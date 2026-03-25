@@ -53,22 +53,43 @@ app.post('/api/login', async (req, res) => {
     } catch (e) { res.status(500).json({ erro: "Erro interno no login." }); }
 });
 
+a// ==========================================
+// 🔐 SEGURANÇA E USUÁRIOS (ROTA CORRIGIDA)
+// ==========================================
+
 app.post('/api/usuarios/recuperar', async (req, res) => {
     try {
         const { email } = req.body;
         const resU = await db.query('SELECT id, nome FROM usuarios WHERE email = $1', [email]);
-        if (resU.rows.length === 0) return res.status(404).json({ erro: "E-mail não encontrado." });
+        
+        if (resU.rows.length === 0) {
+            return res.status(404).json({ erro: "E-mail não encontrado." });
+        }
+
         const senhaTemp = Math.random().toString(36).slice(-8);
         const hash = await bcrypt.hash(senhaTemp, 10);
+        
         await db.query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [hash, resU.rows[0].id]);
-        await transporter.sendMail({
-            from: '"PERSONALIZE Hub" <cezar.antonio.silva@gmail.com>',
-            to: email,
-            subject: 'Recuperação de Senha - PERSONALIZE Hub',
-            html: `<h2>Olá, ${resU.rows[0].nome}!</h2><p>Sua nova senha temporária é: <b>${senhaTemp}</b></p>`
-        });
-        res.json({ mensagem: "📩 E-mail enviado com sucesso!" });
-    } catch (e) { res.status(500).json({ erro: "Erro ao recuperar senha." }); }
+
+        // Tenta enviar o e-mail, mas se falhar, não trava o servidor!
+        try {
+            await transporter.sendMail({
+                from: `"PERSONALIZE Hub" <${process.env.EMAIL_USER}>`,
+                to: email,
+                subject: 'Recuperação de Senha - PERSONALIZE Hub',
+                html: `<h2>Olá, ${resU.rows[0].nome}!</h2><p>Sua nova senha temporária é: <b>${senhaTemp}</b></p>`
+            });
+            res.json({ mensagem: "📩 E-mail enviado com sucesso!" });
+        } catch (mailError) {
+            console.error("❌ Erro ao enviar e-mail:", mailError);
+            // Mesmo que o e-mail falhe, avisamos o frontend para destravar o botão
+            res.status(500).json({ erro: "O servidor não conseguiu enviar o e-mail. Verifique as credenciais SMTP." });
+        }
+
+    } catch (e) { 
+        console.error("Erro na recuperação:", e);
+        res.status(500).json({ erro: "Erro interno ao recuperar senha." }); 
+    }
 });
 
 app.get('/api/usuarios', async (req, res) => {
