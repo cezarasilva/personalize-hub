@@ -53,7 +53,7 @@ app.post('/api/login', async (req, res) => {
     } catch (e) { res.status(500).json({ erro: "Erro interno no login." }); }
 });
 
-a// ==========================================
+// ==========================================
 // 🔐 SEGURANÇA E USUÁRIOS (ROTA CORRIGIDA)
 // ==========================================
 
