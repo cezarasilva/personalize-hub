@@ -123,22 +123,6 @@
             background: #fef3c7;
             color: #92400e;
         }
-
-        /* --- NOVO: Estilo do botão de aprovar --- */
-        .btn-aprovar {
-            background: #10b981;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 12px;
-            margin-right: 10px;
-        }
-        .btn-aprovar:hover {
-            background: #059669;
-        }
     </style>
 </head>
 
@@ -190,12 +174,12 @@
 
     <script>
         const token = localStorage.getItem('token_personalize');
-        const API_URL = 'http://localhost:3000/api/parceiros';
+        const API_URL = '/api/parceiros';
 
         if (!token) window.location.href = 'index.html';
         function logout() { localStorage.clear(); window.location.href = 'index.html'; }
 
-        // --- 1. CARREGAR LOJAS (ATUALIZADO PARA MOSTRAR BOTÃO APROVAR) ---
+        // --- 1. CARREGAR LOJAS ---
         async function carregarLojas() {
             try {
                 const res = await fetch(API_URL, {
@@ -209,23 +193,17 @@
                 tbody.innerHTML = lojas.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Nenhuma loja cadastrada.</td></tr>' : '';
 
                 lojas.forEach(l => {
-                    const isPendente = l.status === 'PENDENTE';
-                    const statusClass = isPendente ? 'status-pendente' : 'status-ativo';
-                    
-                    // LÓGICA DE AÇÕES: Se pendente, mostra "Aprovar". Se ativo, mostra "Editar".
-                    const acoesHTML = isPendente
-                        ? `<button class="btn-aprovar" onclick="aprovarLoja(${l.id}, '${l.nome_loja}')">✅ Aprovar</button>
-                           <button onclick="deletarLoja(${l.id})" style="color: #ef4444; cursor:pointer; background:none; border:none; font-weight:bold; font-size:18px;">🗑️</button>`
-                        : `<button onclick="editarLoja(${l.id}, '${l.nome_loja}')" style="color: #3b82f6; cursor:pointer; background:none; border:none; font-weight:bold; font-size:18px; margin-right:10px;">✏️</button>
-                           <button onclick="deletarLoja(${l.id})" style="color: #ef4444; cursor:pointer; background:none; border:none; font-weight:bold; font-size:18px;">🗑️</button>`;
-
+                    const statusClass = l.status === 'ATIVO' ? 'status-ativo' : 'status-pendente';
                     tbody.innerHTML += `
                         <tr>
                             <td><strong>${l.nome_loja}</strong></td>
                             <td>${l.responsavel}<br><small>${l.email_login || 'Sem e-mail'}</small></td>
                             <td>${l.telefone}</td>
                             <td><span class="status-badge ${statusClass}">${l.status}</span></td>
-                            <td>${acoesHTML}</td>
+                            <td>
+                                <button onclick="editarLoja(${l.id}, '${l.nome_loja}')" style="color: #3b82f6; cursor:pointer; background:none; border:none; font-weight:bold; font-size:18px;">✏️</button>
+                                <button onclick="deletarLoja(${l.id})" style="color: #ef4444; cursor:pointer; background:none; border:none; font-weight:bold; font-size:18px; margin-left:10px;">🗑️</button>
+                            </td>
                         </tr>`;
                 });
             } catch (err) {
@@ -273,30 +251,7 @@
             }
         });
 
-        // --- 3. APROVAR LOJA (NOVO) ---
-        async function aprovarLoja(id, nome) {
-            if (!confirm(`Deseja aprovar a loja "${nome}" e liberar o acesso ao sistema?`)) return;
-
-            try {
-                const res = await fetch(`${API_URL}/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ status: 'ATIVO' })
-                });
-
-                if (res.ok) {
-                    alert("✅ Acesso liberado! O parceiro já pode fazer login.");
-                    carregarLojas();
-                } else {
-                    const data = await res.json();
-                    alert("❌ Erro: " + data.erro);
-                }
-            } catch (err) {
-                alert("Erro de conexão ao tentar aprovar.");
-            }
-        }
-
-        // --- 4. EXCLUIR LOJA ---
+        // --- 3. EXCLUIR LOJA ---
         async function deletarLoja(id) {
             if (confirm("⚠️ Tem certeza? Isso removerá o acesso da loja e todo o histórico de estoque!")) {
                 try {
@@ -310,13 +265,13 @@
             }
         }
 
-        // --- 5. EDITAR LOJA ---
+        // --- 4. EDITAR LOJA ---
         async function editarLoja(id, nomeAtual) {
             const novoNome = prompt("Novo nome da loja:", nomeAtual);
             if (!novoNome || novoNome === nomeAtual) return;
 
             try {
-                const res = await fetch(`${API_URL}/${id}`, {
+                const res = await fetch(`/api/parceiros/${id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',

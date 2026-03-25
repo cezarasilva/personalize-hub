@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -17,6 +18,14 @@ const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// --- SERVIR ARQUIVOS ESTÁTICOS (HTML, CSS, JS) ---
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+// Rota principal: Quando acessar o site, abre o Login direto
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/index.html'));
+});
 
 const JWT_SECRET = process.env.JWT_SECRET || 'chave_super_secreta_personalize';
 

@@ -93,7 +93,7 @@
 
     <script>
         const token = localStorage.getItem('token_personalize');
-        const API_BASE = 'http://localhost:3000/api';
+        const API_BASE = '/api';
 
         if(!token) window.location.href='index.html';
         function logout() { localStorage.clear(); window.location.href='index.html'; }

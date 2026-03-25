@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Frente de Caixa - PERSONALIZE Hub</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
     <style>
         * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
         body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; }
@@ -24,6 +28,10 @@
         input, select { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; }
         .btn-vender { background: #10b981; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; grid-column: span 2; font-size: 16px; transition: 0.2s; }
         .btn-vender:hover { background: #059669; }
+        
+        /* Botão PDF */
+        .btn-pdf { background: #1f2937; color: white; padding: 10px 18px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 13px; }
+        .btn-pdf:hover { background: #111827; }
 
         /* Preview da Foto */
         .preview-container { display: flex; align-items: center; gap: 15px; grid-column: span 2; background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px dashed #d1d5db; min-height: 80px; }
@@ -49,12 +57,12 @@
         <a href="parceiros.html" class="menu-admin">🏪 Lojas Parceiras</a>
         <a href="remessas.html" class="menu-admin">🚚 Remessas (Estoque)</a>
         <a href="vendas.html" class="ativo">💰 Frente de Caixa</a>
-        <a onclick="logout()" style="margin-top:auto; color: #f87171;">🚪 Sair</a>
+        <a onclick="logout()" style="margin-top:auto; color: #f87171; cursor: pointer;">🚪 Sair</a>
     </div>
 
     <div class="main">
         <div class="card">
-            <h2>🛒 Registrar Nova Venda</h2><br>
+            <h2 style="margin-bottom: 15px;">🛒 Registrar Nova Venda</h2>
             <form id="formVenda">
                 <div class="preview-container">
                     <img id="fotoPreview" src="" alt="Produto">
@@ -75,7 +83,11 @@
         </div>
 
         <div class="card">
-            <h2>📜 Extrato Recente de Vendas</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0;">📜 Extrato Recente de Vendas</h2>
+                <button class="btn-pdf" onclick="gerarPDF()">🖨️ Imprimir Fechamento</button>
+            </div>
+            
             <table>
                 <thead>
                     <tr>
@@ -93,27 +105,23 @@
     </div>
 
     <script>
-        const API = 'http://localhost:3000/api';
+        const API = '/api';
         const token = localStorage.getItem('token_personalize');
         const usuarioLogado = JSON.parse(localStorage.getItem('usuario_personalize') || '{}');
         let produtosGlobais = [];
 
         if(!token) window.location.href='index.html';
 
-        // Interface Adaptativa para Parceiros
         if (usuarioLogado.perfil === 'PARCEIRO') {
             document.querySelectorAll('.menu-admin').forEach(el => el.style.display = 'none');
-            // Parceiro não vê a coluna de loja (pois é sempre a dele)
             const colLoja = document.querySelector('.col-loja');
             if(colLoja) colLoja.style.display = 'none';
         }
 
         function logout() { localStorage.clear(); window.location.href='index.html'; }
 
-        // --- 1. CARREGAR PRODUTOS ---
         async function carregarProdutos() {
             try {
-                // Se for parceiro, carrega o estoque dele. Se for admin, carrega tudo.
                 const endpoint = (usuarioLogado.perfil === 'PARCEIRO') 
                     ? `${API}/consignacoes/${usuarioLogado.parceiro_id}` 
                     : `${API}/produtos`;
@@ -125,7 +133,6 @@
                 sel.innerHTML = '<option value="">Selecione o produto...</option>';
                 
                 produtosGlobais.forEach(p => {
-                    // Ajuste de nomes de campos dependendo de qual rota retornou
                     const id = p.produto_id || p.id;
                     const nome = p.produto_nome || p.nome;
                     const estoque = (p.quantidade_atual !== undefined) ? p.quantidade_atual : p.estoque_central;
@@ -133,7 +140,6 @@
                     sel.innerHTML += `<option value="${id}">${nome} - ${p.variacao} (Disp: ${estoque})</option>`;
                 });
 
-                // Carregar lojas no select de origem (apenas admin)
                 if(usuarioLogado.perfil === 'ADMIN') {
                     const resL = await fetch(`${API}/parceiros`);
                     const lojas = await resL.json();
@@ -145,7 +151,6 @@
             } catch (err) { console.error("Erro ao carregar produtos:", err); }
         }
 
-        // --- 2. ATUALIZAR PREVIEW ---
         function atualizarPreview() {
             const id = document.getElementById('produto').value;
             const imgEl = document.getElementById('fotoPreview');
@@ -163,7 +168,6 @@
             }
         }
 
-        // --- 3. LISTAR VENDAS ---
         async function carregarVendas() {
             try {
                 const res = await fetch(`${API}/vendas`, { headers: {'Authorization': `Bearer ${token}`} });
@@ -171,26 +175,32 @@
                 const tbody = document.getElementById('tabelaVendas'); 
                 tbody.innerHTML = '';
                 
+                if (dados.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Nenhuma venda registrada.</td></tr>';
+                    return;
+                }
+
                 dados.forEach(v => {
                     const imgHTML = v.imagem_url 
                         ? `<img src="${v.imagem_url}" class="foto-venda">` 
                         : `<div class="foto-venda" style="background:#eee;"></div>`;
                     
                     const lojaHTML = (usuarioLogado.perfil === 'ADMIN') 
-                        ? `<td><span class="badge-loja">${v.nome_loja || 'Sede Central'}</span></td>` 
+                        ? `<td class="td-loja"><span class="badge-loja">${v.nome_loja || 'Sede Central'}</span></td>` 
                         : '';
 
+                    // Note que adicionei classes (td-prod, td-data, etc) para o PDF conseguir ler os dados!
                     tbody.innerHTML += `
-                        <tr>
+                        <tr class="linha-venda">
                             <td>
                                 <div style="display:flex; align-items:center; gap:10px;">
                                     ${imgHTML}
-                                    <div><strong>${v.produto_nome}</strong><br><small>${v.variacao}</small></div>
+                                    <div class="td-prod"><strong>${v.produto_nome}</strong><br><small>${v.variacao}</small></div>
                                 </div>
                             </td>
-                            <td style="font-size: 11px;">${v.data_formatada}</td>
-                            <td>${v.quantidade} un.</td>
-                            <td style="color:#059669; font-weight:bold;">R$ ${parseFloat(v.valor_total).toFixed(2)}</td>
+                            <td class="td-data" style="font-size: 11px;">${v.data_formatada}</td>
+                            <td class="td-qtd">${v.quantidade} un.</td>
+                            <td class="td-total" style="color:#059669; font-weight:bold;">R$ ${parseFloat(v.valor_total).toFixed(2)}</td>
                             ${lojaHTML}
                             <td>
                                 <button class="btn-acao" title="Cancelar Venda" onclick="cancelarVenda(${v.id})">🗑️</button>
@@ -200,7 +210,6 @@
             } catch (err) { console.error(err); }
         }
 
-        // --- 4. REGISTRAR VENDA ---
         document.getElementById('formVenda').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('btnVender');
@@ -233,7 +242,6 @@
             finally { btn.disabled = false; }
         });
 
-        // --- 5. CANCELAR VENDA ---
         async function cancelarVenda(id) {
             if (!confirm("⚠️ Deseja cancelar esta venda? O estoque será devolvido automaticamente ao centro ou à loja de origem.")) return;
             
@@ -243,11 +251,92 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if(res.ok) {
-                    alert("🗑️ Venda cancelada!");
                     carregarVendas();
                     carregarProdutos();
                 }
             } catch (err) { alert("Erro ao cancelar."); }
+        }
+
+        // ==========================================
+        // 🖨️ FUNÇÃO DO EXTRATO FINANCEIRO EM PDF
+        // ==========================================
+        function gerarPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const dataAtual = new Date().toLocaleDateString('pt-BR');
+            const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const isAdmin = usuarioLogado.perfil === 'ADMIN';
+
+            // 1. Cabeçalho
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(20);
+            doc.text("PERSONALIZE 3D", 105, 20, { align: "center" });
+            
+            doc.setFontSize(14);
+            doc.text("FECHAMENTO DE CAIXA / EXTRATO DE VENDAS", 105, 30, { align: "center" });
+
+            // 2. Informações
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(11);
+            doc.text(`Data de Emissão: ${dataAtual} às ${horaAtual}`, 14, 45);
+            doc.text(`Operador / Responsável: ${usuarioLogado.nome || 'Administrador'}`, 14, 52);
+
+            // 3. Preparando colunas da tabela
+            const colunas = isAdmin 
+                ? [['Produto / Variação', 'Data', 'Qtd', 'Origem da Venda', 'Valor Total']] 
+                : [['Produto / Variação', 'Data', 'Qtd', 'Valor Total']];
+
+            const linhasPdf = [];
+            let somaTotal = 0;
+
+            // Varre o HTML buscando os dados da tabela
+            const trs = document.querySelectorAll('.linha-venda');
+            
+            if(trs.length === 0) {
+                alert("Não há vendas para imprimir!");
+                return;
+            }
+
+            trs.forEach(tr => {
+                // Pega o texto e remove quebras de linha indesejadas
+                const prod = tr.querySelector('.td-prod').innerText.replace(/\n/g, ' - ');
+                const dataHora = tr.querySelector('.td-data').innerText;
+                const qtd = tr.querySelector('.td-qtd').innerText;
+                const totalTexto = tr.querySelector('.td-total').innerText;
+                
+                // Converte o "R$ 150.50" em número para podermos somar
+                const valorLimpo = parseFloat(totalTexto.replace('R$', '').trim());
+                somaTotal += valorLimpo;
+
+                if (isAdmin) {
+                    const loja = tr.querySelector('.td-loja').innerText;
+                    linhasPdf.push([prod, dataHora, qtd, loja, `R$ ${valorLimpo.toFixed(2)}`]);
+                } else {
+                    linhasPdf.push([prod, dataHora, qtd, `R$ ${valorLimpo.toFixed(2)}`]);
+                }
+            });
+
+            // 4. Desenha a Tabela de Vendas
+            doc.autoTable({
+                startY: 60,
+                head: colunas,
+                body: linhasPdf,
+                theme: 'grid',
+                headStyles: { fillColor: [16, 185, 129] }, // Verde para lembrar dinheiro/vendas
+                styles: { fontSize: 10 }
+            });
+
+            // 5. Totalizador no Final do Documento
+            const finalY = doc.lastAutoTable.finalY + 15; 
+            
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            // Alinhado à direita
+            doc.text(`TOTAL ARRECADADO: R$ ${somaTotal.toFixed(2)}`, 195, finalY, { align: 'right' });
+
+            // 6. Download
+            doc.save(`Extrato_Vendas_${dataAtual.replace(/\//g, '-')}.pdf`);
         }
 
         carregarProdutos();

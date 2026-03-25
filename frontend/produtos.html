@@ -122,7 +122,7 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:3000/api/produtos';
+        const API_URL = '/api/produtos';
         const token = localStorage.getItem('token_personalize');
 
         if(!token || localStorage.getItem('perfil_usuario') === 'PARCEIRO') {
@@ -241,7 +241,7 @@
             const novaQtd = prompt(`📦 Estoque Atual: ${qtdAtual}\nDigite a nova quantidade total no estoque:`, qtdAtual);
             if (novaQtd !== null && novaQtd !== "" && novaQtd != qtdAtual) {
                 try {
-                    const res = await fetch(`http://localhost:3000/api/produtos/estoque/${id}`, {
+                    const res = await fetch(`/api/produtos/estoque/${id}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ novo_estoque: parseInt(novaQtd) })
