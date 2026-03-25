@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produtos & Peças - PERSONALIZE Hub</title>
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+        body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; }
+        
+        /* Menu Lateral */
+        .sidebar { width: 250px; background: #1f2937; color: #fff; display: flex; flex-direction: column; padding: 20px 0; }
+        .sidebar h2 { text-align: center; margin-bottom: 30px; color: #60a5fa; font-weight: 800; }
+        .sidebar a { padding: 15px 20px; color: #d1d5db; text-decoration: none; border-left: 4px solid transparent; cursor: pointer; }
+        .sidebar a:hover { background: #374151; color: #fff; }
+        .sidebar a.ativo { background: #374151; border-left-color: #3b82f6; color: #fff; }
+        
+        /* Área Principal */
+        .main { flex: 1; overflow-y: auto; padding: 30px; }
+        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e5e7eb;}
+        
+        /* Formulário */
+        form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        input, select { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; }
+        input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+        .btn-add { background: #3b82f6; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; grid-column: span 2; font-size: 15px; transition: 0.2s; }
+        .btn-add:hover { background: #2563eb; }
+        .btn-add:disabled { background: #94a3b8; cursor: not-allowed; }
+        
+        /* Tabela */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        th { background: #f9fafb; color: #6b7280; font-size: 13px; font-weight: 600; text-transform: uppercase; }
+        
+        /* Badge de Estoque */
+        .badge { background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 12px; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; display: inline-block; }
+        .badge:hover { background: #bbf7d0; transform: scale(1.05); }
+        
+        /* Foto na Tabela */
+        .foto-miniatura { width: 45px; height: 45px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; background: #f9fafb; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #9ca3af; text-align: center; line-height: 1;}
+
+        /* MODAL DE CORTE DA IMAGEM */
+        .modal-corte { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
+        .modal-conteudo { background: #fff; padding: 20px; border-radius: 12px; width: 90%; max-width: 500px; text-align: center; }
+        .container-img-corte { width: 100%; max-height: 400px; margin-bottom: 20px; }
+        .container-img-corte img { max-width: 100%; display: block; }
+        .btn-cortar { background: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-cancelar { background: #ef4444; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>PERSONALIZE</h2>
+        <a href="dashboard.html">📊 Dashboard</a>
+        <a href="produtos.html" class="ativo">📦 Produtos & Peças</a>
+        <a href="parceiros.html">🏪 Lojas Parceiras</a>
+        <a href="usuarios.html">👥 Usuários do Sistema</a>
+        <a href="remessas.html">🚚 Remessas (Estoque)</a>
+        <a href="vendas.html">💰 Frente de Caixa</a>
+        <a onclick="logout()" style="margin-top:auto; color: #f87171; cursor: pointer;">🚪 Sair</a>
+    </div>
+
+    <div class="main">
+        <div class="card">
+            <h2>📦 Novo Produto ou Peça</h2><br>
+            <form id="formProd" enctype="multipart/form-data">
+                <input type="text" id="nome" placeholder="Nome do Produto (Ex: Suporte de Esponja)" style="grid-column: span 2;" required>
+                
+                <select id="categoria">
+                    <option value="Impressão 3D">Impressão 3D</option>
+                    <option value="Personalizados">Personalizados</option>
+                </select>
+                
+                <input type="text" id="variacao" placeholder="Variação (Ex: Branco / Original)" required>
+                <input type="number" id="custo" step="0.01" placeholder="Custo Produção (R$)" required>
+                <input type="number" id="repasse" step="0.01" placeholder="Preço Repasse (R$)" required>
+                <input type="number" id="preco" step="0.01" placeholder="Preço Venda Direta (R$)" required>
+                <input type="number" id="estoque" placeholder="Qtd. Estoque Central" required>
+                
+                <div style="grid-column: span 2; display: flex; gap: 15px; align-items: center;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 13px; font-weight: bold; color: #4b5563; display: block; margin-bottom: 5px;">📸 Foto (Será cortada em Quadrado):</label>
+                        <input type="file" id="imagem" accept="image/*" style="width: 100%; border: 1px dashed #d1d5db; padding: 10px; background: #f9fafb; cursor: pointer;">
+                    </div>
+                    <img id="previewCortado" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #d1d5db; display: none;">
+                </div>
+
+                <button type="submit" class="btn-add" id="btnSalvar">Salvar Produto com Foto</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>📋 Estoque Central</h2>
+            <table id="tabelaGeral">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Repasse (Loja)</th>
+                        <th>Venda (Direta)</th>
+                        <th>Estoque (Clique p/ editar)</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaProd"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="modalCorte" class="modal-corte">
+        <div class="modal-conteudo">
+            <h3 style="margin-bottom: 15px;">Ajustar Foto (Quadrado)</h3>
+            <div class="container-img-corte">
+                <img id="imgParaCortar" src="">
+            </div>
+            <button type="button" class="btn-cortar" id="btnCortar">✂️ Cortar e Salvar</button>
+            <button type="button" class="btn-cancelar" id="btnCancelarCorte">Cancelar</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api/produtos';
+        const token = localStorage.getItem('token_personalize');
+
+        if(!token || localStorage.getItem('perfil_usuario') === 'PARCEIRO') {
+            window.location.href = 'dashboard.html';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'index.html';
+        }
+
+        // ==========================================
+        // ✂️ LÓGICA DE CORTE DE IMAGEM (CROPPER.JS)
+        // ==========================================
+        let cropper = null;
+        let blobFinalCortado = null; // Aqui guardamos o arquivo cortado para enviar pro Supabase
+
+        const inputImagem = document.getElementById('imagem');
+        const modalCorte = document.getElementById('modalCorte');
+        const imgParaCortar = document.getElementById('imgParaCortar');
+        const previewCortado = document.getElementById('previewCortado');
+
+        // 1. Quando o usuário escolhe a foto, abre o Modal de Corte
+        inputImagem.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    imgParaCortar.src = event.target.result;
+                    modalCorte.style.display = 'flex'; // Mostra a tela preta
+                    
+                    // Se já tiver um cortador aberto, destrói para criar o novo da foto atual
+                    if (cropper) cropper.destroy();
+                    
+                    // Inicia a ferramenta de corte forçando o formato Quadrado (Aspect Ratio 1:1)
+                    cropper = new Cropper(imgParaCortar, {
+                        aspectRatio: 1, 
+                        viewMode: 1,
+                        autoCropArea: 1, // Pega 100% da foto no início
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 2. Cancelar o corte
+        document.getElementById('btnCancelarCorte').addEventListener('click', () => {
+            modalCorte.style.display = 'none';
+            inputImagem.value = ''; // Limpa o input
+            blobFinalCortado = null;
+            previewCortado.style.display = 'none';
+            if (cropper) cropper.destroy();
+        });
+
+        // 3. Confirmar o corte
+        document.getElementById('btnCortar').addEventListener('click', () => {
+            // Gera um canvas com tamanho padrão bom para web (600x600 px)
+            const canvas = cropper.getCroppedCanvas({ width: 600, height: 600 }); 
+            
+            // Transforma o canvas em um arquivo (Blob) JPG
+            canvas.toBlob((blob) => {
+                blobFinalCortado = blob; // Salva para mandar pro backend
+                previewCortado.src = canvas.toDataURL(); // Mostra a miniatura na tela
+                previewCortado.style.display = 'block';
+                
+                modalCorte.style.display = 'none'; // Fecha a tela de corte
+                if (cropper) cropper.destroy();
+            }, 'image/jpeg', 0.85); // 0.85 é a qualidade (85%) para não ficar pesado
+        });
+
+        // ==========================================
+        // 📦 LÓGICA DE PRODUTOS
+        // ==========================================
+
+        async function carregar() {
+            try {
+                const res = await fetch(API_URL, { headers: {'Authorization': `Bearer ${token}`} });
+                if (!res.ok) throw new Error("Falha ao carregar");
+                
+                const dados = await res.json();
+                const tbody = document.getElementById('tabelaProd'); 
+                tbody.innerHTML = '';
+                
+                dados.forEach(p => {
+                    const imgHTML = p.imagem_url 
+                        ? `<img src="${p.imagem_url}" class="foto-miniatura">` 
+                        : `<div class="foto-miniatura">Sem<br>Foto</div>`;
+
+                    tbody.innerHTML += `
+                    <tr>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                ${imgHTML}
+                                <div>
+                                    <strong>${p.nome}</strong><br>
+                                    <small style="color: #6b7280;">${p.variacao} | ${p.categoria}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>R$ ${parseFloat(p.preco_repasse).toFixed(2)}</td>
+                        <td>R$ ${parseFloat(p.preco_venda).toFixed(2)}</td>
+                        <td>
+                            <span class="badge" onclick="ajustarEstoque(${p.id}, ${p.estoque_central})" title="Clique para ajustar">
+                                ${p.estoque_central} un. ✏️
+                            </span>
+                        </td>
+                        <td>
+                            <button onclick="deletar(${p.id})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-weight:bold; font-size: 13px;">Excluir</button>
+                        </td>
+                    </tr>`;
+                });
+            } catch (erro) { console.error("Erro:", erro); }
+        }
+
+        async function ajustarEstoque(id, qtdAtual) {
+            const novaQtd = prompt(`📦 Estoque Atual: ${qtdAtual}\nDigite a nova quantidade total no estoque:`, qtdAtual);
+            if (novaQtd !== null && novaQtd !== "" && novaQtd != qtdAtual) {
+                try {
+                    const res = await fetch(`http://localhost:3000/api/produtos/estoque/${id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ novo_estoque: parseInt(novaQtd) })
+                    });
+                    if (res.ok) carregar(); 
+                    else alert("❌ Erro ao atualizar estoque.");
+                } catch (erro) { alert("❌ Erro de conexão."); }
+            }
+        }
+
+        // --- CADASTRAR PRODUTO (AGORA ENVIA A FOTO CORTADA) ---
+        document.getElementById('formProd').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnSalvar');
+            btn.textContent = '⏳ Fazendo upload e salvando...';
+            btn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('nome', document.getElementById('nome').value);
+            formData.append('categoria', document.getElementById('categoria').value);
+            formData.append('variacao', document.getElementById('variacao').value);
+            formData.append('custo_producao', document.getElementById('custo').value);
+            formData.append('preco_repasse', document.getElementById('repasse').value);
+            formData.append('preco_venda', document.getElementById('preco').value);
+            formData.append('estoque', document.getElementById('estoque').value);
+            formData.append('descricao', 'Peça 3D');
+
+            // SE EXISTIR UMA FOTO CORTADA, MANDA ELA EM VEZ DA ORIGINAL
+            if (blobFinalCortado) { 
+                // O terceiro parâmetro é o nome simulado do arquivo
+                formData.append('imagem', blobFinalCortado, 'produto_quadrado.jpg'); 
+            }
+
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST', 
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                if(res.ok) {
+                    alert("✅ Produto cadastrado!");
+                    document.getElementById('formProd').reset(); 
+                    
+                    // Limpa as imagens da tela
+                    blobFinalCortado = null;
+                    previewCortado.style.display = 'none';
+                    previewCortado.src = '';
+                    
+                    carregar();
+                }
+            } catch (erro) {
+                alert("❌ Falha na comunicação.");
+            } finally {
+                btn.textContent = 'Salvar Produto com Foto';
+                btn.disabled = false;
+            }
+        });
+
+        async function deletar(id) { 
+            if(confirm('Isso apagará o produto e todo o histórico vinculado. Confirmar?')) { 
+                try {
+                    const res = await fetch(`${API_URL}/${id}`, { 
+                        method: 'DELETE', 
+                        headers: {'Authorization': `Bearer ${token}`} 
+                    });
+                    if(res.ok) carregar();
+                } catch (erro) { alert("❌ Erro ao excluir."); }
+            } 
+        }
+        
+        carregar();
+    </script>
+</body>
+</html>

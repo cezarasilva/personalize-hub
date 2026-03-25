@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Recuperar - PERSONALIZE Hub</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+        body { background: #f3f4f6; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .box { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 400px; text-align: center; }
+        h2 { color: #1f2937; margin-bottom: 15px; }
+        p { color: #6b7280; font-size: 14px; line-height: 1.6; margin-bottom: 25px; }
+        input { width: 100%; padding: 12px; border: 1.5px solid #d1d5db; border-radius: 10px; margin-bottom: 15px; outline: none; font-size: 15px;}
+        input:focus { border-color: #3b82f6; }
+        .btn { width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.3s; font-size: 15px;}
+        .btn:hover { background: #2563eb; }
+        .voltar { display: block; margin-top: 20px; color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 600; }
+        #mensagem { margin-top: 15px; font-size: 14px; display: none; padding: 10px; border-radius: 8px;}
+        .sucesso { background: #dcfce7; color: #166534; }
+        .erro { background: #fee2e2; color: #991b1b; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>Esqueceu a senha?</h2>
+        <p>Insira seu e-mail abaixo. Enviaremos uma senha temporária para você acessar o sistema.</p>
+        
+        <form id="formRecuperar">
+            <input type="email" id="emailRec" placeholder="Seu e-mail cadastrado" required>
+            <button type="submit" class="btn" id="btnRecuperar">Enviar Nova Senha</button>
+        </form>
+
+        <div id="mensagem"></div>
+
+        <a href="index.html" class="voltar">← Voltar para o Login</a>
+    </div>
+
+    <script>
+        document.getElementById('formRecuperar').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnRecuperar');
+            const msg = document.getElementById('mensagem');
+            const email = document.getElementById('emailRec').value;
+            
+            btn.textContent = '⏳ Enviando E-mail...';
+            btn.disabled = true;
+            msg.style.display = 'none';
+
+            try {
+                const res = await fetch('http://localhost:3000/api/usuarios/recuperar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                const dados = await res.json();
+
+                msg.style.display = 'block';
+                if (res.ok) {
+                    msg.className = 'sucesso';
+                    msg.textContent = dados.mensagem;
+                    document.getElementById('emailRec').value = '';
+                } else {
+                    msg.className = 'erro';
+                    msg.textContent = dados.erro;
+                }
+            } catch (erro) {
+                msg.style.display = 'block';
+                msg.className = 'erro';
+                msg.textContent = "Erro de conexão com o servidor.";
+            } finally {
+                btn.textContent = 'Enviar Nova Senha';
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

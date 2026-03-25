@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Seja um Parceiro - PERSONALIZE Hub</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+        body { background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .box { background: #fff; padding: 40px; border-radius: 12px; width: 100%; max-width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: #4b5563; }
+        input { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; }
+        .btn { width: 100%; padding: 14px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn:hover { background: #2563eb; }
+        #msg { margin-top: 20px; text-align: center; padding: 12px; border-radius: 8px; display: none; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2 style="text-align: center; margin-bottom: 10px; color: #1f2937;">Seja um Revendedor</h2>
+        <p style="text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 25px;">Preencha os dados para análise</p>
+        <form id="formReg">
+            <div class="form-group"><label>Nome da Loja</label><input type="text" id="loja" required></div>
+            <div class="form-group"><label>Responsável</label><input type="text" id="resp" required></div>
+            <div class="form-group"><label>WhatsApp</label><input type="text" id="tel" required></div>
+            <div class="form-group"><label>E-mail (Login)</label><input type="email" id="email" required></div>
+            <div class="form-group"><label>Senha</label><input type="password" id="senha" required></div>
+            <button type="submit" class="btn">Enviar Solicitação</button>
+        </form>
+        <div id="msg"></div>
+        <p style="text-align: center; margin-top: 20px;"><a href="index.html" style="color: #6b7280; text-decoration: none; font-size: 14px;">← Voltar ao Login</a></p>
+    </div>
+    <script>
+        document.getElementById('formReg').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const m = document.getElementById('msg');
+            m.style.display = 'block'; m.textContent = '⏳ Enviando...';
+            try {
+                const res = await fetch('http://localhost:3000/api/parceiros/solicitar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nome_loja: document.getElementById('loja').value,
+                        responsavel: document.getElementById('resp').value,
+                        telefone: document.getElementById('tel').value,
+                        email_login: document.getElementById('email').value,
+                        senha_login: document.getElementById('senha').value
+                    })
+                });
+                const dados = await res.json();
+                m.textContent = dados.mensagem || dados.erro;
+                m.style.background = res.ok ? '#dcfce7' : '#fee2e2';
+                m.style.color = res.ok ? '#166534' : '#991b1b';
+                if(res.ok) document.getElementById('formReg').reset();
+            } catch (err) { m.textContent = 'Erro de conexão.'; }
+        });
+    </script>
+</body>
+</html>
