@@ -30,9 +30,13 @@ app.get('/', (req, res) => {
 const JWT_SECRET = process.env.JWT_SECRET || 'chave_super_secreta_personalize';
 
 // --- CONFIGURAÇÃO EMAIL (GMAIL) ---
+// Agora puxando as credenciais de forma segura pelas variáveis do Render/dotenv
 const transporter = nodemailer.createTransport({
     service: 'gmail',
-    auth: { user: 'cezar.antonio.silva@gmail.com', pass: 'bxse sblc spnt rkbo' }
+    auth: { 
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS 
+    }
 });
 
 // ==========================================
@@ -53,10 +57,7 @@ app.post('/api/login', async (req, res) => {
     } catch (e) { res.status(500).json({ erro: "Erro interno no login." }); }
 });
 
-// ==========================================
-// 🔐 SEGURANÇA E USUÁRIOS (ROTA CORRIGIDA)
-// ==========================================
-
+// Recuperação de senha "Anti-Travamento"
 app.post('/api/usuarios/recuperar', async (req, res) => {
     try {
         const { email } = req.body;
@@ -69,22 +70,19 @@ app.post('/api/usuarios/recuperar', async (req, res) => {
         const senhaTemp = Math.random().toString(36).slice(-8);
         const hash = await bcrypt.hash(senhaTemp, 10);
         
+        // 1. Atualiza no banco PRIMEIRO
         await db.query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [hash, resU.rows[0].id]);
 
-        // Tenta enviar o e-mail, mas se falhar, não trava o servidor!
-        try {
-            await transporter.sendMail({
-                from: `"PERSONALIZE Hub" <${process.env.EMAIL_USER}>`,
-                to: email,
-                subject: 'Recuperação de Senha - PERSONALIZE Hub',
-                html: `<h2>Olá, ${resU.rows[0].nome}!</h2><p>Sua nova senha temporária é: <b>${senhaTemp}</b></p>`
-            });
-            res.json({ mensagem: "📩 E-mail enviado com sucesso!" });
-        } catch (mailError) {
-            console.error("❌ Erro ao enviar e-mail:", mailError);
-            // Mesmo que o e-mail falhe, avisamos o frontend para destravar o botão
-            res.status(500).json({ erro: "O servidor não conseguiu enviar o e-mail. Verifique as credenciais SMTP." });
-        }
+        // 2. Responde ao usuário IMEDIATAMENTE (Destrava o botão na hora)
+        res.json({ mensagem: "Solicitação recebida! Se o e-mail estiver correto e o servidor configurado, você receberá a nova senha." });
+
+        // 3. Tenta enviar o e-mail em Background
+        transporter.sendMail({
+            from: `"PERSONALIZE Hub" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'Recuperação de Senha - PERSONALIZE Hub',
+            html: `<h2>Olá, ${resU.rows[0].nome}!</h2><p>Sua nova senha temporária é: <b>${senhaTemp}</b></p>`
+        }).catch(err => console.error("❌ Falha silenciosa no envio de e-mail:", err.message));
 
     } catch (e) { 
         console.error("Erro na recuperação:", e);
@@ -140,9 +138,6 @@ app.post('/api/parceiros', async (req, res) => {
     try {
         const { nome_loja, responsavel, telefone, email, senha } = req.body;
 
-        // Log para conferência no terminal
-        console.log("Admin cadastrando loja:", { nome_loja, email });
-
         const check = await db.query('SELECT id FROM usuarios WHERE email = $1', [email]);
         if (check.rows.length > 0) return res.status(400).json({ erro: "E-mail já cadastrado!" });
 
@@ -173,12 +168,10 @@ app.post('/api/parceiros', async (req, res) => {
 app.post('/api/parceiros/solicitar', async (req, res) => {
     try {
         const { nome_loja, responsavel, telefone, email_login, senha_login } = req.body;
-        console.log("Nova solicitação de parceria recebida:", nome_loja);
 
         const check = await db.query('SELECT id FROM usuarios WHERE email = $1', [email_login]);
         if (check.rows.length > 0) return res.status(400).json({ erro: "Este e-mail já está em uso!" });
 
-        // Entra como PENDENTE
         const novaLoja = await db.query(
             `INSERT INTO parceiros (nome_loja, responsavel, telefone, status) 
              VALUES ($1, $2, $3, 'PENDENTE') RETURNING id`, 
@@ -188,7 +181,6 @@ app.post('/api/parceiros/solicitar', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(senha_login, salt);
         
-        // Entra como inativo (false) para não conseguir logar
         await db.query(
             `INSERT INTO usuarios (nome, email, senha_hash, perfil, parceiro_id, ativo) 
              VALUES ($1, $2, $3, 'PARCEIRO', $4, false)`, 
@@ -221,7 +213,6 @@ app.put('/api/parceiros/:id', async (req, res) => {
 
         if (resultado.rowCount === 0) return res.status(404).json({ erro: "Loja não encontrada." });
 
-        // Se mudou o status da loja para ATIVO, ativa o usuário também
         if (status === 'ATIVO') {
             await db.query('UPDATE usuarios SET ativo = true WHERE parceiro_id = $1', [id]);
         }
@@ -317,23 +308,20 @@ app.get('/api/consignacoes/:parceiro_id', async (req, res) => {
     }
 });
 
-// 2. ENVIAR NOVA REMESSA (Cria ou Incrementa)
+// 2. ENVIAR NOVA REMESSA (Cria ou Incrementa um por um)
 app.post('/api/consignacoes', async (req, res) => {
     try {
         const { parceiro_id, produto_id, quantidade } = req.body;
         const qtd = parseInt(quantidade);
 
-        // Busca a variação e checa estoque central
         const vRes = await db.query(`SELECT id, estoque_central FROM produto_variacoes WHERE produto_id = $1`, [produto_id]);
         if (vRes.rows.length === 0) return res.status(404).json({ erro: "Produto não encontrado." });
         
         const vId = vRes.rows[0].id;
         if (vRes.rows[0].estoque_central < qtd) return res.status(400).json({ erro: "Estoque central insuficiente!" });
 
-        // Tira do estoque central
         await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, vId]);
 
-        // Verifica se a loja já tem esse produto
         const ex = await db.query('SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', [parceiro_id, vId]);
 
         if (ex.rows.length > 0) {
@@ -348,6 +336,56 @@ app.post('/api/consignacoes', async (req, res) => {
     }
 });
 
+// ========================================================
+// 📦 NOVO: ENVIO EM LOTE (O Carrinho de Produtos)
+// ========================================================
+app.post('/api/consignacoes/lote', async (req, res) => {
+    try {
+        const { parceiro_id, itens } = req.body; 
+
+        if (!itens || itens.length === 0) {
+            return res.status(400).json({ erro: "A lista de remessa está vazia." });
+        }
+
+        // Inicia uma transação segura
+        await db.query('BEGIN');
+
+        for (let item of itens) {
+            const qtd = parseInt(item.quantidade);
+
+            // 1. Busca a variação e checa o estoque central
+            const vRes = await db.query(`SELECT id, estoque_central FROM produto_variacoes WHERE produto_id = $1`, [item.produto_id]);
+            if (vRes.rows.length === 0) throw new Error(`Produto ID ${item.produto_id} não encontrado.`);
+            if (vRes.rows[0].estoque_central < qtd) throw new Error(`Estoque central insuficiente para um dos produtos.`);
+            
+            const vId = vRes.rows[0].id;
+
+            // 2. Tira do estoque central
+            await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, vId]);
+
+            // 3. Adiciona na loja parceira
+            const ex = await db.query('SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', [parceiro_id, vId]);
+
+            if (ex.rows.length > 0) {
+                await db.query('UPDATE consignacoes_estoque SET quantidade_atual = quantidade_atual + $1, quantidade_enviada = quantidade_enviada + $1 WHERE id = $2', [qtd, ex.rows[0].id]);
+            } else {
+                await db.query('INSERT INTO consignacoes_estoque (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual) VALUES ($1, $2, $3, $3)', [parceiro_id, vId, qtd]);
+            }
+        }
+
+        // Se tudo deu certo, confirma as alterações no banco
+        await db.query('COMMIT');
+        res.status(201).json({ mensagem: "📦 Remessa em lote enviada com sucesso!" });
+
+    } catch (e) {
+        // Se deu erro em qualquer produto, desfaz tudo para não quebrar o estoque
+        await db.query('ROLLBACK');
+        console.error("Erro no lote:", e);
+        res.status(400).json({ erro: e.message });
+    }
+});
+// ========================================================
+
 // 3. AJUSTAR QUANTIDADE (Update com balanceamento de estoque)
 app.put('/api/consignacoes/:id', async (req, res) => {
     try {
@@ -360,13 +398,11 @@ app.put('/api/consignacoes/:id', async (req, res) => {
         const { variacao_id, quantidade_atual } = rem.rows[0];
         const diferenca = nova_quantidade - quantidade_atual;
 
-        // Se estiver aumentando o envio, checa se tem no centro
         if (diferenca > 0) {
             const centro = await db.query('SELECT estoque_central FROM produto_variacoes WHERE id = $1', [variacao_id]);
             if (centro.rows[0].estoque_central < diferenca) return res.status(400).json({ erro: "Estoque central insuficiente para este ajuste!" });
         }
 
-        // Ajusta ambos os lados
         await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [diferenca, variacao_id]);
         await db.query('UPDATE consignacoes_estoque SET quantidade_atual = $1 WHERE id = $2', [nova_quantidade, id]);
 
@@ -383,7 +419,6 @@ app.delete('/api/consignacoes/:id', async (req, res) => {
         const rem = await db.query('SELECT variacao_id, quantidade_atual FROM consignacoes_estoque WHERE id = $1', [id]);
         if (rem.rows.length === 0) return res.status(404).json({ erro: "Remessa não encontrada." });
 
-        // Devolve ao centro e apaga
         await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', [rem.rows[0].quantidade_atual, rem.rows[0].variacao_id]);
         await db.query('DELETE FROM consignacoes_estoque WHERE id = $1', [id]);
 
@@ -397,7 +432,6 @@ app.delete('/api/consignacoes/:id', async (req, res) => {
 // 💰 FRENTE DE CAIXA (VENDAS & ESTORNO)
 // ==========================================
 
-// 1. REGISTRAR VENDA (Lógica Inteligente de Estoque)
 app.post('/api/vendas', async (req, res) => {
     try {
         const { produto_id, quantidade, parceiro_id } = req.body;
@@ -407,7 +441,6 @@ app.post('/api/vendas', async (req, res) => {
         const user = jwt.verify(auth.split(' ')[1], JWT_SECRET);
         const qtd = parseInt(quantidade);
 
-        // Busca informações do produto e da variação
         const info = await db.query(`
             SELECT v.id, v.preco_venda, v.preco_repasse, v.estoque_central 
             FROM produto_variacoes v 
@@ -416,14 +449,10 @@ app.post('/api/vendas', async (req, res) => {
         if (info.rows.length === 0) return res.status(404).json({ erro: "Produto não encontrado." });
         const v = info.rows[0];
 
-        // Define se a venda é do estoque central ou de um parceiro
-        // Se for Admin, ele pode escolher um parceiro ou vender direto (null)
-        // Se for Parceiro, o sistema força o ID dele
         let pIdFinal = (user.perfil === 'PARCEIRO') ? user.parceiro_id : (parceiro_id || null);
         let valorVenda = 0;
 
         if (pIdFinal) {
-            // VENDA VIA PARCEIRO: Tira do estoque consignado
             const estLoja = await db.query(
                 'SELECT id, quantidade_atual FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', 
                 [pIdFinal, v.id]
@@ -434,16 +463,14 @@ app.post('/api/vendas', async (req, res) => {
             }
 
             await db.query('UPDATE consignacoes_estoque SET quantidade_atual = quantidade_atual - $1, quantidade_vendida = quantidade_vendida + $1 WHERE id = $2', [qtd, estLoja.rows[0].id]);
-            valorVenda = v.preco_repasse * qtd; // Preço que o parceiro paga pro Rogério
+            valorVenda = v.preco_repasse * qtd; 
         } else {
-            // VENDA DIRETA (ADMIN): Tira do estoque central
             if (v.estoque_central < qtd) return res.status(400).json({ erro: "Estoque central insuficiente!" });
             
             await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, v.id]);
-            valorVenda = v.preco_venda * qtd; // Preço de venda final
+            valorVenda = v.preco_venda * qtd; 
         }
 
-        // Registra a venda
         await db.query(
             `INSERT INTO vendas (parceiro_id, usuario_id, variacao_id, quantidade, valor_total) 
              VALUES ($1, $2, $3, $4, $5)`, 
@@ -458,7 +485,6 @@ app.post('/api/vendas', async (req, res) => {
     }
 });
 
-// 2. LISTAR ÚLTIMAS VENDAS (Extrato)
 app.get('/api/vendas', async (req, res) => {
     try {
         const query = `
@@ -479,7 +505,6 @@ app.get('/api/vendas', async (req, res) => {
     }
 });
 
-// 3. CANCELAR VENDA (Estorno de Estoque)
 app.delete('/api/vendas/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -488,7 +513,6 @@ app.delete('/api/vendas/:id', async (req, res) => {
 
         const venda = vRes.rows[0];
 
-        // Devolve o estoque para o lugar de origem
         if (venda.parceiro_id) {
             await db.query(
                 `UPDATE consignacoes_estoque 
@@ -518,21 +542,18 @@ app.delete('/api/vendas/:id', async (req, res) => {
 
 app.get('/api/dashboard', async (req, res) => {
     try {
-        // 1. Vendas do Mês (Receita e Pedidos)
         const vMes = await db.query(`
             SELECT COUNT(*) as total_pedidos, COALESCE(SUM(valor_total), 0) as receita_total 
             FROM vendas 
             WHERE EXTRACT(MONTH FROM data_venda) = EXTRACT(MONTH FROM CURRENT_DATE) 
             AND EXTRACT(YEAR FROM data_venda) = EXTRACT(YEAR FROM CURRENT_DATE)`);
 
-        // 2. Patrimônio: Qtd total no estoque central e Valor Total (Custo de Produção)
         const estoquePatrimonio = await db.query(`
             SELECT 
                 SUM(estoque_central) as qtd_total_central,
                 SUM(estoque_central * custo_producao) as valor_total_custo
             FROM produto_variacoes`);
 
-        // 3. Estoque por Parceiro (Onde estão os produtos)
         const estoquePorParceiro = await db.query(`
             SELECT 
                 p.nome_loja, 
@@ -542,7 +563,6 @@ app.get('/api/dashboard', async (req, res) => {
             GROUP BY p.nome_loja
             ORDER BY total_produtos DESC`);
 
-        // 4. Itens com estoque baixo (Abaixo de 5 unidades)
         const eBaixo = await db.query(`
             SELECT p.nome, v.estoque_central, v.variacao 
             FROM produto_variacoes v 
@@ -550,7 +570,6 @@ app.get('/api/dashboard', async (req, res) => {
             WHERE v.estoque_central < 5 
             ORDER BY v.estoque_central ASC LIMIT 4`);
 
-        // 5. Ranking de produtos mais vendidos
         const rank = await db.query(`
             SELECT p.nome, SUM(v.quantidade) as total_vendido 
             FROM vendas v 

@@ -18,10 +18,15 @@
         .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e5e7eb;}
         .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: end; }
         select, input { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; }
-        .btn-send { background: #3b82f6; color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-        .btn-send:hover { background: #2563eb; }
+        
+        /* Botões */
+        .btn-add { background: #6b7280; color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-add:hover { background: #4b5563; }
+        .btn-send-lote { background: #10b981; color: white; padding: 15px; border: none; border-radius: 8px; font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s; width: 100%; margin-top: 15px; display: none; }
+        .btn-send-lote:hover { background: #059669; }
         .btn-pdf { background: #1f2937; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; display: none; }
         .btn-pdf:hover { background: #111827; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
         th { background: #f9fafb; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase; }
@@ -29,6 +34,10 @@
         .empty-state { text-align: center; padding: 30px; color: #9ca3af; font-size: 14px; }
         .btn-acao { background: none; border: none; cursor: pointer; font-size: 16px; margin-left: 10px; transition: 0.2s; }
         .btn-acao:hover { transform: scale(1.2); }
+
+        /* Estilo da lista temporária */
+        .carrinho-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 15px; margin-top: 20px; }
+        .carrinho-box h3 { font-size: 14px; color: #475569; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -45,24 +54,53 @@
 
     <div class="main">
         <div class="card">
-            <h2>🚚 Nova Remessa para Loja</h2><br>
+            <h2>🚚 Nova Remessa (Envio em Lote)</h2><br>
+            
+            <!-- Seleção da Loja (Fica separada para valer pro lote todo) -->
+            <div style="margin-bottom: 15px;">
+                <label style="font-size: 12px; font-weight: bold;">Loja de Destino da Remessa:</label>
+                <select id="parc" style="width: 100%; max-width: 400px; display: block; margin-top: 5px;" required>
+                    <option value="">Selecione a Loja primeiro...</option>
+                </select>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+
+            <!-- Formulário de Adicionar ao Lote -->
             <form id="formRem" class="form-grid">
-                <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="font-size: 12px; font-weight: bold;">Loja de Destino:</label>
-                    <select id="parc" required><option value="">Selecione a Loja...</option></select>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="font-size: 12px; font-weight: bold;">Produto/Peça:</label>
+                <div style="display:flex; flex-direction:column; gap:5px; grid-column: span 2;">
+                    <label style="font-size: 12px; font-weight: bold;">Adicionar Produto/Peça:</label>
                     <select id="prod" required><option value="">Escolha a Peça...</option></select>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="font-size: 12px; font-weight: bold;">Qtd. a Enviar:</label>
-                    <input type="number" id="qtd" placeholder="0" min="1" required>
+                    <label style="font-size: 12px; font-weight: bold;">Qtd:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="qtd" placeholder="0" min="1" required style="width: 80px;">
+                        <button type="submit" class="btn-add" style="flex: 1;">➕ Add à Lista</button>
+                    </div>
                 </div>
-                <button type="submit" class="btn-send" id="btnEnviar" style="grid-column: span 3; margin-top: 10px;">Confirmar Envio de Remessa</button>
             </form>
+
+            <!-- A Lista de Produtos (Carrinho) -->
+            <div class="carrinho-box">
+                <h3>📦 Itens Prontos para Envio</h3>
+                <table style="margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th>Quantidade</th>
+                            <th style="width: 80px;">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabLote">
+                        <tr><td colspan="3" class="empty-state" style="padding: 15px;">Nenhum produto adicionado ainda.</td></tr>
+                    </tbody>
+                </table>
+                <button id="btnEnviarLote" class="btn-send-lote" onclick="enviarLoteCompleto()">🚀 Confirmar Envio de Toda a Remessa</button>
+            </div>
         </div>
 
+        <!-- TABELA DE ESTOQUE ATUAL -->
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h2>📋 Estoque Consignado Atual</h2>
@@ -94,6 +132,9 @@
     <script>
         const token = localStorage.getItem('token_personalize');
         const API_BASE = '/api';
+        
+        // Variável que guarda o "Carrinho" de remessa
+        let listaRemessa = [];
 
         if(!token) window.location.href='index.html';
         function logout() { localStorage.clear(); window.location.href='index.html'; }
@@ -122,39 +163,111 @@
             } catch (err) { console.error(err); }
         }
 
-        // --- 2. ENVIAR REMESSA ---
-        document.getElementById('formRem').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('btnEnviar');
-            btn.disabled = true;
+        // --- 2. ADICIONAR AO LOTE (CARRINHO) ---
+        document.getElementById('formRem').addEventListener('submit', (e) => {
+            e.preventDefault(); // Impede de enviar pro servidor agora
+            
+            const parceiro = document.getElementById('parc').value;
+            if(!parceiro) {
+                alert("Por favor, selecione a Loja de Destino primeiro!");
+                document.getElementById('parc').focus();
+                return;
+            }
 
-            const payload = { 
-                parceiro_id: document.getElementById('parc').value, 
-                produto_id: document.getElementById('prod').value, 
-                quantidade: document.getElementById('qtd').value 
-            };
+            const prodSelect = document.getElementById('prod');
+            const produto_id = prodSelect.value;
+            // Pega o nome do produto limpo, sem o texto de "- Disp:"
+            const nomeProduto = prodSelect.options[prodSelect.selectedIndex].text.split(' - Disp:')[0]; 
+            const quantidade = parseInt(document.getElementById('qtd').value);
 
-            try {
-                const res = await fetch(`${API_BASE}/consignacoes`, {
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(payload)
-                });
-                if (res.ok) {
-                    alert('✅ Remessa enviada!');
-                    document.getElementById('formRem').reset();
-                    carregarDados();
-                    
-                    // Se a loja enviada for a mesma que está filtrada na tabela, recarrega a tabela
-                    if(document.getElementById('filtroParc').value === payload.parceiro_id) {
-                        document.getElementById('filtroParc').dispatchEvent(new Event('change'));
-                    }
-                }
-            } catch (err) { alert('Erro de conexão.'); }
-            finally { btn.disabled = false; }
+            // Verifica se o item já está na lista
+            const indexExistente = listaRemessa.findIndex(i => i.produto_id === produto_id);
+            if(indexExistente >= 0) {
+                // Se já tem, só soma a quantidade
+                listaRemessa[indexExistente].quantidade += quantidade;
+            } else {
+                // Se não tem, adiciona novo na lista
+                listaRemessa.push({ produto_id, nomeProduto, quantidade });
+            }
+
+            atualizarTabelaLote();
+            
+            // Limpa os campos de produto e quantidade, mas deixa a loja selecionada
+            prodSelect.value = "";
+            document.getElementById('qtd').value = "";
+            prodSelect.focus();
         });
 
-        // --- 3. FILTRAR ESTOQUE ---
+        // --- 3. ATUALIZAR TABELA DO LOTE ---
+        function atualizarTabelaLote() {
+            const tbody = document.getElementById('tabLote');
+            const btnSend = document.getElementById('btnEnviarLote');
+            
+            if(listaRemessa.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state" style="padding: 15px;">Nenhum produto adicionado ainda.</td></tr>';
+                btnSend.style.display = 'none';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            listaRemessa.forEach((item, index) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${item.nomeProduto}</td>
+                        <td><span class="badge-qtd">${item.quantidade} un.</span></td>
+                        <td>
+                            <button title="Remover da Lista" class="btn-acao" onclick="removerDoLote(${index})">❌</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            btnSend.style.display = 'block';
+        }
+
+        function removerDoLote(index) {
+            listaRemessa.splice(index, 1);
+            atualizarTabelaLote();
+        }
+
+        // --- 4. ENVIAR TUDO PRO SERVIDOR (LOTE) ---
+        async function enviarLoteCompleto() {
+            const parceiro_id = document.getElementById('parc').value;
+            if(!parceiro_id || listaRemessa.length === 0) return;
+
+            const btn = document.getElementById('btnEnviarLote');
+            btn.innerText = "⏳ Enviando Remessa...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/consignacoes/lote`, {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ parceiro_id: parceiro_id, itens: listaRemessa })
+                });
+
+                if (res.ok) {
+                    alert('📦 Remessa Completa enviada com sucesso!');
+                    listaRemessa = []; // Esvazia o carrinho
+                    atualizarTabelaLote();
+                    document.getElementById('parc').value = ""; // Reseta a loja
+                    carregarDados(); // Atualiza os estoques centrais no select
+                    
+                    // Atualiza a tabela de baixo automaticamente
+                    document.getElementById('filtroParc').value = parceiro_id;
+                    document.getElementById('filtroParc').dispatchEvent(new Event('change'));
+                } else {
+                    const erro = await res.json();
+                    alert("❌ Erro ao enviar: " + erro.erro);
+                }
+            } catch (err) { 
+                alert('Erro de conexão com o servidor.'); 
+            } finally { 
+                btn.innerText = "🚀 Confirmar Envio de Toda a Remessa";
+                btn.disabled = false; 
+            }
+        }
+
+        // --- 5. FILTRAR ESTOQUE DA LOJA ---
         document.getElementById('filtroParc').addEventListener('change', async (e) => {
             const lojaId = e.target.value;
             const btnPdf = document.getElementById('btnImprimir');
@@ -171,12 +284,12 @@
                 const tbody = document.getElementById('tabEst'); 
                 
                 if (est.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Sem estoque consignado.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Sem estoque consignado nesta loja.</td></tr>';
                     btnPdf.style.display = 'none';
                     return;
                 }
 
-                btnPdf.style.display = 'block'; // Mostra o botão de PDF
+                btnPdf.style.display = 'block'; 
                 tbody.innerHTML = '';
                 est.forEach(i => {
                     tbody.innerHTML += `
@@ -193,7 +306,6 @@
             } catch (err) { console.error(err); }
         });
 
-        // --- NOVAS FUNÇÕES ---
         async function excluirRemessa(id) {
             if(!confirm("⚠️ Deseja estornar esta remessa? O estoque voltará para o centro.")) return;
             const res = await fetch(`${API_BASE}/consignacoes/${id}`, { method: 'DELETE', headers: {'Authorization': `Bearer ${token}`} });
@@ -207,41 +319,38 @@
                 method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ nova_quantidade: parseInt(novaQtd) })
             });
-            if(res.ok) document.getElementById('filtroParc').dispatchEvent(new Event('change'));
-            else { const erro = await res.json(); alert("❌ " + erro.erro); }
+            if(res.ok) {
+                document.getElementById('filtroParc').dispatchEvent(new Event('change'));
+                carregarDados();
+            } else { 
+                const erro = await res.json(); alert("❌ " + erro.erro); 
+            }
         }
 
         // ==========================================
-        // 🖨️ FUNÇÃO MAGNÍFICA DO PDF
+        // 🖨️ FUNÇÃO DO PDF (Mantida intacta)
         // ==========================================
         function gerarPDF() {
-            // Importa as funções da biblioteca jsPDF
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
 
-            // Pega o nome da loja selecionada no filtro
             const selectLoja = document.getElementById('filtroParc');
             const nomeLoja = selectLoja.options[selectLoja.selectedIndex].text;
-            
-            // Pega a data e hora de hoje
             const dataAtual = new Date().toLocaleDateString('pt-BR');
             const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-            // 1. Cabeçalho do PDF
             doc.setFont("helvetica", "bold");
             doc.setFontSize(20);
-            doc.text("PERSONALIZE 3D", 105, 20, { align: "center" }); // Título Centralizado
+            doc.text("PERSONALIZE 3D", 105, 20, { align: "center" }); 
             
             doc.setFontSize(14);
             doc.text("RECIBO DE ESTOQUE / CONSIGNAÇÃO", 105, 30, { align: "center" });
 
-            // 2. Informações da Remessa
             doc.setFont("helvetica", "normal");
             doc.setFontSize(12);
             doc.text(`Empresa Parceira: ${nomeLoja}`, 14, 45);
             doc.text(`Data da Conferência: ${dataAtual} às ${horaAtual}`, 14, 53);
 
-            // 3. Montando os dados da tabela extraindo do HTML atual
             const linhasPdf = [];
             document.querySelectorAll('.linha-produto').forEach(tr => {
                 const nomeProd = tr.querySelector('.td-nome').innerText;
@@ -250,40 +359,30 @@
                 linhasPdf.push([nomeProd, variacao, qtd]);
             });
 
-            // 4. Desenhando a Tabela no PDF
             doc.autoTable({
                 startY: 60,
                 head: [['Produto', 'Variação / Modelo', 'Quantidade']],
                 body: linhasPdf,
                 theme: 'grid',
-                headStyles: { fillColor: [59, 130, 246] }, // Azul combinando com o sistema
+                headStyles: { fillColor: [59, 130, 246] },
                 styles: { fontSize: 11 }
             });
 
-            // 5. Linhas de Assinatura
-            // Pega a posição Y final de onde a tabela terminou para desenhar as assinaturas embaixo
             const finalY = doc.lastAutoTable.finalY + 40; 
-
             doc.setLineWidth(0.5);
-            
-            // Assinatura 1 (Sua)
             doc.line(20, finalY, 90, finalY);
             doc.text("PERSONALIZE 3D", 35, finalY + 7);
             doc.setFontSize(10);
             doc.text("Entregador / Conferente", 33, finalY + 12);
 
-            // Assinatura 2 (Da Loja)
             doc.setFontSize(12);
             doc.line(120, finalY, 190, finalY);
             
-            // Quebra o nome da loja se for muito grande
             const nomeLojaCurto = nomeLoja.length > 25 ? nomeLoja.substring(0, 25) + '...' : nomeLoja;
             doc.text(nomeLojaCurto, 135, finalY + 7);
-            
             doc.setFontSize(10);
             doc.text("Responsável pelo Recebimento", 125, finalY + 12);
 
-            // 6. Baixando o arquivo mágico
             doc.save(`Recibo_Estoque_${nomeLoja.replace(/\s+/g, '_')}_${dataAtual.replace(/\//g, '-')}.pdf`);
         }
 
