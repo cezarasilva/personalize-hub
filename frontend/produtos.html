@@ -2,66 +2,124 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Produtos & Peças - PERSONALIZE Hub</title>
     
+    <!-- Cropper para Fotos -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    
+    <!-- SweetAlert2 para Alertas -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <style>
         * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
-        body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; }
         
-        /* Menu Lateral */
-        .sidebar { width: 250px; background: #1f2937; color: #fff; display: flex; flex-direction: column; padding: 20px 0; }
-        .sidebar h2 { text-align: center; margin-bottom: 30px; color: #60a5fa; font-weight: 800; }
-        .sidebar a { padding: 15px 20px; color: #d1d5db; text-decoration: none; border-left: 4px solid transparent; cursor: pointer; }
+        /* ==========================================
+           🖥️ MODO DESKTOP (PC) 
+           ========================================== */
+        body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; flex-direction: row; }
+        
+        .sidebar { width: 250px; background: #1f2937; color: #fff; display: flex; flex-direction: column; z-index: 1000; }
+        .sidebar-top { padding: 25px 20px; text-align: center; background: #111827; }
+        .sidebar-top h2 { color: #60a5fa; font-weight: 800; font-size: 1.5rem; margin: 0; }
+        .btn-menu { display: none; } 
+        
+        .sidebar-links { display: flex; flex-direction: column; flex: 1; overflow-y: auto; }
+        .sidebar a { padding: 15px 20px; color: #d1d5db; text-decoration: none; border-left: 4px solid transparent; cursor: pointer; transition: 0.2s; font-size: 15px; }
         .sidebar a:hover { background: #374151; color: #fff; }
         .sidebar a.ativo { background: #374151; border-left-color: #3b82f6; color: #fff; }
-        
-        /* Área Principal */
+        .btn-sair { margin-top: auto; color: #f87171 !important; border-top: 1px solid #374151; }
+
         .main { flex: 1; overflow-y: auto; padding: 30px; }
         .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e5e7eb;}
         
         /* Formulário */
         form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        input, select { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; }
-        input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+        input, select { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; background: #f9fafb; width: 100%; }
+        input:focus, select:focus { border-color: #3b82f6; background: #fff; }
+        
         .btn-add { background: #3b82f6; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; grid-column: span 2; font-size: 15px; transition: 0.2s; }
         .btn-add:hover { background: #2563eb; }
         .btn-add:disabled { background: #94a3b8; cursor: not-allowed; }
         
+        .foto-container { grid-column: span 2; display: flex; gap: 15px; align-items: center; }
+
         /* Tabela */
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .table-container { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; min-width: 700px; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
         th { background: #f9fafb; color: #6b7280; font-size: 13px; font-weight: 600; text-transform: uppercase; }
         
-        /* Badge de Estoque */
-        .badge { background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 12px; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; display: inline-block; }
+        .badge { background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 12px; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; display: inline-block; white-space: nowrap; border: 1px solid #bbf7d0; }
         .badge:hover { background: #bbf7d0; transform: scale(1.05); }
         
-        /* Foto na Tabela */
-        .foto-miniatura { width: 45px; height: 45px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; background: #f9fafb; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #9ca3af; text-align: center; line-height: 1;}
+        .foto-miniatura { width: 45px; height: 45px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; background: #f9fafb; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #9ca3af; text-align: center; line-height: 1; flex-shrink: 0;}
 
         /* MODAL DE CORTE DA IMAGEM */
-        .modal-corte { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
-        .modal-conteudo { background: #fff; padding: 20px; border-radius: 12px; width: 90%; max-width: 500px; text-align: center; }
+        .modal-corte { display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; padding: 15px; }
+        .modal-conteudo { background: #fff; padding: 20px; border-radius: 12px; width: 100%; max-width: 500px; text-align: center; max-height: 90vh; overflow-y: auto; }
         .container-img-corte { width: 100%; max-height: 400px; margin-bottom: 20px; }
         .container-img-corte img { max-width: 100%; display: block; }
-        .btn-cortar { background: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .btn-cancelar { background: #ef4444; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-left: 10px; }
+        .btn-cortar { background: #10b981; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; margin-bottom: 10px; width: 100%; }
+        .btn-cancelar { background: #ef4444; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; }
+
+        /* ==========================================
+           📱 MODO CELULAR (Menu Hamburguer Funcional)
+           ========================================== */
+        @media (max-width: 768px) {
+            body { flex-direction: column; overflow: visible; }
+            
+            .sidebar { width: 100%; height: auto; position: relative; overflow: visible; }
+            .sidebar-top { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #111827; }
+            .sidebar-top h2 { font-size: 1.3rem; text-align: left; }
+            
+            .btn-menu { 
+                display: flex; background: #3b82f6; color: white; border: none; font-size: 24px; 
+                width: 40px; height: 40px; border-radius: 6px; align-items: center; justify-content: center; 
+                cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            }
+            
+            .sidebar-links { 
+                display: none; position: absolute; top: 100%; left: 0; width: 100%; 
+                background: #1f2937; box-shadow: 0 10px 15px rgba(0,0,0,0.5); z-index: 9999; 
+            }
+            .sidebar-links.ativo-mobile { display: flex !important; }
+
+            .sidebar a { padding: 15px 20px; border-bottom: 1px solid #374151; border-left: none; }
+            .sidebar a.ativo { border-left: none; background: #374151; border-left: 4px solid #3b82f6; }
+            
+            .main { padding: 15px; overflow-y: visible; }
+            .card { padding: 15px; }
+            
+            /* Ajusta o formulário para 1 coluna no celular */
+            form { grid-template-columns: 1fr; }
+            #nome, .btn-add, .foto-container { grid-column: span 1 !important; }
+            .foto-container { flex-direction: column; align-items: flex-start; }
+            
+            /* Ajusta o modal de corte */
+            .modal-conteudo { padding: 15px; }
+            .container-img-corte { max-height: 300px; }
+        }
     </style>
 </head>
 <body>
+    
+    <!-- BARRA SUPERIOR (Mobile) / LATERAL (PC) -->
     <div class="sidebar">
-        <h2>PERSONALIZE</h2>
-        <a href="dashboard.html">📊 Dashboard</a>
-        <a href="produtos.html" class="ativo">📦 Produtos & Peças</a>
-        <a href="parceiros.html">🏪 Lojas Parceiras</a>
-        <a href="usuarios.html">👥 Usuários do Sistema</a>
-        <a href="remessas.html">🚚 Remessas (Estoque)</a>
-        <a href="vendas.html">💰 Frente de Caixa</a>
-        <a onclick="logout()" style="margin-top:auto; color: #f87171; cursor: pointer;">🚪 Sair</a>
+        <div class="sidebar-top">
+            <h2>PERSONALIZE</h2>
+            <button class="btn-menu" onclick="toggleMenu()">☰</button>
+        </div>
+        <div class="sidebar-links" id="menuLinks">
+            <a href="dashboard.html">📊 Dashboard</a>
+            <a href="produtos.html" class="ativo">📦 Produtos & Peças</a>
+            <a href="parceiros.html">🏪 Lojas Parceiras</a>
+            <a href="usuarios.html">👥 Usuários do Sistema</a>
+            <a href="remessas.html">🚚 Remessas (Estoque)</a>
+            <a href="vendas.html">💰 Frente de Caixa</a>
+            <a class="btn-sair" onclick="logout()">🚪 Sair</a>
+        </div>
     </div>
 
     <div class="main">
@@ -81,8 +139,8 @@
                 <input type="number" id="preco" step="0.01" placeholder="Preço Venda Direta (R$)" required>
                 <input type="number" id="estoque" placeholder="Qtd. Estoque Central" required>
                 
-                <div style="grid-column: span 2; display: flex; gap: 15px; align-items: center;">
-                    <div style="flex: 1;">
+                <div class="foto-container" style="grid-column: span 2;">
+                    <div style="flex: 1; width: 100%;">
                         <label style="font-size: 13px; font-weight: bold; color: #4b5563; display: block; margin-bottom: 5px;">📸 Foto (Será cortada em Quadrado):</label>
                         <input type="file" id="imagem" accept="image/*" style="width: 100%; border: 1px dashed #d1d5db; padding: 10px; background: #f9fafb; cursor: pointer;">
                     </div>
@@ -95,24 +153,29 @@
 
         <div class="card">
             <h2>📋 Estoque Central</h2>
-            <table id="tabelaGeral">
-                <thead>
-                    <tr>
-                        <th>Produto</th>
-                        <th>Repasse (Loja)</th>
-                        <th>Venda (Direta)</th>
-                        <th>Estoque (Clique p/ editar)</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody id="tabelaProd"></tbody>
-            </table>
+            <div class="table-container">
+                <table id="tabelaGeral">
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th>Repasse (Loja)</th>
+                            <th>Venda (Direta)</th>
+                            <th>Estoque (Clique p/ editar)</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaProd">
+                        <tr><td colspan="5" style="text-align: center; padding: 20px;">Carregando produtos...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
+    <!-- MODAL DO CROPPER -->
     <div id="modalCorte" class="modal-corte">
         <div class="modal-conteudo">
-            <h3 style="margin-bottom: 15px;">Ajustar Foto (Quadrado)</h3>
+            <h3 style="margin-bottom: 15px; color: #1f2937;">Ajustar Foto (Quadrado)</h3>
             <div class="container-img-corte">
                 <img id="imgParaCortar" src="">
             </div>
@@ -134,69 +197,72 @@
             window.location.href = 'index.html';
         }
 
+        // 🍔 Função do Menu Hamburguer
+        function toggleMenu() {
+            const menu = document.getElementById('menuLinks');
+            menu.classList.toggle('ativo-mobile');
+        }
+
+        // Configuração do SweetAlert (Toasts flutuantes)
+        const Toast = Swal.mixin({
+            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
+        });
+
         // ==========================================
         // ✂️ LÓGICA DE CORTE DE IMAGEM (CROPPER.JS)
         // ==========================================
         let cropper = null;
-        let blobFinalCortado = null; // Aqui guardamos o arquivo cortado para enviar pro Supabase
+        let blobFinalCortado = null; 
 
         const inputImagem = document.getElementById('imagem');
         const modalCorte = document.getElementById('modalCorte');
         const imgParaCortar = document.getElementById('imgParaCortar');
         const previewCortado = document.getElementById('previewCortado');
 
-        // 1. Quando o usuário escolhe a foto, abre o Modal de Corte
         inputImagem.addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function (event) {
                     imgParaCortar.src = event.target.result;
-                    modalCorte.style.display = 'flex'; // Mostra a tela preta
+                    modalCorte.style.display = 'flex'; 
                     
-                    // Se já tiver um cortador aberto, destrói para criar o novo da foto atual
                     if (cropper) cropper.destroy();
                     
-                    // Inicia a ferramenta de corte forçando o formato Quadrado (Aspect Ratio 1:1)
                     cropper = new Cropper(imgParaCortar, {
                         aspectRatio: 1, 
                         viewMode: 1,
-                        autoCropArea: 1, // Pega 100% da foto no início
+                        autoCropArea: 1, 
                     });
                 };
                 reader.readAsDataURL(file);
             }
         });
 
-        // 2. Cancelar o corte
         document.getElementById('btnCancelarCorte').addEventListener('click', () => {
             modalCorte.style.display = 'none';
-            inputImagem.value = ''; // Limpa o input
+            inputImagem.value = ''; 
             blobFinalCortado = null;
             previewCortado.style.display = 'none';
             if (cropper) cropper.destroy();
         });
 
-        // 3. Confirmar o corte
         document.getElementById('btnCortar').addEventListener('click', () => {
-            // Gera um canvas com tamanho padrão bom para web (600x600 px)
             const canvas = cropper.getCroppedCanvas({ width: 600, height: 600 }); 
             
-            // Transforma o canvas em um arquivo (Blob) JPG
             canvas.toBlob((blob) => {
-                blobFinalCortado = blob; // Salva para mandar pro backend
-                previewCortado.src = canvas.toDataURL(); // Mostra a miniatura na tela
+                blobFinalCortado = blob; 
+                previewCortado.src = canvas.toDataURL(); 
                 previewCortado.style.display = 'block';
                 
-                modalCorte.style.display = 'none'; // Fecha a tela de corte
+                modalCorte.style.display = 'none'; 
                 if (cropper) cropper.destroy();
-            }, 'image/jpeg', 0.85); // 0.85 é a qualidade (85%) para não ficar pesado
+            }, 'image/jpeg', 0.85); 
         });
 
         // ==========================================
         // 📦 LÓGICA DE PRODUTOS
         // ==========================================
-
         async function carregar() {
             try {
                 const res = await fetch(API_URL, { headers: {'Authorization': `Bearer ${token}`} });
@@ -204,8 +270,13 @@
                 
                 const dados = await res.json();
                 const tbody = document.getElementById('tabelaProd'); 
-                tbody.innerHTML = '';
                 
+                if (dados.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#9ca3af;">Nenhum produto cadastrado.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
                 dados.forEach(p => {
                     const imgHTML = p.imagem_url 
                         ? `<img src="${p.imagem_url}" class="foto-miniatura">` 
@@ -230,33 +301,50 @@
                             </span>
                         </td>
                         <td>
-                            <button onclick="deletar(${p.id})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-weight:bold; font-size: 13px;">Excluir</button>
+                            <button onclick="deletar(${p.id})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-weight:bold; font-size: 16px; padding: 5px;">🗑️</button>
                         </td>
                     </tr>`;
                 });
-            } catch (erro) { console.error("Erro:", erro); }
+            } catch (erro) { 
+                console.error("Erro:", erro); 
+                document.getElementById('tabelaProd').innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Erro ao conectar com o servidor.</td></tr>';
+            }
         }
 
         async function ajustarEstoque(id, qtdAtual) {
-            const novaQtd = prompt(`📦 Estoque Atual: ${qtdAtual}\nDigite a nova quantidade total no estoque:`, qtdAtual);
-            if (novaQtd !== null && novaQtd !== "" && novaQtd != qtdAtual) {
+            const { value: novaQtd } = await Swal.fire({
+                title: 'Ajustar Estoque Central',
+                input: 'number',
+                inputLabel: 'Qual a nova quantidade disponível no centro?',
+                inputValue: qtdAtual,
+                showCancelButton: true,
+                confirmButtonText: 'Salvar',
+                cancelButtonText: 'Cancelar',
+                inputValidator: (value) => { if (!value || value < 0) return 'Insira um valor válido!' }
+            });
+
+            if (novaQtd && parseInt(novaQtd) !== qtdAtual) {
                 try {
                     const res = await fetch(`/api/produtos/estoque/${id}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ novo_estoque: parseInt(novaQtd) })
                     });
-                    if (res.ok) carregar(); 
-                    else alert("❌ Erro ao atualizar estoque.");
-                } catch (erro) { alert("❌ Erro de conexão."); }
+                    if (res.ok) {
+                        Toast.fire({ icon: 'success', title: 'Estoque atualizado!' });
+                        carregar(); 
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha ao atualizar o estoque.' });
+                    }
+                } catch (erro) { Swal.fire({ icon: 'error', title: 'Erro de conexão' }); }
             }
         }
 
-        // --- CADASTRAR PRODUTO (AGORA ENVIA A FOTO CORTADA) ---
+        // --- CADASTRAR PRODUTO ---
         document.getElementById('formProd').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('btnSalvar');
-            btn.textContent = '⏳ Fazendo upload e salvando...';
+            btn.textContent = '⏳ Fazendo upload...';
             btn.disabled = true;
 
             const formData = new FormData();
@@ -269,9 +357,7 @@
             formData.append('estoque', document.getElementById('estoque').value);
             formData.append('descricao', 'Peça 3D');
 
-            // SE EXISTIR UMA FOTO CORTADA, MANDA ELA EM VEZ DA ORIGINAL
             if (blobFinalCortado) { 
-                // O terceiro parâmetro é o nome simulado do arquivo
                 formData.append('imagem', blobFinalCortado, 'produto_quadrado.jpg'); 
             }
 
@@ -283,18 +369,19 @@
                 });
 
                 if(res.ok) {
-                    alert("✅ Produto cadastrado!");
+                    Toast.fire({ icon: 'success', title: '✅ Produto cadastrado!' });
                     document.getElementById('formProd').reset(); 
                     
-                    // Limpa as imagens da tela
                     blobFinalCortado = null;
                     previewCortado.style.display = 'none';
                     previewCortado.src = '';
                     
                     carregar();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Erro', text: 'Não foi possível cadastrar o produto.' });
                 }
             } catch (erro) {
-                alert("❌ Falha na comunicação.");
+                Swal.fire({ icon: 'error', title: 'Erro de Comunicação', text: 'Verifique sua conexão.' });
             } finally {
                 btn.textContent = 'Salvar Produto com Foto';
                 btn.disabled = false;
@@ -302,14 +389,30 @@
         });
 
         async function deletar(id) { 
-            if(confirm('Isso apagará o produto e todo o histórico vinculado. Confirmar?')) { 
+            const confirmacao = await Swal.fire({
+                title: 'Excluir Produto?',
+                text: "Isso apagará o produto e todo o histórico vinculado a ele nas lojas. Tem certeza?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sim, excluir!',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if(confirmacao.isConfirmed) { 
                 try {
                     const res = await fetch(`${API_URL}/${id}`, { 
                         method: 'DELETE', 
                         headers: {'Authorization': `Bearer ${token}`} 
                     });
-                    if(res.ok) carregar();
-                } catch (erro) { alert("❌ Erro ao excluir."); }
+                    if(res.ok) {
+                        Toast.fire({ icon: 'success', title: 'Produto excluído!' });
+                        carregar();
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Erro ao excluir' });
+                    }
+                } catch (erro) { Swal.fire({ icon: 'error', title: 'Erro de rede' }); }
             } 
         }
         

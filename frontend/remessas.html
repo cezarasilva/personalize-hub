@@ -2,153 +2,235 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Remessas - PERSONALIZE Hub</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <style>
         * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
-        body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; }
-        .sidebar { width: 250px; background: #1f2937; color: #fff; display: flex; flex-direction: column; padding: 20px 0; }
-        .sidebar h2 { text-align: center; margin-bottom: 30px; color: #60a5fa; font-weight: 800; }
-        .sidebar a { padding: 15px 20px; color: #d1d5db; text-decoration: none; border-left: 4px solid transparent; cursor: pointer; }
+        
+        /* ==========================================
+           🖥️ MODO DESKTOP (PC) 
+           ========================================== */
+        body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; flex-direction: row; }
+        
+        .sidebar { width: 250px; background: #1f2937; color: #fff; display: flex; flex-direction: column; z-index: 1000; }
+        .sidebar-top { padding: 25px 20px; text-align: center; background: #111827; }
+        .sidebar-top h2 { color: #60a5fa; font-weight: 800; font-size: 1.5rem; margin: 0; }
+        .btn-menu { display: none; } /* Escondido no PC */
+        
+        .sidebar-links { display: flex; flex-direction: column; flex: 1; overflow-y: auto; }
+        .sidebar a { padding: 15px 20px; color: #d1d5db; text-decoration: none; border-left: 4px solid transparent; cursor: pointer; transition: 0.2s; font-size: 15px; }
+        .sidebar a:hover { background: #374151; color: #fff; }
         .sidebar a.ativo { background: #374151; border-left-color: #3b82f6; color: #fff; }
+        .btn-sair { margin-top: auto; color: #f87171 !important; border-top: 1px solid #374151; }
+
         .main { flex: 1; overflow-y: auto; padding: 30px; }
         .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e5e7eb;}
         .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: end; }
-        select, input { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; }
+        select, input { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; width: 100%; background: #f9fafb; }
+        select:focus, input:focus { border-color: #3b82f6; background: #fff; }
         
-        /* Botões */
-        .btn-add { background: #6b7280; color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-add { background: #6b7280; color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; white-space: nowrap; }
         .btn-add:hover { background: #4b5563; }
         .btn-send-lote { background: #10b981; color: white; padding: 15px; border: none; border-radius: 8px; font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s; width: 100%; margin-top: 15px; display: none; }
         .btn-send-lote:hover { background: #059669; }
-        .btn-pdf { background: #1f2937; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; display: none; }
+        .btn-pdf { background: #1f2937; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; display: none; white-space: nowrap; }
         .btn-pdf:hover { background: #111827; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .table-container { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; min-width: 600px; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
         th { background: #f9fafb; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase; }
-        .badge-qtd { background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
+        .badge-qtd { background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; white-space: nowrap; }
         .empty-state { text-align: center; padding: 30px; color: #9ca3af; font-size: 14px; }
         .btn-acao { background: none; border: none; cursor: pointer; font-size: 16px; margin-left: 10px; transition: 0.2s; }
         .btn-acao:hover { transform: scale(1.2); }
-
-        /* Estilo da lista temporária */
         .carrinho-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 15px; margin-top: 20px; }
         .carrinho-box h3 { font-size: 14px; color: #475569; margin-bottom: 10px; }
+
+        /* ==========================================
+           📱 MODO CELULAR (Menu Hamburguer Funcional)
+           ========================================== */
+        @media (max-width: 768px) {
+            body { flex-direction: column; overflow: visible; }
+            
+            /* A barra superior vira um bloco fixo e visível */
+            .sidebar { width: 100%; height: auto; position: relative; overflow: visible; }
+            .sidebar-top { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #111827; }
+            .sidebar-top h2 { font-size: 1.3rem; text-align: left; }
+            
+            /* Botão Hamburguer visível e estlizado */
+            .btn-menu { 
+                display: flex; 
+                background: #3b82f6; 
+                color: white; 
+                border: none; 
+                font-size: 24px; 
+                width: 40px; 
+                height: 40px; 
+                border-radius: 6px; 
+                align-items: center; 
+                justify-content: center; 
+                cursor: pointer; 
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            }
+            
+            /* Menu oculto que vai descer (Dropdown) */
+            .sidebar-links { 
+                display: none; /* Escondido por padrão */
+                position: absolute; 
+                top: 100%; /* Gruda exatamente embaixo da barra superior */
+                left: 0; 
+                width: 100%; 
+                background: #1f2937; 
+                box-shadow: 0 10px 15px rgba(0,0,0,0.5); 
+                z-index: 9999; 
+            }
+            
+            /* Classe mágica que o JS ativa para mostrar o menu */
+            .sidebar-links.ativo-mobile { display: flex !important; }
+
+            .sidebar a { padding: 15px 20px; border-bottom: 1px solid #374151; border-left: none; }
+            .sidebar a.ativo { border-left: none; background: #374151; border-left: 4px solid #3b82f6; }
+            
+            /* Ajustes gerais de espaçamento para o celular */
+            .main { padding: 15px; overflow-y: visible; }
+            .card { padding: 15px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .header-estoque { flex-direction: column; align-items: stretch !important; gap: 10px; }
+            .btn-pdf { width: 100%; text-align: center; }
+        }
     </style>
 </head>
 <body>
+    
+    <!-- BARRA LATERAL (Vira barra superior no celular) -->
     <div class="sidebar">
-        <h2>PERSONALIZE</h2>
-        <a href="dashboard.html">📊 Dashboard</a>
-        <a href="produtos.html">📦 Produtos & Peças</a>
-        <a href="parceiros.html">🏪 Lojas Parceiras</a>
-        <a href="usuarios.html">👥 Usuários do Sistema</a>
-        <a href="remessas.html" class="ativo">🚚 Remessas (Estoque)</a>
-        <a href="vendas.html">💰 Frente de Caixa</a>
-        <a onclick="logout()" style="margin-top:auto; color: #f87171; padding: 15px 20px; cursor: pointer;">🚪 Sair</a>
+        <div class="sidebar-top">
+            <h2>PERSONALIZE</h2>
+            <button class="btn-menu" onclick="toggleMenu()">☰</button>
+        </div>
+        <div class="sidebar-links" id="menuLinks">
+            <a href="dashboard.html">📊 Dashboard</a>
+            <a href="produtos.html">📦 Produtos</a>
+            <a href="parceiros.html">🏪 Lojas</a>
+            <a href="usuarios.html">👥 Usuários</a>
+            <a href="remessas.html" class="ativo">🚚 Remessas</a>
+            <a href="vendas.html">💰 Caixa</a>
+            <a class="btn-sair" onclick="logout()">🚪 Sair</a>
+        </div>
     </div>
 
     <div class="main">
         <div class="card">
-            <h2>🚚 Nova Remessa (Envio em Lote)</h2><br>
+            <h2>🚚 Nova Remessa (Em Lote)</h2><br>
             
-            <!-- Seleção da Loja (Fica separada para valer pro lote todo) -->
             <div style="margin-bottom: 15px;">
-                <label style="font-size: 12px; font-weight: bold;">Loja de Destino da Remessa:</label>
-                <select id="parc" style="width: 100%; max-width: 400px; display: block; margin-top: 5px;" required>
+                <label style="font-size: 12px; font-weight: bold; color: #4b5563;">Loja de Destino:</label>
+                <select id="parc" required>
                     <option value="">Selecione a Loja primeiro...</option>
                 </select>
             </div>
 
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+            <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 15px 0;">
 
-            <!-- Formulário de Adicionar ao Lote -->
             <form id="formRem" class="form-grid">
-                <div style="display:flex; flex-direction:column; gap:5px; grid-column: span 2;">
-                    <label style="font-size: 12px; font-weight: bold;">Adicionar Produto/Peça:</label>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <label style="font-size: 12px; font-weight: bold; color: #4b5563;">Produto/Peça:</label>
                     <select id="prod" required><option value="">Escolha a Peça...</option></select>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="font-size: 12px; font-weight: bold;">Qtd:</label>
+                    <label style="font-size: 12px; font-weight: bold; color: #4b5563;">Quantidade:</label>
                     <div style="display: flex; gap: 10px;">
-                        <input type="number" id="qtd" placeholder="0" min="1" required style="width: 80px;">
-                        <button type="submit" class="btn-add" style="flex: 1;">➕ Add à Lista</button>
+                        <input type="number" id="qtd" placeholder="0" min="1" required style="width: 100px;">
+                        <button type="submit" class="btn-add">➕ Add</button>
                     </div>
                 </div>
             </form>
 
-            <!-- A Lista de Produtos (Carrinho) -->
             <div class="carrinho-box">
                 <h3>📦 Itens Prontos para Envio</h3>
-                <table style="margin-top: 0;">
-                    <thead>
-                        <tr>
-                            <th>Produto</th>
-                            <th>Quantidade</th>
-                            <th style="width: 80px;">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabLote">
-                        <tr><td colspan="3" class="empty-state" style="padding: 15px;">Nenhum produto adicionado ainda.</td></tr>
-                    </tbody>
-                </table>
-                <button id="btnEnviarLote" class="btn-send-lote" onclick="enviarLoteCompleto()">🚀 Confirmar Envio de Toda a Remessa</button>
+                <div class="table-container">
+                    <table style="margin-top: 0; min-width: unset;">
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th>Qtd</th>
+                                <th style="width: 60px;">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabLote">
+                            <tr><td colspan="3" class="empty-state" style="padding: 15px;">Nenhum produto adicionado à caixa.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <button id="btnEnviarLote" class="btn-send-lote" onclick="enviarLoteCompleto()">🚀 Confirmar Envio da Remessa</button>
             </div>
         </div>
 
-        <!-- TABELA DE ESTOQUE ATUAL -->
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div class="header-estoque" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h2>📋 Estoque Consignado Atual</h2>
-                <button id="btnImprimir" class="btn-pdf" onclick="gerarPDF()">🖨️ Imprimir Recibo PDF</button>
+                <button id="btnImprimir" class="btn-pdf" onclick="gerarPDF()">🖨️ Imprimir PDF</button>
             </div>
             
             <div style="margin-top: 5px;">
-                <select id="filtroParc" style="width: 100%; max-width: 400px;">
-                    <option value="">Selecione para ver o estoque...</option>
+                <select id="filtroParc">
+                    <option value="">Selecione para ver o estoque da loja...</option>
                 </select>
             </div>
             
-            <table>
-                <thead>
-                    <tr>
-                        <th>Peça / Produto</th>
-                        <th>Variação</th>
-                        <th>Qtd. na Loja</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody id="tabEst">
-                    <tr><td colspan="4" class="empty-state">Selecione uma loja para ver o estoque atual.</td></tr>
-                </tbody>
-            </table>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th>Variação</th>
+                            <th>Qtd. na Loja</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabEst">
+                        <tr><td colspan="4" class="empty-state">Selecione uma loja para carregar o estoque.</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
         const token = localStorage.getItem('token_personalize');
         const API_BASE = '/api';
-        
-        // Variável que guarda o "Carrinho" de remessa
         let listaRemessa = [];
 
         if(!token) window.location.href='index.html';
         function logout() { localStorage.clear(); window.location.href='index.html'; }
 
-        // --- 1. CARREGAR SELECTS ---
+        // ==========================================
+        // 🍔 FUNÇÃO DO MENU HAMBURGUER (Abre/Fecha)
+        // ==========================================
+        function toggleMenu() {
+            const menu = document.getElementById('menuLinks');
+            menu.classList.toggle('ativo-mobile');
+        }
+
+        // Configuração do SweetAlert para as notificações bonitas (Toasts)
+        const Toast = Swal.mixin({
+            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
+        });
+
+        // 1. CARREGAR SELECTS
         async function carregarDados() {
             try {
                 const resPa = await fetch(`${API_BASE}/parceiros`, { headers: {'Authorization': `Bearer ${token}`} });
                 const parceiros = await resPa.json();
                 let optPa = '<option value="">Selecione a Loja...</option>';
                 parceiros.forEach(p => {
-                    if(p.status && p.status.toUpperCase() === 'ATIVO') {
-                        optPa += `<option value="${p.id}">${p.nome_loja}</option>`;
-                    }
+                    if(p.status && p.status.toUpperCase() === 'ATIVO') optPa += `<option value="${p.id}">${p.nome_loja}</option>`;
                 });
                 document.getElementById('parc').innerHTML = optPa;
                 document.getElementById('filtroParc').innerHTML = optPa;
@@ -160,66 +242,47 @@
                     optPr += `<option value="${p.id}">${p.nome} (${p.variacao}) - Disp: ${p.estoque_central}</option>`;
                 });
                 document.getElementById('prod').innerHTML = optPr;
-            } catch (err) { console.error(err); }
+            } catch (err) { Toast.fire({ icon: 'error', title: 'Erro ao conectar com o servidor.' }); }
         }
 
-        // --- 2. ADICIONAR AO LOTE (CARRINHO) ---
+        // 2. ADICIONAR AO LOTE (Carrinho de Remessa)
         document.getElementById('formRem').addEventListener('submit', (e) => {
-            e.preventDefault(); // Impede de enviar pro servidor agora
-            
+            e.preventDefault();
             const parceiro = document.getElementById('parc').value;
             if(!parceiro) {
-                alert("Por favor, selecione a Loja de Destino primeiro!");
-                document.getElementById('parc').focus();
+                Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Selecione a Loja de Destino primeiro!' });
                 return;
             }
 
             const prodSelect = document.getElementById('prod');
             const produto_id = prodSelect.value;
-            // Pega o nome do produto limpo, sem o texto de "- Disp:"
             const nomeProduto = prodSelect.options[prodSelect.selectedIndex].text.split(' - Disp:')[0]; 
             const quantidade = parseInt(document.getElementById('qtd').value);
 
-            // Verifica se o item já está na lista
             const indexExistente = listaRemessa.findIndex(i => i.produto_id === produto_id);
-            if(indexExistente >= 0) {
-                // Se já tem, só soma a quantidade
-                listaRemessa[indexExistente].quantidade += quantidade;
-            } else {
-                // Se não tem, adiciona novo na lista
-                listaRemessa.push({ produto_id, nomeProduto, quantidade });
-            }
+            if(indexExistente >= 0) listaRemessa[indexExistente].quantidade += quantidade;
+            else listaRemessa.push({ produto_id, nomeProduto, quantidade });
 
             atualizarTabelaLote();
-            
-            // Limpa os campos de produto e quantidade, mas deixa a loja selecionada
-            prodSelect.value = "";
-            document.getElementById('qtd').value = "";
-            prodSelect.focus();
+            prodSelect.value = ""; document.getElementById('qtd').value = ""; prodSelect.focus();
         });
 
-        // --- 3. ATUALIZAR TABELA DO LOTE ---
+        // 3. ATUALIZAR TABELA LOTE
         function atualizarTabelaLote() {
             const tbody = document.getElementById('tabLote');
             const btnSend = document.getElementById('btnEnviarLote');
-            
             if(listaRemessa.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty-state" style="padding: 15px;">Nenhum produto adicionado ainda.</td></tr>';
-                btnSend.style.display = 'none';
-                return;
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state" style="padding: 15px;">Nenhum produto adicionado à caixa.</td></tr>';
+                btnSend.style.display = 'none'; return;
             }
-
             tbody.innerHTML = '';
             listaRemessa.forEach((item, index) => {
                 tbody.innerHTML += `
                     <tr>
                         <td>${item.nomeProduto}</td>
                         <td><span class="badge-qtd">${item.quantidade} un.</span></td>
-                        <td>
-                            <button title="Remover da Lista" class="btn-acao" onclick="removerDoLote(${index})">❌</button>
-                        </td>
-                    </tr>
-                `;
+                        <td><button class="btn-acao" onclick="removerDoLote(${index})">❌</button></td>
+                    </tr>`;
             });
             btnSend.style.display = 'block';
         }
@@ -229,68 +292,52 @@
             atualizarTabelaLote();
         }
 
-        // --- 4. ENVIAR TUDO PRO SERVIDOR (LOTE) ---
+        // 4. ENVIAR LOTE PRO SERVIDOR
         async function enviarLoteCompleto() {
             const parceiro_id = document.getElementById('parc').value;
             if(!parceiro_id || listaRemessa.length === 0) return;
 
             const btn = document.getElementById('btnEnviarLote');
-            btn.innerText = "⏳ Enviando Remessa...";
-            btn.disabled = true;
+            btn.innerText = "⏳ Enviando Remessa..."; btn.disabled = true;
 
             try {
                 const res = await fetch(`${API_BASE}/consignacoes/lote`, {
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ parceiro_id: parceiro_id, itens: listaRemessa })
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ parceiro_id, itens: listaRemessa })
                 });
 
                 if (res.ok) {
-                    alert('📦 Remessa Completa enviada com sucesso!');
-                    listaRemessa = []; // Esvazia o carrinho
-                    atualizarTabelaLote();
-                    document.getElementById('parc').value = ""; // Reseta a loja
-                    carregarDados(); // Atualiza os estoques centrais no select
-                    
-                    // Atualiza a tabela de baixo automaticamente
+                    Toast.fire({ icon: 'success', title: '📦 Remessa enviada com sucesso!' });
+                    listaRemessa = []; atualizarTabelaLote();
+                    document.getElementById('parc').value = ""; carregarDados();
                     document.getElementById('filtroParc').value = parceiro_id;
                     document.getElementById('filtroParc').dispatchEvent(new Event('change'));
                 } else {
                     const erro = await res.json();
-                    alert("❌ Erro ao enviar: " + erro.erro);
+                    Swal.fire({ icon: 'error', title: 'Ops!', text: erro.erro });
                 }
-            } catch (err) { 
-                alert('Erro de conexão com o servidor.'); 
-            } finally { 
-                btn.innerText = "🚀 Confirmar Envio de Toda a Remessa";
-                btn.disabled = false; 
-            }
+            } catch (err) { Swal.fire({ icon: 'error', title: 'Erro de conexão', text: 'Verifique sua internet.' }); } 
+            finally { btn.innerText = "🚀 Confirmar Envio da Remessa"; btn.disabled = false; }
         }
 
-        // --- 5. FILTRAR ESTOQUE DA LOJA ---
+        // 5. FILTRAR ESTOQUE DA LOJA
         document.getElementById('filtroParc').addEventListener('change', async (e) => {
             const lojaId = e.target.value;
             const btnPdf = document.getElementById('btnImprimir');
-            
             if(!lojaId) {
                 btnPdf.style.display = 'none';
-                document.getElementById('tabEst').innerHTML = '<tr><td colspan="4" class="empty-state">Selecione uma loja para ver o estoque atual.</td></tr>';
+                document.getElementById('tabEst').innerHTML = '<tr><td colspan="4" class="empty-state">Selecione uma loja para carregar o estoque.</td></tr>';
                 return;
             }
-
             try {
                 const res = await fetch(`${API_BASE}/consignacoes/${lojaId}`, { headers: {'Authorization': `Bearer ${token}`} });
                 const est = await res.json();
                 const tbody = document.getElementById('tabEst'); 
-                
                 if (est.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Sem estoque consignado nesta loja.</td></tr>';
-                    btnPdf.style.display = 'none';
-                    return;
+                    btnPdf.style.display = 'none'; return;
                 }
-
-                btnPdf.style.display = 'block'; 
-                tbody.innerHTML = '';
+                btnPdf.style.display = 'block'; tbody.innerHTML = '';
                 est.forEach(i => {
                     tbody.innerHTML += `
                         <tr class="linha-produto">
@@ -298,91 +345,76 @@
                             <td class="td-var">${i.variacao}</td>
                             <td class="td-qtd"><span class="badge-qtd">${i.quantidade_atual} un.</span></td>
                             <td>
-                                <button title="Ajustar Qtd" class="btn-acao" onclick="ajustarRemessa(${i.id}, ${i.quantidade_atual})">✏️</button>
-                                <button title="Excluir/Estornar" class="btn-acao" onclick="excluirRemessa(${i.id})">🗑️</button>
+                                <button title="Ajustar" class="btn-acao" onclick="ajustarRemessa(${i.id}, ${i.quantidade_atual})">✏️</button>
+                                <button title="Estornar" class="btn-acao" onclick="excluirRemessa(${i.id})">🗑️</button>
                             </td>
                         </tr>`;
                 });
             } catch (err) { console.error(err); }
         });
 
+        // 6. SWEETALERT PARA EXCLUIR E AJUSTAR (Evita os alertas nativos feios)
         async function excluirRemessa(id) {
-            if(!confirm("⚠️ Deseja estornar esta remessa? O estoque voltará para o centro.")) return;
-            const res = await fetch(`${API_BASE}/consignacoes/${id}`, { method: 'DELETE', headers: {'Authorization': `Bearer ${token}`} });
-            if(res.ok) { document.getElementById('filtroParc').dispatchEvent(new Event('change')); carregarDados(); }
+            const confirmacao = await Swal.fire({ 
+                title: 'Estornar Remessa?', 
+                text: "O estoque voltará para o centro de distribuição.", 
+                icon: 'warning', 
+                showCancelButton: true, 
+                confirmButtonColor: '#d33', 
+                cancelButtonColor: '#3085d6', 
+                confirmButtonText: 'Sim, estornar!', 
+                cancelButtonText: 'Cancelar' 
+            });
+            if(confirmacao.isConfirmed) {
+                const res = await fetch(`${API_BASE}/consignacoes/${id}`, { method: 'DELETE', headers: {'Authorization': `Bearer ${token}`} });
+                if(res.ok) { 
+                    Toast.fire({ icon: 'success', title: 'Remessa estornada com sucesso' }); 
+                    document.getElementById('filtroParc').dispatchEvent(new Event('change')); 
+                    carregarDados(); 
+                }
+            }
         }
 
         async function ajustarRemessa(id, qtdAtual) {
-            const novaQtd = prompt("Qual a nova quantidade total na loja?", qtdAtual);
-            if(novaQtd === null || novaQtd == qtdAtual) return;
-            const res = await fetch(`${API_BASE}/consignacoes/${id}`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ nova_quantidade: parseInt(novaQtd) })
+            const { value: novaQtd } = await Swal.fire({ 
+                title: 'Ajustar Quantidade', 
+                input: 'number', 
+                inputLabel: 'Qual a nova quantidade total exata na loja?', 
+                inputValue: qtdAtual, 
+                showCancelButton: true, 
+                confirmButtonText: 'Salvar',
+                cancelButtonText: 'Cancelar',
+                inputValidator: (value) => { if (!value || value < 0) return 'Insira um valor válido!' } 
             });
-            if(res.ok) {
-                document.getElementById('filtroParc').dispatchEvent(new Event('change'));
-                carregarDados();
-            } else { 
-                const erro = await res.json(); alert("❌ " + erro.erro); 
+            
+            if(novaQtd && novaQtd != qtdAtual) {
+                const res = await fetch(`${API_BASE}/consignacoes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ nova_quantidade: parseInt(novaQtd) }) });
+                if(res.ok) { 
+                    Toast.fire({ icon: 'success', title: 'Quantidade ajustada!' }); 
+                    document.getElementById('filtroParc').dispatchEvent(new Event('change')); 
+                    carregarDados(); 
+                } 
+                else { 
+                    const erro = await res.json(); 
+                    Swal.fire({ icon: 'error', title: 'Erro de Estoque', text: erro.erro }); 
+                }
             }
         }
 
         // ==========================================
-        // 🖨️ FUNÇÃO DO PDF (Mantida intacta)
+        // 🖨️ FUNÇÃO DE PDF DO RECIBO
         // ==========================================
         function gerarPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-
-            const selectLoja = document.getElementById('filtroParc');
-            const nomeLoja = selectLoja.options[selectLoja.selectedIndex].text;
-            const dataAtual = new Date().toLocaleDateString('pt-BR');
-            const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(20);
-            doc.text("PERSONALIZE 3D", 105, 20, { align: "center" }); 
-            
-            doc.setFontSize(14);
-            doc.text("RECIBO DE ESTOQUE / CONSIGNAÇÃO", 105, 30, { align: "center" });
-
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(12);
-            doc.text(`Empresa Parceira: ${nomeLoja}`, 14, 45);
-            doc.text(`Data da Conferência: ${dataAtual} às ${horaAtual}`, 14, 53);
-
-            const linhasPdf = [];
-            document.querySelectorAll('.linha-produto').forEach(tr => {
-                const nomeProd = tr.querySelector('.td-nome').innerText;
-                const variacao = tr.querySelector('.td-var').innerText;
-                const qtd = tr.querySelector('.td-qtd').innerText;
-                linhasPdf.push([nomeProd, variacao, qtd]);
-            });
-
-            doc.autoTable({
-                startY: 60,
-                head: [['Produto', 'Variação / Modelo', 'Quantidade']],
-                body: linhasPdf,
-                theme: 'grid',
-                headStyles: { fillColor: [59, 130, 246] },
-                styles: { fontSize: 11 }
-            });
-
-            const finalY = doc.lastAutoTable.finalY + 40; 
-            doc.setLineWidth(0.5);
-            doc.line(20, finalY, 90, finalY);
-            doc.text("PERSONALIZE 3D", 35, finalY + 7);
-            doc.setFontSize(10);
-            doc.text("Entregador / Conferente", 33, finalY + 12);
-
-            doc.setFontSize(12);
-            doc.line(120, finalY, 190, finalY);
-            
-            const nomeLojaCurto = nomeLoja.length > 25 ? nomeLoja.substring(0, 25) + '...' : nomeLoja;
-            doc.text(nomeLojaCurto, 135, finalY + 7);
-            doc.setFontSize(10);
-            doc.text("Responsável pelo Recebimento", 125, finalY + 12);
-
+            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            const selectLoja = document.getElementById('filtroParc'); const nomeLoja = selectLoja.options[selectLoja.selectedIndex].text;
+            const dataAtual = new Date().toLocaleDateString('pt-BR'); const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.text("PERSONALIZE 3D", 105, 20, { align: "center" }); 
+            doc.setFontSize(14); doc.text("RECIBO DE ESTOQUE / CONSIGNAÇÃO", 105, 30, { align: "center" });
+            doc.setFont("helvetica", "normal"); doc.setFontSize(12); doc.text(`Empresa Parceira: ${nomeLoja}`, 14, 45); doc.text(`Data da Conferência: ${dataAtual} às ${horaAtual}`, 14, 53);
+            const linhasPdf = []; document.querySelectorAll('.linha-produto').forEach(tr => { linhasPdf.push([tr.querySelector('.td-nome').innerText, tr.querySelector('.td-var').innerText, tr.querySelector('.td-qtd').innerText]); });
+            doc.autoTable({ startY: 60, head: [['Produto', 'Variação / Modelo', 'Quantidade']], body: linhasPdf, theme: 'grid', headStyles: { fillColor: [59, 130, 246] } });
+            const finalY = doc.lastAutoTable.finalY + 40; doc.setLineWidth(0.5); doc.line(20, finalY, 90, finalY); doc.text("PERSONALIZE 3D", 35, finalY + 7); doc.setFontSize(10); doc.text("Entregador / Conferente", 33, finalY + 12);
+            doc.setFontSize(12); doc.line(120, finalY, 190, finalY); doc.text(nomeLoja.length > 25 ? nomeLoja.substring(0, 25) + '...' : nomeLoja, 135, finalY + 7); doc.setFontSize(10); doc.text("Responsável pelo Recebimento", 125, finalY + 12);
             doc.save(`Recibo_Estoque_${nomeLoja.replace(/\s+/g, '_')}_${dataAtual.replace(/\//g, '-')}.pdf`);
         }
 
