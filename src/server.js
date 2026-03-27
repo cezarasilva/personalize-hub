@@ -1,8 +1,9 @@
 require('dotenv').config();
 
-const dns = require('node:dns');
-dns.setDefaultResultOrder('ipv4first');
+// const dns = require('node:dns');
+// dns.setDefaultResultOrder('ipv4first');
 
+const crypto = require('crypto'); 
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
@@ -72,12 +73,11 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
-// 🔑 ROTA: RECUPERAR SENHA (ESQUECI A SENHA)
+// 🔑 ROTA 1: GERAR TOKEN E ENVIAR E-MAIL
 // ==========================================
 app.post('/api/usuarios/recuperar', async (req, res) => {
     try {
         const { email } = req.body;
-
         if (!email) return res.status(400).json({ erro: "Por favor, informe seu e-mail." });
 
         const userRes = await db.query('SELECT * FROM usuarios WHERE email = $1', [email]);
@@ -85,43 +85,85 @@ app.post('/api/usuarios/recuperar', async (req, res) => {
 
         const user = userRes.rows[0];
 
-        // Gera uma senha temporária aleatória (6 números)
-        const novaSenha = Math.floor(100000 + Math.random() * 900000).toString();
+        // 1. Gera um Token seguro e a data de validade (1 hora)
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const tokenExpira = new Date(Date.now() + 3600000); // +1 Hora
 
-        const salt = await bcrypt.genSalt(10);
-        const hash = await bcrypt.hash(novaSenha, salt);
+        // 2. Salva o Token no banco de dados
+        await db.query(
+            'UPDATE usuarios SET reset_token = $1, reset_token_expira = $2 WHERE id = $3', 
+            [resetToken, tokenExpira, user.id]
+        );
 
-        // Salva no banco
-        await db.query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [hash, user.id]);
+        // 3. Monta o Link Mágico
+        const linkRecuperacao = `https://personalize-hub.onrender.com/redefinir-senha.html?token=${resetToken}`;
 
-        // Dispara o e-mail em background
+        // 4. Dispara o e-mail com o Botão
         const mailOptions = {
             from: `"PERSONALIZE Hub" <${process.env.EMAIL_USER}>`,
             to: email,
-            subject: 'PERSONALIZE Hub - Recuperação de Senha',
+            subject: 'Recuperação de Senha - PERSONALIZE Hub',
             html: `
-                <div style="font-family: Arial, sans-serif; color: #333; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                <div style="font-family: Arial, sans-serif; color: #333; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
                     <h2 style="color: #3b82f6; text-align: center;">PERSONALIZE Hub</h2>
                     <p>Olá, <strong>${user.nome}</strong>!</p>
-                    <p>Você solicitou a recuperação de senha do sistema.</p>
-                    <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
-                        <p style="margin: 0; font-size: 14px; color: #6b7280;">Seu usuário de acesso é:</p>
-                        <p style="margin: 5px 0 15px 0; font-size: 18px; font-weight: bold; color: #1f2937;">${user.usuario || user.email}</p>
-                        
-                        <p style="margin: 0; font-size: 14px; color: #6b7280;">Sua nova senha temporária:</p>
-                        <p style="margin: 5px 0 0 0; font-size: 24px; font-weight: bold; color: #10b981; letter-spacing: 2px;">${novaSenha}</p>
+                    <p>Recebemos um pedido para redefinir sua senha de acesso. (Seu usuário é: <b>${user.usuario || user.email}</b>).</p>
+                    <p>Para criar uma nova senha, clique no botão abaixo. Este link é válido por 1 hora.</p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${linkRecuperacao}" style="background-color: #3b82f6; color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Redefinir Minha Senha</a>
                     </div>
-                    <p style="font-size: 13px; color: #ef4444; text-align: center;">Recomendamos que você altere esta senha assim que fizer o login.</p>
+                    
+                    <p style="font-size: 12px; color: #9ca3af; text-align: center;">Se você não solicitou isso, pode ignorar este e-mail tranquilamente.</p>
                 </div>
             `
         };
 
         await transporter.sendMail(mailOptions);
-        res.status(200).json({ mensagem: "Uma nova senha foi enviada para o seu e-mail!" });
+        res.status(200).json({ mensagem: "Link de recuperação enviado para o seu e-mail!" });
 
     } catch (erro) {
-        console.error("❌ ERRO RECUPERAÇÃO DE SENHA:", erro);
+        console.error("❌ ERRO RECUPERAÇÃO:", erro);
         res.status(500).json({ erro: "Erro no servidor ao tentar enviar o e-mail." });
+    }
+});
+
+// ==========================================
+// 🔑 ROTA 2: RECEBER A NOVA SENHA E SALVAR
+// ==========================================
+app.post('/api/usuarios/reset-password', async (req, res) => {
+    try {
+        const { token, novaSenha } = req.body;
+
+        if (!token || !novaSenha) return res.status(400).json({ erro: "Dados inválidos." });
+
+        // 1. Procura se existe alguém com esse Token e se ainda tá na validade
+        const userRes = await db.query(
+            'SELECT * FROM usuarios WHERE reset_token = $1 AND reset_token_expira > NOW()',
+            [token]
+        );
+
+        if (userRes.rows.length === 0) {
+            return res.status(400).json({ erro: "Link inválido ou expirado. Solicite novamente." });
+        }
+
+        const user = userRes.rows[0];
+
+        // 2. Criptografa a senha nova
+        const salt = await bcrypt.genSalt(10);
+        const hash = await bcrypt.hash(novaSenha, salt);
+
+        // 3. Atualiza a senha no banco e DELETA o Token (para não ser usado de novo)
+        await db.query(
+            'UPDATE usuarios SET senha_hash = $1, reset_token = NULL, reset_token_expira = NULL WHERE id = $2',
+            [hash, user.id]
+        );
+
+        res.status(200).json({ mensagem: "Senha redefinida com sucesso!" });
+
+    } catch (erro) {
+        console.error("❌ ERRO RESET:", erro);
+        res.status(500).json({ erro: "Erro ao redefinir a senha." });
     }
 });
 
