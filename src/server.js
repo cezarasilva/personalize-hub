@@ -30,12 +30,17 @@ app.get('/', (req, res) => {
 const JWT_SECRET = process.env.JWT_SECRET || 'chave_super_secreta_personalize';
 
 // --- CONFIGURAÇÃO EMAIL (GMAIL) ---
-// Agora puxando as credenciais de forma segura pelas variáveis do Render/dotenv
+// Configuração forçada com Host e Porta para evitar Timeout no Render
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: { 
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS 
+    },
+    tls: {
+        rejectUnauthorized: false
     }
 });
 
@@ -45,10 +50,9 @@ const transporter = nodemailer.createTransport({
 
 app.post('/api/login', async (req, res) => {
     try {
-        // Agora recebe 'usuario' em vez de 'email'
+        // Agora o login é pelo USUARIO e não mais pelo e-mail
         const { usuario, senha } = req.body; 
         
-        // Busca pelo NOME DE USUÁRIO
         const resU = await db.query('SELECT * FROM usuarios WHERE usuario = $1', [usuario]);
         if (resU.rows.length === 0) return res.status(401).json({ erro: "Usuário ou senha incorretos!" });
         
@@ -59,54 +63,80 @@ app.post('/api/login', async (req, res) => {
         if (!valida) return res.status(401).json({ erro: "Usuário ou senha incorretos!" });
         
         const token = jwt.sign({ id: user.id, perfil: user.perfil, parceiro_id: user.parceiro_id }, JWT_SECRET, { expiresIn: '8h' });
-        res.json({ token, usuario: { nome: user.nome, perfil: user.perfil, parceiro_id: user.parceiro_id } });
+        res.json({ token, usuario: { nome: user.nome, perfil: user.perfil, parceiro_id: user.parceiro_id, usuario: user.usuario } });
     } catch (e) { res.status(500).json({ erro: "Erro interno no login." }); }
 });
 
-// Recuperação de senha "Anti-Travamento"
+// ==========================================
+// 🔑 ROTA: RECUPERAR SENHA (ESQUECI A SENHA)
+// ==========================================
 app.post('/api/usuarios/recuperar', async (req, res) => {
     try {
         const { email } = req.body;
-        const resU = await db.query('SELECT id, nome FROM usuarios WHERE email = $1', [email]);
-        
-        if (resU.rows.length === 0) {
-            return res.status(404).json({ erro: "E-mail não encontrado." });
-        }
 
-        const senhaTemp = Math.random().toString(36).slice(-8);
-        const hash = await bcrypt.hash(senhaTemp, 10);
-        
-        // 1. Atualiza no banco PRIMEIRO
-        await db.query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [hash, resU.rows[0].id]);
+        if (!email) return res.status(400).json({ erro: "Por favor, informe seu e-mail." });
 
-        // 2. Responde ao usuário IMEDIATAMENTE (Destrava o botão na hora)
-        res.json({ mensagem: "Solicitação recebida! Se o e-mail estiver correto e o servidor configurado, você receberá a nova senha." });
+        const userRes = await db.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+        if (userRes.rows.length === 0) return res.status(404).json({ erro: "E-mail não encontrado no sistema." });
 
-        // 3. Tenta enviar o e-mail em Background
-        transporter.sendMail({
+        const user = userRes.rows[0];
+
+        // Gera uma senha temporária aleatória (6 números)
+        const novaSenha = Math.floor(100000 + Math.random() * 900000).toString();
+
+        const salt = await bcrypt.genSalt(10);
+        const hash = await bcrypt.hash(novaSenha, salt);
+
+        // Salva no banco
+        await db.query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [hash, user.id]);
+
+        // Dispara o e-mail em background
+        const mailOptions = {
             from: `"PERSONALIZE Hub" <${process.env.EMAIL_USER}>`,
             to: email,
-            subject: 'Recuperação de Senha - PERSONALIZE Hub',
-            html: `<h2>Olá, ${resU.rows[0].nome}!</h2><p>Sua nova senha temporária é: <b>${senhaTemp}</b></p>`
-        }).catch(err => console.error("❌ Falha silenciosa no envio de e-mail:", err.message));
+            subject: 'PERSONALIZE Hub - Recuperação de Senha',
+            html: `
+                <div style="font-family: Arial, sans-serif; color: #333; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                    <h2 style="color: #3b82f6; text-align: center;">PERSONALIZE Hub</h2>
+                    <p>Olá, <strong>${user.nome}</strong>!</p>
+                    <p>Você solicitou a recuperação de senha do sistema.</p>
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #6b7280;">Seu usuário de acesso é:</p>
+                        <p style="margin: 5px 0 15px 0; font-size: 18px; font-weight: bold; color: #1f2937;">${user.usuario || user.email}</p>
+                        
+                        <p style="margin: 0; font-size: 14px; color: #6b7280;">Sua nova senha temporária:</p>
+                        <p style="margin: 5px 0 0 0; font-size: 24px; font-weight: bold; color: #10b981; letter-spacing: 2px;">${novaSenha}</p>
+                    </div>
+                    <p style="font-size: 13px; color: #ef4444; text-align: center;">Recomendamos que você altere esta senha assim que fizer o login.</p>
+                </div>
+            `
+        };
 
-    } catch (e) { 
-        console.error("Erro na recuperação:", e);
-        res.status(500).json({ erro: "Erro interno ao recuperar senha." }); 
+        await transporter.sendMail(mailOptions);
+        res.status(200).json({ mensagem: "Uma nova senha foi enviada para o seu e-mail!" });
+
+    } catch (erro) {
+        console.error("❌ ERRO RECUPERAÇÃO DE SENHA:", erro);
+        res.status(500).json({ erro: "Erro no servidor ao tentar enviar o e-mail." });
     }
 });
 
 app.get('/api/usuarios', async (req, res) => {
     try {
-        const u = await db.query(`SELECT u.id, u.nome, u.email, u.perfil, u.ativo, p.nome_loja FROM usuarios u LEFT JOIN parceiros p ON u.parceiro_id = p.id ORDER BY u.id DESC`);
+        const u = await db.query(`SELECT u.id, u.nome, u.email, u.usuario, u.perfil, u.ativo, p.nome_loja FROM usuarios u LEFT JOIN parceiros p ON u.parceiro_id = p.id ORDER BY u.id DESC`);
         res.json(u.rows);
     } catch (e) { res.status(500).json({ erro: "Erro ao buscar usuários." }); }
 });
 
 app.put('/api/usuarios/:id', async (req, res) => {
     try {
-        const { nome, email, ativo } = req.body;
-        await db.query('UPDATE usuarios SET nome=$1, email=$2, ativo=$3 WHERE id=$4', [nome, email, ativo, req.params.id]);
+        const { nome, senha, ativo } = req.body;
+        if(senha) {
+            const hash = await bcrypt.hash(senha, 10);
+            await db.query('UPDATE usuarios SET nome=$1, senha_hash=$2, ativo=$3 WHERE id=$4', [nome, hash, ativo, req.params.id]);
+        } else {
+            await db.query('UPDATE usuarios SET nome=$1, ativo=$2 WHERE id=$3', [nome, ativo, req.params.id]);
+        }
         res.json({ mensagem: "✅ Usuário atualizado!" });
     } catch (e) { res.status(500).json({ erro: "Erro ao atualizar usuário." }); }
 });
@@ -123,28 +153,25 @@ app.delete('/api/usuarios/:id', async (req, res) => {
 // 🏪 GESTÃO DE PARCEIROS E LOJAS
 // ==========================================
 
-// 1. LISTAR PARCEIROS (Admin)
 app.get('/api/parceiros', async (req, res) => {
     try {
         const d = await db.query(`
-            SELECT p.*, u.email as email_login 
+            SELECT p.*, u.usuario, u.email as email_login 
             FROM parceiros p 
             LEFT JOIN usuarios u ON u.parceiro_id = p.id 
             ORDER BY p.id DESC
         `);
         res.json(d.rows);
     } catch (e) { 
-        console.error(e);
         res.status(500).json({ erro: "Erro ao buscar parceiros." }); 
     }
 });
 
 app.post('/api/parceiros', async (req, res) => {
     try {
-        // Agora recebe email E usuario
+        // Recebe e-mail E usuario
         const { nome_loja, responsavel, telefone, email, usuario, senha } = req.body;
 
-        // Verifica se o e-mail OU o usuário já existem
         const checkUser = await db.query('SELECT id FROM usuarios WHERE email = $1 OR usuario = $2', [email, usuario]);
         if (checkUser.rows.length > 0) return res.status(400).json({ erro: "E-mail ou Nome de Usuário já em uso!" });
 
@@ -158,7 +185,6 @@ app.post('/api/parceiros', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(senha, salt);
         
-        // Insere também o campo 'usuario'
         await db.query(
             `INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, parceiro_id, ativo) 
              VALUES ($1, $2, $3, $4, 'PARCEIRO', $5, true)`, 
@@ -167,12 +193,10 @@ app.post('/api/parceiros', async (req, res) => {
 
         res.status(201).json({ mensagem: "✅ Parceiro cadastrado com sucesso!" });
     } catch (erro) {
-        console.error("ERRO NO CADASTRO:", erro.message);
         res.status(500).json({ erro: "Erro interno: " + erro.message });
     }
 });
 
-// 3. SOLICITAÇÃO EXTERNA (Vem do registrar.html - Fica PENDENTE)
 app.post('/api/parceiros/solicitar', async (req, res) => {
     try {
         const { nome_loja, responsavel, telefone, email_login, senha_login } = req.body;
@@ -189,6 +213,7 @@ app.post('/api/parceiros/solicitar', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(senha_login, salt);
         
+        // Cadastra sem usuario definido (apenas e-mail) até o admin aprovar e criar um
         await db.query(
             `INSERT INTO usuarios (nome, email, senha_hash, perfil, parceiro_id, ativo) 
              VALUES ($1, $2, $3, 'PARCEIRO', $4, false)`, 
@@ -197,12 +222,10 @@ app.post('/api/parceiros/solicitar', async (req, res) => {
 
         res.status(201).json({ mensagem: "✅ Solicitação enviada! Aguarde nossa análise." });
     } catch (erro) {
-        console.error("ERRO NA SOLICITAÇÃO:", erro.message);
         res.status(500).json({ erro: "Erro interno ao enviar solicitação." });
     }
 });
 
-// 4. EDITAR PARCEIRO (Admin ajustando dados)
 app.put('/api/parceiros/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -227,12 +250,10 @@ app.put('/api/parceiros/:id', async (req, res) => {
 
         res.json({ mensagem: "✅ Loja atualizada com sucesso!", dados: resultado.rows[0] });
     } catch (erro) {
-        console.error("ERRO AO EDITAR LOJA:", erro.message);
         res.status(500).json({ erro: "Erro interno: " + erro.message });
     }
 });
 
-// 5. DELETAR PARCEIRO (Limpa tudo associado)
 app.delete('/api/parceiros/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -298,11 +319,11 @@ app.delete('/api/produtos/:id', async (req, res) => {
 // 🚚 GESTÃO DE REMESSAS (CONSIGNAÇÃO)
 // ==========================================
 
-// 1. LISTAR ESTOQUE DE UMA LOJA ESPECÍFICA
 app.get('/api/consignacoes/:parceiro_id', async (req, res) => {
     try {
+        // CORREÇÃO: Agora a query devolve o "p.id as produto_id" para a frente de caixa saber de quem abater
         const query = `
-            SELECT c.id, p.nome as produto_nome, v.variacao, v.preco_repasse, c.quantidade_atual, c.variacao_id
+            SELECT c.id, p.id as produto_id, p.nome as produto_nome, v.variacao, v.preco_repasse, c.quantidade_atual, c.variacao_id, p.imagem_url
             FROM consignacoes_estoque c 
             JOIN produto_variacoes v ON c.variacao_id = v.id 
             JOIN produtos p ON v.produto_id = p.id 
@@ -316,7 +337,6 @@ app.get('/api/consignacoes/:parceiro_id', async (req, res) => {
     }
 });
 
-// 2. ENVIAR NOVA REMESSA (Cria ou Incrementa um por um)
 app.post('/api/consignacoes', async (req, res) => {
     try {
         const { parceiro_id, produto_id, quantidade } = req.body;
@@ -344,34 +364,23 @@ app.post('/api/consignacoes', async (req, res) => {
     }
 });
 
-// ========================================================
-// 📦 NOVO: ENVIO EM LOTE (O Carrinho de Produtos)
-// ========================================================
 app.post('/api/consignacoes/lote', async (req, res) => {
     try {
         const { parceiro_id, itens } = req.body; 
 
-        if (!itens || itens.length === 0) {
-            return res.status(400).json({ erro: "A lista de remessa está vazia." });
-        }
+        if (!itens || itens.length === 0) return res.status(400).json({ erro: "A lista de remessa está vazia." });
 
-        // Inicia uma transação segura
         await db.query('BEGIN');
 
         for (let item of itens) {
             const qtd = parseInt(item.quantidade);
-
-            // 1. Busca a variação e checa o estoque central
             const vRes = await db.query(`SELECT id, estoque_central FROM produto_variacoes WHERE produto_id = $1`, [item.produto_id]);
             if (vRes.rows.length === 0) throw new Error(`Produto ID ${item.produto_id} não encontrado.`);
-            if (vRes.rows[0].estoque_central < qtd) throw new Error(`Estoque central insuficiente para um dos produtos.`);
+            if (vRes.rows[0].estoque_central < qtd) throw new Error(`Estoque central insuficiente.`);
             
             const vId = vRes.rows[0].id;
-
-            // 2. Tira do estoque central
             await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, vId]);
 
-            // 3. Adiciona na loja parceira
             const ex = await db.query('SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', [parceiro_id, vId]);
 
             if (ex.rows.length > 0) {
@@ -381,20 +390,15 @@ app.post('/api/consignacoes/lote', async (req, res) => {
             }
         }
 
-        // Se tudo deu certo, confirma as alterações no banco
         await db.query('COMMIT');
         res.status(201).json({ mensagem: "📦 Remessa em lote enviada com sucesso!" });
 
     } catch (e) {
-        // Se deu erro em qualquer produto, desfaz tudo para não quebrar o estoque
         await db.query('ROLLBACK');
-        console.error("Erro no lote:", e);
         res.status(400).json({ erro: e.message });
     }
 });
-// ========================================================
 
-// 3. AJUSTAR QUANTIDADE (Update com balanceamento de estoque)
 app.put('/api/consignacoes/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -420,7 +424,6 @@ app.put('/api/consignacoes/:id', async (req, res) => {
     }
 });
 
-// 4. DELETAR/ESTORNAR REMESSA (Devolve tudo ao centro)
 app.delete('/api/consignacoes/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -498,7 +501,7 @@ app.get('/api/vendas', async (req, res) => {
         const query = `
             SELECT v.id, v.quantidade, v.valor_total, 
                    TO_CHAR(v.data_venda, 'DD/MM/YYYY HH24:MI') as data_formatada, 
-                   p.nome as produto_nome, var.variacao, 
+                   p.nome as produto_nome, p.imagem_url, var.variacao, 
                    COALESCE(parc.nome_loja, 'VENDA DIRETA') as loja 
             FROM vendas v 
             JOIN produto_variacoes var ON v.variacao_id = var.id 
@@ -599,7 +602,6 @@ app.get('/api/dashboard', async (req, res) => {
         });
 
     } catch (e) { 
-        console.error("Erro Dashboard:", e.message);
         res.status(500).json({ erro: "Erro ao processar dados do dashboard." }); 
     }
 });
