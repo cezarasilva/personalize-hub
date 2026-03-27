@@ -1,7 +1,3 @@
-// 🔥 FORÇA USO DE IPv4 (ESSENCIAL PRA RENDER)
-const dns = require('node:dns');
-dns.setDefaultResultOrder('ipv4first');
-
 require('dotenv').config();
 
 const express = require('express');
@@ -9,10 +5,14 @@ const path = require('path');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
 const db = require('./config/db');
 const multer = require('multer'); 
 const { createClient } = require('@supabase/supabase-js'); 
+
+// 🔥 IMPORTAÇÃO DO RESEND (Adeus, Nodemailer e Timeout!)
+const { Resend } = require('resend');
+// Puxa a chave da variável de ambiente (ou coloque a sua 're_...' aqui APENAS para testar localmente)
+const resend = new Resend(process.env.RESEND_API_KEY || 're_t2eqt6kd_AvyJxFdLGiCxu9QeW92oLJLN');
 
 // --- CONFIGURAÇÃO SUPABASE ---
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -24,39 +24,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- SERVIR ARQUIVOS ESTÁTICOS (HTML, CSS, JS) ---
+// --- SERVIR ARQUIVOS ESTÁTICOS ---
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Rota principal
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'chave_super_secreta_personalize';
-
-// 🔐 CONFIG SMTP (BLINDADO)
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587, // 👈 MAIS COMPATÍVEL
-    secure: false,
-    family: 4, // 👈 FORÇA IPv4
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false
-    }
-});
-
-// ✅ TESTAR CONEXÃO SMTP AO INICIAR
-transporter.verify((error, success) => {
-    if (error) {
-        console.error('❌ Erro SMTP:', error);
-    } else {
-        console.log('✅ SMTP pronto para envio de e-mails');
-    }
-});
 
 
 // ==========================================
@@ -82,34 +57,33 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
-// 🔑 ROTA 1: GERAR TOKEN JWT E ENVIAR E-MAIL
+// 🔑 ROTA 1: GERAR TOKEN JWT E ENVIAR E-MAIL (COM RESEND)
 // ==========================================
 app.post('/api/usuarios/recuperar', async (req, res) => {
     try {
         const { email } = req.body;
         if (!email) return res.status(400).json({ erro: 'Email é obrigatório' });
 
-        // Confirma se o e-mail existe no banco
         const userRes = await db.query('SELECT * FROM usuarios WHERE email = $1', [email]);
         if (userRes.rows.length === 0) return res.status(404).json({ erro: "E-mail não encontrado no sistema." });
         const user = userRes.rows[0];
 
-        // 🔐 GERAR TOKEN JWT (Stateless - não precisa salvar no banco!)
+        // 🔐 GERAR TOKEN JWT
         const token = jwt.sign(
             { id: user.id, email: user.email }, 
             JWT_SECRET, 
             { expiresIn: '1h' }
         );
 
-        // Pega a URL dinâmica do servidor (funciona no localhost e no Render)
+        // Monta o Link
         const host = req.get('host');
         const protocolo = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
         const link = `${protocolo}://${host}/redefinir-senha.html?token=${token}`;
 
-        // 📧 ENVIO DE EMAIL
-        await transporter.sendMail({
-            from: `"PERSONALIZE Hub" <${process.env.EMAIL_USER}>`,
-            to: email,
+        // 📧 ENVIO DE EMAIL VIA RESEND (API HTTP - Bypass no bloqueio do Render)
+        const { data, error } = await resend.emails.send({
+            from: 'PERSONALIZE Hub <onboarding@resend.dev>', // Remetente de teste do Resend
+            to: email, // Lembre-se: por enquanto só chega no cezar.antonio.silva@gmail.com
             subject: 'Recuperação de senha - PERSONALIZE Hub',
             html: `
                 <div style="font-family: Arial, sans-serif; color: #333; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
@@ -128,11 +102,16 @@ app.post('/api/usuarios/recuperar', async (req, res) => {
             `
         });
 
+        if (error) {
+            console.error('❌ Erro Resend:', error);
+            return res.status(500).json({ erro: 'Erro ao enviar email pela API.' });
+        }
+
         res.json({ mensagem: 'Link de recuperação enviado com sucesso!' });
 
     } catch (erro) {
         console.error('❌ ERRO RECUPERAÇÃO DE SENHA:', erro);
-        res.status(500).json({ erro: 'Erro ao enviar email' });
+        res.status(500).json({ erro: 'Erro interno no servidor' });
     }
 });
 
@@ -144,7 +123,6 @@ app.post('/api/usuarios/reset-password', async (req, res) => {
         const { token, novaSenha } = req.body;
         if (!token || !novaSenha) return res.status(400).json({ erro: "Dados inválidos." });
 
-        // Verifica se o Token é válido e se não expirou (A mágica do JWT)
         let decoded;
         try {
             decoded = jwt.verify(token, JWT_SECRET);
@@ -152,7 +130,6 @@ app.post('/api/usuarios/reset-password', async (req, res) => {
             return res.status(400).json({ erro: "Link expirado ou inválido. Solicite novamente." });
         }
 
-        // Criptografa a nova senha e salva usando o ID que estava dentro do Token!
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(novaSenha, salt);
 
@@ -166,7 +143,10 @@ app.post('/api/usuarios/reset-password', async (req, res) => {
     }
 });
 
-// --- RESTO DAS ROTAS (Usuários, Lojas, Produtos, Vendas, Dashboard) ---
+
+// ==========================================
+// OUTRAS ROTAS (Usuários, Parceiros, Produtos, Vendas, Dashboard)
+// ==========================================
 
 app.get('/api/usuarios', async (req, res) => {
     try {
@@ -195,22 +175,11 @@ app.delete('/api/usuarios/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ erro: "Erro ao excluir usuário." }); }
 });
 
-// ==========================================
-// 🏪 GESTÃO DE PARCEIROS E LOJAS
-// ==========================================
-
 app.get('/api/parceiros', async (req, res) => {
     try {
-        const d = await db.query(`
-            SELECT p.*, u.usuario, u.email as email_login 
-            FROM parceiros p 
-            LEFT JOIN usuarios u ON u.parceiro_id = p.id 
-            ORDER BY p.id DESC
-        `);
+        const d = await db.query(`SELECT p.*, u.usuario, u.email as email_login FROM parceiros p LEFT JOIN usuarios u ON u.parceiro_id = p.id ORDER BY p.id DESC`);
         res.json(d.rows);
-    } catch (e) { 
-        res.status(500).json({ erro: "Erro ao buscar parceiros." }); 
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao buscar parceiros." }); }
 });
 
 app.post('/api/parceiros', async (req, res) => {
@@ -219,24 +188,14 @@ app.post('/api/parceiros', async (req, res) => {
         const checkUser = await db.query('SELECT id FROM usuarios WHERE email = $1 OR usuario = $2', [email, usuario]);
         if (checkUser.rows.length > 0) return res.status(400).json({ erro: "E-mail ou Nome de Usuário já em uso!" });
 
-        const novaLoja = await db.query(
-            `INSERT INTO parceiros (nome_loja, responsavel, telefone, status) VALUES ($1, $2, $3, 'ATIVO') RETURNING id`, 
-            [nome_loja, responsavel, telefone]
-        );
-
+        const novaLoja = await db.query(`INSERT INTO parceiros (nome_loja, responsavel, telefone, status) VALUES ($1, $2, $3, 'ATIVO') RETURNING id`, [nome_loja, responsavel, telefone]);
         const parceiro_id = novaLoja.rows[0].id;
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(senha, salt);
         
-        await db.query(
-            `INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, parceiro_id, ativo) VALUES ($1, $2, $3, $4, 'PARCEIRO', $5, true)`, 
-            [responsavel, email, usuario, hash, parceiro_id]
-        );
-
+        await db.query(`INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, parceiro_id, ativo) VALUES ($1, $2, $3, $4, 'PARCEIRO', $5, true)`, [responsavel, email, usuario, hash, parceiro_id]);
         res.status(201).json({ mensagem: "✅ Parceiro cadastrado com sucesso!" });
-    } catch (erro) {
-        res.status(500).json({ erro: "Erro interno: " + erro.message });
-    }
+    } catch (erro) { res.status(500).json({ erro: "Erro interno: " + erro.message }); }
 });
 
 app.post('/api/parceiros/solicitar', async (req, res) => {
@@ -245,43 +204,27 @@ app.post('/api/parceiros/solicitar', async (req, res) => {
         const check = await db.query('SELECT id FROM usuarios WHERE email = $1', [email_login]);
         if (check.rows.length > 0) return res.status(400).json({ erro: "Este e-mail já está em uso!" });
 
-        const novaLoja = await db.query(
-            `INSERT INTO parceiros (nome_loja, responsavel, telefone, status) VALUES ($1, $2, $3, 'PENDENTE') RETURNING id`, 
-            [nome_loja, responsavel, telefone]
-        );
-
+        const novaLoja = await db.query(`INSERT INTO parceiros (nome_loja, responsavel, telefone, status) VALUES ($1, $2, $3, 'PENDENTE') RETURNING id`, [nome_loja, responsavel, telefone]);
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(senha_login, salt);
         
-        await db.query(
-            `INSERT INTO usuarios (nome, email, senha_hash, perfil, parceiro_id, ativo) VALUES ($1, $2, $3, 'PARCEIRO', $4, false)`, 
-            [responsavel, email_login, hash, novaLoja.rows[0].id]
-        );
-
+        await db.query(`INSERT INTO usuarios (nome, email, senha_hash, perfil, parceiro_id, ativo) VALUES ($1, $2, $3, 'PARCEIRO', $4, false)`, [responsavel, email_login, hash, novaLoja.rows[0].id]);
         res.status(201).json({ mensagem: "✅ Solicitação enviada! Aguarde nossa análise." });
-    } catch (erro) {
-        res.status(500).json({ erro: "Erro interno ao enviar solicitação." });
-    }
+    } catch (erro) { res.status(500).json({ erro: "Erro interno ao enviar solicitação." }); }
 });
 
 app.put('/api/parceiros/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { nome_loja, responsavel, telefone, status } = req.body;
-        const query = `
-            UPDATE parceiros 
-            SET nome_loja = COALESCE($1, nome_loja), responsavel = COALESCE($2, responsavel), 
-                telefone = COALESCE($3, telefone), status = COALESCE($4, status) 
-            WHERE id = $5 RETURNING *`;
+        const query = `UPDATE parceiros SET nome_loja = COALESCE($1, nome_loja), responsavel = COALESCE($2, responsavel), telefone = COALESCE($3, telefone), status = COALESCE($4, status) WHERE id = $5 RETURNING *`;
         
         const resultado = await db.query(query, [nome_loja, responsavel, telefone, status, id]);
         if (resultado.rowCount === 0) return res.status(404).json({ erro: "Loja não encontrada." });
 
         if (status === 'ATIVO') await db.query('UPDATE usuarios SET ativo = true WHERE parceiro_id = $1', [id]);
         res.json({ mensagem: "✅ Loja atualizada com sucesso!", dados: resultado.rows[0] });
-    } catch (erro) {
-        res.status(500).json({ erro: "Erro interno: " + erro.message });
-    }
+    } catch (erro) { res.status(500).json({ erro: "Erro interno: " + erro.message }); }
 });
 
 app.delete('/api/parceiros/:id', async (req, res) => {
@@ -293,11 +236,6 @@ app.delete('/api/parceiros/:id', async (req, res) => {
         res.json({ mensagem: "🗑️ Parceiro removido com sucesso!" });
     } catch (e) { res.status(500).json({ erro: "Erro ao deletar parceiro." }); }
 });
-
-
-// ==========================================
-// 📦 PRODUTOS E LOGÍSTICA
-// ==========================================
 
 app.post('/api/produtos', upload.single('imagem'), async (req, res) => {
     try {
@@ -343,72 +281,53 @@ app.delete('/api/produtos/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ erro: "Erro ao deletar produto." }); }
 });
 
-// ==========================================
-// 🚚 GESTÃO DE REMESSAS (CONSIGNAÇÃO)
-// ==========================================
-
 app.get('/api/consignacoes/:parceiro_id', async (req, res) => {
     try {
-        const query = `
-            SELECT c.id, p.id as produto_id, p.nome as produto_nome, v.variacao, v.preco_repasse, c.quantidade_atual, c.variacao_id, p.imagem_url
-            FROM consignacoes_estoque c 
-            JOIN produto_variacoes v ON c.variacao_id = v.id 
-            JOIN produtos p ON v.produto_id = p.id 
-            WHERE c.parceiro_id = $1 AND c.quantidade_atual > 0
-            ORDER BY p.nome ASC`;
-        
+        const query = `SELECT c.id, p.id as produto_id, p.nome as produto_nome, v.variacao, v.preco_repasse, c.quantidade_atual, c.variacao_id, p.imagem_url FROM consignacoes_estoque c JOIN produto_variacoes v ON c.variacao_id = v.id JOIN produtos p ON v.produto_id = p.id WHERE c.parceiro_id = $1 AND c.quantidade_atual > 0 ORDER BY p.nome ASC`;
         const d = await db.query(query, [req.params.parceiro_id]);
         res.json(d.rows);
-    } catch (e) { res.status(500).json({ erro: "Erro ao buscar estoque da loja." }); }
+    } catch (e) { res.status(500).json({ erro: "Erro ao buscar estoque." }); }
 });
 
 app.post('/api/consignacoes', async (req, res) => {
     try {
         const { parceiro_id, produto_id, quantidade } = req.body;
         const qtd = parseInt(quantidade);
-
         const vRes = await db.query(`SELECT id, estoque_central FROM produto_variacoes WHERE produto_id = $1`, [produto_id]);
         if (vRes.rows.length === 0) return res.status(404).json({ erro: "Produto não encontrado." });
-        
         const vId = vRes.rows[0].id;
         if (vRes.rows[0].estoque_central < qtd) return res.status(400).json({ erro: "Estoque central insuficiente!" });
 
         await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, vId]);
         const ex = await db.query('SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', [parceiro_id, vId]);
 
-        if (ex.rows.length > 0) {
-            await db.query('UPDATE consignacoes_estoque SET quantidade_atual = quantidade_atual + $1, quantidade_enviada = quantidade_enviada + $1 WHERE id = $2', [qtd, ex.rows[0].id]);
-        } else {
-            await db.query('INSERT INTO consignacoes_estoque (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual) VALUES ($1, $2, $3, $3)', [parceiro_id, vId, qtd]);
-        }
+        if (ex.rows.length > 0) await db.query('UPDATE consignacoes_estoque SET quantidade_atual = quantidade_atual + $1, quantidade_enviada = quantidade_enviada + $1 WHERE id = $2', [qtd, ex.rows[0].id]);
+        else await db.query('INSERT INTO consignacoes_estoque (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual) VALUES ($1, $2, $3, $3)', [parceiro_id, vId, qtd]);
         res.status(201).json({ mensagem: "✅ Remessa enviada com sucesso!" });
-    } catch (e) { res.status(500).json({ erro: "Erro ao processar remessa: " + e.message }); }
+    } catch (e) { res.status(500).json({ erro: "Erro ao processar remessa." }); }
 });
 
 app.post('/api/consignacoes/lote', async (req, res) => {
     try {
         const { parceiro_id, itens } = req.body; 
-        if (!itens || itens.length === 0) return res.status(400).json({ erro: "A lista de remessa está vazia." });
+        if (!itens || itens.length === 0) return res.status(400).json({ erro: "Lista vazia." });
 
         await db.query('BEGIN');
         for (let item of itens) {
             const qtd = parseInt(item.quantidade);
             const vRes = await db.query(`SELECT id, estoque_central FROM produto_variacoes WHERE produto_id = $1`, [item.produto_id]);
-            if (vRes.rows.length === 0) throw new Error(`Produto ID ${item.produto_id} não encontrado.`);
-            if (vRes.rows[0].estoque_central < qtd) throw new Error(`Estoque central insuficiente.`);
+            if (vRes.rows.length === 0) throw new Error(`Produto não encontrado.`);
+            if (vRes.rows[0].estoque_central < qtd) throw new Error(`Estoque insuficiente.`);
             
             const vId = vRes.rows[0].id;
             await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, vId]);
             const ex = await db.query('SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', [parceiro_id, vId]);
 
-            if (ex.rows.length > 0) {
-                await db.query('UPDATE consignacoes_estoque SET quantidade_atual = quantidade_atual + $1, quantidade_enviada = quantidade_enviada + $1 WHERE id = $2', [qtd, ex.rows[0].id]);
-            } else {
-                await db.query('INSERT INTO consignacoes_estoque (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual) VALUES ($1, $2, $3, $3)', [parceiro_id, vId, qtd]);
-            }
+            if (ex.rows.length > 0) await db.query('UPDATE consignacoes_estoque SET quantidade_atual = quantidade_atual + $1, quantidade_enviada = quantidade_enviada + $1 WHERE id = $2', [qtd, ex.rows[0].id]);
+            else await db.query('INSERT INTO consignacoes_estoque (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual) VALUES ($1, $2, $3, $3)', [parceiro_id, vId, qtd]);
         }
         await db.query('COMMIT');
-        res.status(201).json({ mensagem: "📦 Remessa em lote enviada com sucesso!" });
+        res.status(201).json({ mensagem: "📦 Remessa em lote enviada!" });
     } catch (e) {
         await db.query('ROLLBACK');
         res.status(400).json({ erro: e.message });
@@ -419,7 +338,6 @@ app.put('/api/consignacoes/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { nova_quantidade } = req.body;
-
         const rem = await db.query('SELECT variacao_id, quantidade_atual FROM consignacoes_estoque WHERE id = $1', [id]);
         if (rem.rows.length === 0) return res.status(404).json({ erro: "Remessa não encontrada." });
 
@@ -428,12 +346,11 @@ app.put('/api/consignacoes/:id', async (req, res) => {
 
         if (diferenca > 0) {
             const centro = await db.query('SELECT estoque_central FROM produto_variacoes WHERE id = $1', [variacao_id]);
-            if (centro.rows[0].estoque_central < diferenca) return res.status(400).json({ erro: "Estoque central insuficiente para este ajuste!" });
+            if (centro.rows[0].estoque_central < diferenca) return res.status(400).json({ erro: "Estoque insuficiente!" });
         }
 
         await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [diferenca, variacao_id]);
         await db.query('UPDATE consignacoes_estoque SET quantidade_atual = $1 WHERE id = $2', [nova_quantidade, id]);
-
         res.json({ mensagem: "✅ Quantidade ajustada!" });
     } catch (e) { res.status(500).json({ erro: "Erro no ajuste." }); }
 });
@@ -446,14 +363,9 @@ app.delete('/api/consignacoes/:id', async (req, res) => {
 
         await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', [rem.rows[0].quantidade_atual, rem.rows[0].variacao_id]);
         await db.query('DELETE FROM consignacoes_estoque WHERE id = $1', [id]);
-
-        res.json({ mensagem: "🗑️ Remessa cancelada e estoque devolvido ao centro!" });
-    } catch (e) { res.status(500).json({ erro: "Erro ao excluir remessa." }); }
+        res.json({ mensagem: "🗑️ Remessa devolvida!" });
+    } catch (e) { res.status(500).json({ erro: "Erro ao excluir." }); }
 });
-
-// ==========================================
-// 💰 FRENTE DE CAIXA (VENDAS & ESTORNO)
-// ==========================================
 
 app.post('/api/vendas', async (req, res) => {
     try {
@@ -464,11 +376,7 @@ app.post('/api/vendas', async (req, res) => {
         const user = jwt.verify(auth.split(' ')[1], JWT_SECRET);
         const qtd = parseInt(quantidade);
 
-        const info = await db.query(`
-            SELECT v.id, v.preco_venda, v.preco_repasse, v.estoque_central 
-            FROM produto_variacoes v 
-            WHERE v.produto_id = $1`, [produto_id]);
-        
+        const info = await db.query(`SELECT v.id, v.preco_venda, v.preco_repasse, v.estoque_central FROM produto_variacoes v WHERE v.produto_id = $1`, [produto_id]);
         if (info.rows.length === 0) return res.status(404).json({ erro: "Produto não encontrado." });
         const v = info.rows[0];
 
@@ -476,54 +384,28 @@ app.post('/api/vendas', async (req, res) => {
         let valorVenda = 0;
 
         if (pIdFinal) {
-            const estLoja = await db.query(
-                'SELECT id, quantidade_atual FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', 
-                [pIdFinal, v.id]
-            );
-
-            if (estLoja.rows.length === 0 || estLoja.rows[0].quantidade_atual < qtd) {
-                return res.status(400).json({ erro: "Estoque insuficiente na loja parceira!" });
-            }
+            const estLoja = await db.query('SELECT id, quantidade_atual FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', [pIdFinal, v.id]);
+            if (estLoja.rows.length === 0 || estLoja.rows[0].quantidade_atual < qtd) return res.status(400).json({ erro: "Estoque insuficiente na loja parceira!" });
 
             await db.query('UPDATE consignacoes_estoque SET quantidade_atual = quantidade_atual - $1, quantidade_vendida = quantidade_vendida + $1 WHERE id = $2', [qtd, estLoja.rows[0].id]);
             valorVenda = v.preco_repasse * qtd; 
         } else {
             if (v.estoque_central < qtd) return res.status(400).json({ erro: "Estoque central insuficiente!" });
-            
             await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, v.id]);
             valorVenda = v.preco_venda * qtd; 
         }
 
-        await db.query(
-            `INSERT INTO vendas (parceiro_id, usuario_id, variacao_id, quantidade, valor_total) 
-             VALUES ($1, $2, $3, $4, $5)`, 
-            [pIdFinal, user.id, v.id, qtd, valorVenda]
-        );
-
+        await db.query(`INSERT INTO vendas (parceiro_id, usuario_id, variacao_id, quantidade, valor_total) VALUES ($1, $2, $3, $4, $5)`, [pIdFinal, user.id, v.id, qtd, valorVenda]);
         res.status(201).json({ mensagem: "✅ Venda realizada com sucesso!" });
-
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ erro: "Erro ao processar venda: " + e.message });
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao processar venda." }); }
 });
 
 app.get('/api/vendas', async (req, res) => {
     try {
-        const query = `
-            SELECT v.id, v.quantidade, v.valor_total, 
-                   TO_CHAR(v.data_venda, 'DD/MM/YYYY HH24:MI') as data_formatada, 
-                   p.nome as produto_nome, p.imagem_url, var.variacao, 
-                   COALESCE(parc.nome_loja, 'VENDA DIRETA') as loja 
-            FROM vendas v 
-            JOIN produto_variacoes var ON v.variacao_id = var.id 
-            JOIN produtos p ON var.produto_id = p.id 
-            LEFT JOIN parceiros parc ON v.parceiro_id = parc.id 
-            ORDER BY v.id DESC LIMIT 50`;
-        
+        const query = `SELECT v.id, v.quantidade, v.valor_total, TO_CHAR(v.data_venda, 'DD/MM/YYYY HH24:MI') as data_formatada, p.nome as produto_nome, p.imagem_url, var.variacao, COALESCE(parc.nome_loja, 'VENDA DIRETA') as loja FROM vendas v JOIN produto_variacoes var ON v.variacao_id = var.id JOIN produtos p ON var.produto_id = p.id LEFT JOIN parceiros parc ON v.parceiro_id = parc.id ORDER BY v.id DESC LIMIT 50`;
         const result = await db.query(query);
         res.json(result.rows);
-    } catch (e) { res.status(500).json({ erro: "Erro ao buscar extrato de vendas." }); }
+    } catch (e) { res.status(500).json({ erro: "Erro ao buscar extrato." }); }
 });
 
 app.delete('/api/vendas/:id', async (req, res) => {
@@ -533,64 +415,26 @@ app.delete('/api/vendas/:id', async (req, res) => {
         if (vRes.rows.length === 0) return res.status(404).json({ erro: "Venda não encontrada." });
 
         const venda = vRes.rows[0];
-
         if (venda.parceiro_id) {
-            await db.query(
-                `UPDATE consignacoes_estoque 
-                 SET quantidade_atual = quantidade_atual + $1, 
-                     quantidade_vendida = quantidade_vendida - $1 
-                 WHERE parceiro_id = $2 AND variacao_id = $3`, 
-                [venda.quantidade, venda.parceiro_id, venda.variacao_id]
-            );
+            await db.query(`UPDATE consignacoes_estoque SET quantidade_atual = quantidade_atual + $1, quantidade_vendida = quantidade_vendida - $1 WHERE parceiro_id = $2 AND variacao_id = $3`, [venda.quantidade, venda.parceiro_id, venda.variacao_id]);
         } else {
-            await db.query(
-                'UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', 
-                [venda.quantidade, venda.variacao_id]
-            );
+            await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', [venda.quantidade, venda.variacao_id]);
         }
-
         await db.query('DELETE FROM vendas WHERE id = $1', [id]);
-        res.json({ mensagem: "✅ Venda cancelada e estoque estornado!" });
+        res.json({ mensagem: "✅ Venda estornada!" });
     } catch (e) { res.status(500).json({ erro: "Erro ao cancelar venda." }); }
 });
 
-// ==========================================
-// 📊 DASHBOARD E GRÁFICOS
-// ==========================================
-
 app.get('/api/dashboard', async (req, res) => {
     try {
-        const vMes = await db.query(`
-            SELECT COUNT(*) as total_pedidos, COALESCE(SUM(valor_total), 0) as receita_total 
-            FROM vendas 
-            WHERE EXTRACT(MONTH FROM data_venda) = EXTRACT(MONTH FROM CURRENT_DATE) 
-            AND EXTRACT(YEAR FROM data_venda) = EXTRACT(YEAR FROM CURRENT_DATE)`);
+        const vMes = await db.query(`SELECT COUNT(*) as total_pedidos, COALESCE(SUM(valor_total), 0) as receita_total FROM vendas WHERE EXTRACT(MONTH FROM data_venda) = EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(YEAR FROM data_venda) = EXTRACT(YEAR FROM CURRENT_DATE)`);
+        const estoquePatrimonio = await db.query(`SELECT SUM(estoque_central) as qtd_total_central, SUM(estoque_central * custo_producao) as valor_total_custo FROM produto_variacoes`);
+        const estoquePorParceiro = await db.query(`SELECT p.nome_loja, COALESCE(SUM(c.quantidade_atual), 0) as total_produtos FROM parceiros p LEFT JOIN consignacoes_estoque c ON p.id = c.parceiro_id GROUP BY p.nome_loja ORDER BY total_produtos DESC`);
+        const eBaixo = await db.query(`SELECT p.nome, v.estoque_central, v.variacao FROM produto_variacoes v JOIN produtos p ON p.id = v.produto_id WHERE v.estoque_central < 5 ORDER BY v.estoque_central ASC LIMIT 4`);
+        const rank = await db.query(`SELECT p.nome, SUM(v.quantidade) as total_vendido FROM vendas v JOIN produto_variacoes var ON v.variacao_id = var.id JOIN produtos p ON var.produto_id = p.id GROUP BY p.nome ORDER BY total_vendido DESC LIMIT 4`);
 
-        const estoquePatrimonio = await db.query(`
-            SELECT SUM(estoque_central) as qtd_total_central, SUM(estoque_central * custo_producao) as valor_total_custo FROM produto_variacoes`);
-
-        const estoquePorParceiro = await db.query(`
-            SELECT p.nome_loja, COALESCE(SUM(c.quantidade_atual), 0) as total_produtos
-            FROM parceiros p LEFT JOIN consignacoes_estoque c ON p.id = c.parceiro_id
-            GROUP BY p.nome_loja ORDER BY total_produtos DESC`);
-
-        const eBaixo = await db.query(`
-            SELECT p.nome, v.estoque_central, v.variacao 
-            FROM produto_variacoes v JOIN produtos p ON p.id = v.produto_id 
-            WHERE v.estoque_central < 5 ORDER BY v.estoque_central ASC LIMIT 4`);
-
-        const rank = await db.query(`
-            SELECT p.nome, SUM(v.quantidade) as total_vendido 
-            FROM vendas v JOIN produto_variacoes var ON v.variacao_id = var.id 
-            JOIN produtos p ON var.produto_id = p.id 
-            GROUP BY p.nome ORDER BY total_vendido DESC LIMIT 4`);
-
-        res.json({ 
-            pedidos_mes: vMes.rows[0].total_pedidos, receita_mes: vMes.rows[0].receita_total,
-            patrimonio: { quantidade: estoquePatrimonio.rows[0].qtd_total_central || 0, valor: estoquePatrimonio.rows[0].valor_total_custo || 0 },
-            parceiros_estoque: estoquePorParceiro.rows, estoque_lista: eBaixo.rows, ranking: rank.rows 
-        });
-    } catch (e) { res.status(500).json({ erro: "Erro ao processar dados do dashboard." }); }
+        res.json({ pedidos_mes: vMes.rows[0].total_pedidos, receita_mes: vMes.rows[0].receita_total, patrimonio: { quantidade: estoquePatrimonio.rows[0].qtd_total_central || 0, valor: estoquePatrimonio.rows[0].valor_total_custo || 0 }, parceiros_estoque: estoquePorParceiro.rows, estoque_lista: eBaixo.rows, ranking: rank.rows });
+    } catch (e) { res.status(500).json({ erro: "Erro no dashboard." }); }
 });
 
 app.get('/api/grafico-vendas', async (req, res) => {
