@@ -218,7 +218,7 @@
             menu.classList.toggle('ativo-mobile');
         }
 
-        // Configuração do SweetAlert para as notificações bonitas (Toasts)
+        // Configuração do SweetAlert
         const Toast = Swal.mixin({
             toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
         });
@@ -353,7 +353,7 @@
             } catch (err) { console.error(err); }
         });
 
-        // 6. SWEETALERT PARA EXCLUIR E AJUSTAR (Evita os alertas nativos feios)
+        // 6. EXCLUIR E AJUSTAR
         async function excluirRemessa(id) {
             const confirmacao = await Swal.fire({ 
                 title: 'Estornar Remessa?', 
@@ -402,19 +402,102 @@
         }
 
         // ==========================================
-        // 🖨️ FUNÇÃO DE PDF DO RECIBO
+        // 🖨️ FUNÇÃO DE PDF DO RECIBO (COM TERMO JURÍDICO E SOMA TOTAL)
         // ==========================================
         function gerarPDF() {
-            const { jsPDF } = window.jspdf; const doc = new jsPDF();
-            const selectLoja = document.getElementById('filtroParc'); const nomeLoja = selectLoja.options[selectLoja.selectedIndex].text;
-            const dataAtual = new Date().toLocaleDateString('pt-BR'); const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.text("PERSONALIZE 3D", 105, 20, { align: "center" }); 
-            doc.setFontSize(14); doc.text("RECIBO DE ESTOQUE / CONSIGNAÇÃO", 105, 30, { align: "center" });
-            doc.setFont("helvetica", "normal"); doc.setFontSize(12); doc.text(`Empresa Parceira: ${nomeLoja}`, 14, 45); doc.text(`Data da Conferência: ${dataAtual} às ${horaAtual}`, 14, 53);
-            const linhasPdf = []; document.querySelectorAll('.linha-produto').forEach(tr => { linhasPdf.push([tr.querySelector('.td-nome').innerText, tr.querySelector('.td-var').innerText, tr.querySelector('.td-qtd').innerText]); });
-            doc.autoTable({ startY: 60, head: [['Produto', 'Variação / Modelo', 'Quantidade']], body: linhasPdf, theme: 'grid', headStyles: { fillColor: [59, 130, 246] } });
-            const finalY = doc.lastAutoTable.finalY + 40; doc.setLineWidth(0.5); doc.line(20, finalY, 90, finalY); doc.text("PERSONALIZE 3D", 35, finalY + 7); doc.setFontSize(10); doc.text("Entregador / Conferente", 33, finalY + 12);
-            doc.setFontSize(12); doc.line(120, finalY, 190, finalY); doc.text(nomeLoja.length > 25 ? nomeLoja.substring(0, 25) + '...' : nomeLoja, 135, finalY + 7); doc.setFontSize(10); doc.text("Responsável pelo Recebimento", 125, finalY + 12);
+            const { jsPDF } = window.jspdf; 
+            const doc = new jsPDF();
+            
+            const selectLoja = document.getElementById('filtroParc'); 
+            const nomeLoja = selectLoja.options[selectLoja.selectedIndex].text;
+            
+            const dataAtual = new Date().toLocaleDateString('pt-BR'); 
+            const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            // CABEÇALHO DO PDF
+            doc.setFont("helvetica", "bold"); 
+            doc.setFontSize(20); 
+            doc.text("PERSONALIZE 3D", 105, 20, { align: "center" }); 
+            doc.setFontSize(14); 
+            doc.text("RECIBO DE CONSIGNAÇÃO / ESTOQUE", 105, 30, { align: "center" });
+            
+            doc.setFont("helvetica", "normal"); 
+            doc.setFontSize(12); 
+            doc.text(`Empresa Parceira: ${nomeLoja}`, 14, 45); 
+            doc.text(`Data da Conferência: ${dataAtual} às ${horaAtual}`, 14, 53);
+            
+            // EXTRAIR DADOS DA TABELA E CALCULAR TOTAL
+            const linhasPdf = []; 
+            let totalPecas = 0;
+
+            document.querySelectorAll('.linha-produto').forEach(tr => { 
+                const nomeProd = tr.querySelector('.td-nome').innerText;
+                const varProd = tr.querySelector('.td-var').innerText;
+                const qtdTexto = tr.querySelector('.td-qtd').innerText;
+                
+                // Pega só os números da string (Ex: de "15 un." pega "15")
+                const qtdNumero = parseInt(qtdTexto.replace(/\D/g, ''));
+                totalPecas += qtdNumero;
+
+                linhasPdf.push([nomeProd, varProd, qtdNumero.toString()]); 
+            });
+
+            // Adiciona a linha de TOTAL no final da tabela
+            linhasPdf.push(['', 'TOTAL DE PEÇAS', totalPecas.toString()]);
+
+            // DESENHAR TABELA
+            doc.autoTable({ 
+                startY: 60, 
+                head: [['Produto', 'Variação / Modelo', 'Quantidade']], 
+                body: linhasPdf, 
+                theme: 'grid', 
+                headStyles: { fillColor: [59, 130, 246] },
+                // Deixa a última linha (Total) em negrito e com fundo diferente
+                didParseCell: function (data) {
+                    if (data.row.index === linhasPdf.length - 1) {
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.fillColor = [243, 244, 246]; // Cinza claro
+                    }
+                }
+            });
+
+            // TERMO DE RESPONSABILIDADE (JURÍDICO)
+            let finalY = doc.lastAutoTable.finalY + 15; // Inicia logo abaixo da tabela
+            
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.text("TERMO DE RESPONSABILIDADE E GUARDA", 14, finalY);
+            
+            finalY += 6;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+            const termo = "O parceiro consignado declara ter recebido os itens descritos neste documento em perfeito estado de conservação. Fica expressamente acordado que a guarda e o zelo dos produtos são de inteira responsabilidade do parceiro. Em caso de perda, roubo, dano ou extravio de qualquer peça sob sua posse, o parceiro assumirá o prejuízo, comprometendo-se a ressarcir a PERSONALIZE Hub no valor integral de repasse dos itens faltantes.";
+            
+            // splitTextToSize quebra o texto automaticamente nas margens da página
+            const linhasTermo = doc.splitTextToSize(termo, 180);
+            doc.text(linhasTermo, 14, finalY);
+
+            // ASSINATURAS
+            finalY += (linhasTermo.length * 5) + 30; // Desce o espaço do termo + 30px
+            
+            doc.setLineWidth(0.5); 
+            
+            // Assinatura Personalize (Esquerda)
+            doc.line(20, finalY, 90, finalY); 
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10); 
+            doc.text("PERSONALIZE 3D", 35, finalY + 5); 
+            doc.setFont("helvetica", "normal");
+            doc.text("Conferente / Entregador", 34, finalY + 10);
+            
+            // Assinatura Parceiro (Direita)
+            doc.line(120, finalY, 190, finalY); 
+            doc.setFont("helvetica", "bold");
+            doc.text(nomeLoja.length > 25 ? nomeLoja.substring(0, 25) + '...' : nomeLoja, 135, finalY + 5); 
+            doc.setFont("helvetica", "normal");
+            doc.text("Responsável pelo Recebimento", 125, finalY + 10);
+            
+            // SALVAR
             doc.save(`Recibo_Estoque_${nomeLoja.replace(/\s+/g, '_')}_${dataAtual.replace(/\//g, '-')}.pdf`);
         }
 
