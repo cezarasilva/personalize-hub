@@ -45,13 +45,19 @@ const transporter = nodemailer.createTransport({
 
 app.post('/api/login', async (req, res) => {
     try {
-        const { email, senha } = req.body;
-        const resU = await db.query('SELECT * FROM usuarios WHERE email = $1', [email]);
-        if (resU.rows.length === 0) return res.status(401).json({ erro: "E-mail ou senha incorretos!" });
+        // Agora recebe 'usuario' em vez de 'email'
+        const { usuario, senha } = req.body; 
+        
+        // Busca pelo NOME DE USUÁRIO
+        const resU = await db.query('SELECT * FROM usuarios WHERE usuario = $1', [usuario]);
+        if (resU.rows.length === 0) return res.status(401).json({ erro: "Usuário ou senha incorretos!" });
+        
         const user = resU.rows[0];
         if (!user.ativo) return res.status(403).json({ erro: "Acesso bloqueado ou em análise." });
+        
         const valida = await bcrypt.compare(senha, user.senha_hash);
-        if (!valida) return res.status(401).json({ erro: "E-mail ou senha incorretos!" });
+        if (!valida) return res.status(401).json({ erro: "Usuário ou senha incorretos!" });
+        
         const token = jwt.sign({ id: user.id, perfil: user.perfil, parceiro_id: user.parceiro_id }, JWT_SECRET, { expiresIn: '8h' });
         res.json({ token, usuario: { nome: user.nome, perfil: user.perfil, parceiro_id: user.parceiro_id } });
     } catch (e) { res.status(500).json({ erro: "Erro interno no login." }); }
@@ -133,13 +139,14 @@ app.get('/api/parceiros', async (req, res) => {
     }
 });
 
-// 2. CADASTRAR DIRETO (Apenas Admin - Já entra ATIVO)
 app.post('/api/parceiros', async (req, res) => {
     try {
-        const { nome_loja, responsavel, telefone, email, senha } = req.body;
+        // Agora recebe email E usuario
+        const { nome_loja, responsavel, telefone, email, usuario, senha } = req.body;
 
-        const check = await db.query('SELECT id FROM usuarios WHERE email = $1', [email]);
-        if (check.rows.length > 0) return res.status(400).json({ erro: "E-mail já cadastrado!" });
+        // Verifica se o e-mail OU o usuário já existem
+        const checkUser = await db.query('SELECT id FROM usuarios WHERE email = $1 OR usuario = $2', [email, usuario]);
+        if (checkUser.rows.length > 0) return res.status(400).json({ erro: "E-mail ou Nome de Usuário já em uso!" });
 
         const novaLoja = await db.query(
             `INSERT INTO parceiros (nome_loja, responsavel, telefone, status) 
@@ -151,10 +158,11 @@ app.post('/api/parceiros', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(senha, salt);
         
+        // Insere também o campo 'usuario'
         await db.query(
-            `INSERT INTO usuarios (nome, email, senha_hash, perfil, parceiro_id, ativo) 
-             VALUES ($1, $2, $3, 'PARCEIRO', $4, true)`, 
-            [responsavel, email, hash, parceiro_id]
+            `INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, parceiro_id, ativo) 
+             VALUES ($1, $2, $3, $4, 'PARCEIRO', $5, true)`, 
+            [responsavel, email, usuario, hash, parceiro_id]
         );
 
         res.status(201).json({ mensagem: "✅ Parceiro cadastrado com sucesso!" });

@@ -18,6 +18,7 @@
         input:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
         .btn-login { width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 16px; transition: 0.3s; }
         .btn-login:hover { background: #2563eb; transform: translateY(-1px); }
+        .btn-login:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
         #mensagem { text-align: center; margin-top: 15px; font-size: 14px; min-height: 20px; font-weight: 500; }
         .footer { text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #f3f4f6; font-size: 14px; }
         .footer a { color: #3b82f6; text-decoration: none; font-weight: 700; display: block; margin-top: 8px; }
@@ -26,38 +27,72 @@
 <body>
     <div class="login-box">
         <div class="brand"><h1>PERSONALIZE <span>Hub</span></h1><p>Gestão de Peças & Impressão 3D</p></div>
+        
         <form id="formLogin">
-            <div class="input-group"><label>E-mail</label><input type="email" id="email" placeholder="seu@email.com" required></div>
-            <div class="input-group"><label>Senha</label><input type="password" id="senha" placeholder="••••••••" required></div>
-            <button type="submit" class="btn-login">Entrar no Sistema</button>
+            <div class="input-group">
+                <label>Usuário</label>
+                <input type="text" id="usuario" placeholder="Ex: personalize.loja1" required>
+            </div>
+            <div class="input-group">
+                <label>Senha</label>
+                <input type="password" id="senha" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn-login" id="btnEntrar">Entrar no Sistema</button>
         </form>
+        
         <div id="mensagem"></div>
+        
         <div class="footer">
             <a href="recuperar.html">Esqueci minha senha</a>
             <a href="registrar.html">Quero ser um revendedor</a>
         </div>
     </div>
+
     <script>
         document.getElementById('formLogin').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
             const msg = document.getElementById('mensagem');
-            msg.textContent = '⏳ Verificando...'; msg.style.color = '#6b7280';
+            const btn = document.getElementById('btnEntrar');
+            
+            msg.textContent = '⏳ Verificando...'; 
+            msg.style.color = '#6b7280';
+            btn.disabled = true;
+            btn.textContent = 'Acessando...';
+
             try {
                 const res = await fetch('/api/login', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: document.getElementById('email').value, senha: document.getElementById('senha').value })
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        usuario: document.getElementById('usuario').value.trim(), 
+                        senha: document.getElementById('senha').value 
+                    })
                 });
+                
                 const dados = await res.json();
+                
                 if (res.ok) {
+                    // Salva as credenciais no navegador
                     localStorage.setItem('token_personalize', dados.token);
                     localStorage.setItem('nome_usuario', dados.usuario.nome);
                     localStorage.setItem('perfil_usuario', dados.usuario.perfil);
                     localStorage.setItem('parceiro_id', dados.usuario.parceiro_id);
+                    localStorage.setItem('usuario_personalize', JSON.stringify(dados.usuario));
+                    
                     window.location.href = 'dashboard.html';
                 } else {
-                    msg.textContent = '❌ ' + dados.erro; msg.style.color = '#ef4444';
+                    msg.textContent = '❌ ' + dados.erro; 
+                    msg.style.color = '#ef4444';
+                    btn.disabled = false;
+                    btn.textContent = 'Entrar no Sistema';
                 }
-            } catch (err) { msg.textContent = '❌ Servidor offline.'; }
+            } catch (err) { 
+                msg.textContent = '❌ Erro de conexão com o servidor.'; 
+                msg.style.color = '#ef4444';
+                btn.disabled = false;
+                btn.textContent = 'Entrar no Sistema';
+            }
         });
     </script>
 </body>
