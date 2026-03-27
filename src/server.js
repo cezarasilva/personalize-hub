@@ -1,9 +1,9 @@
-require('dotenv').config();
-
+// 🔥 FORÇA USO DE IPv4 (ESSENCIAL PRA RENDER)
 const dns = require('node:dns');
 dns.setDefaultResultOrder('ipv4first');
 
-const crypto = require('crypto'); 
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
@@ -27,27 +27,37 @@ app.use(express.json());
 // --- SERVIR ARQUIVOS ESTÁTICOS (HTML, CSS, JS) ---
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Rota principal: Quando acessar o site, abre o Login direto
+// Rota principal
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'chave_super_secreta_personalize';
 
-// --- CONFIGURAÇÃO EMAIL (GMAIL) ---
-// Configuração forçada com Host e Porta para evitar Timeout no Render
+// 🔐 CONFIG SMTP (BLINDADO)
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: { 
-        user: process.env.EMAIL_USER, 
-        pass: process.env.EMAIL_PASS 
+    port: 587, // 👈 MAIS COMPATÍVEL
+    secure: false,
+    family: 4, // 👈 FORÇA IPv4
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     },
     tls: {
         rejectUnauthorized: false
     }
 });
+
+// ✅ TESTAR CONEXÃO SMTP AO INICIAR
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('❌ Erro SMTP:', error);
+    } else {
+        console.log('✅ SMTP pronto para envio de e-mails');
+    }
+});
+
 
 // ==========================================
 // 🔐 SEGURANÇA E USUÁRIOS
@@ -55,7 +65,6 @@ const transporter = nodemailer.createTransport({
 
 app.post('/api/login', async (req, res) => {
     try {
-        // Agora o login é pelo USUARIO e não mais pelo e-mail
         const { usuario, senha } = req.body; 
         
         const resU = await db.query('SELECT * FROM usuarios WHERE usuario = $1', [usuario]);
@@ -73,91 +82,81 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
-// 🔑 ROTA 1: GERAR TOKEN E ENVIAR E-MAIL
+// 🔑 ROTA 1: GERAR TOKEN JWT E ENVIAR E-MAIL
 // ==========================================
 app.post('/api/usuarios/recuperar', async (req, res) => {
     try {
         const { email } = req.body;
-        if (!email) return res.status(400).json({ erro: "Por favor, informe seu e-mail." });
+        if (!email) return res.status(400).json({ erro: 'Email é obrigatório' });
 
+        // Confirma se o e-mail existe no banco
         const userRes = await db.query('SELECT * FROM usuarios WHERE email = $1', [email]);
         if (userRes.rows.length === 0) return res.status(404).json({ erro: "E-mail não encontrado no sistema." });
-
         const user = userRes.rows[0];
 
-        // 1. Gera um Token seguro e a data de validade (1 hora)
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const tokenExpira = new Date(Date.now() + 3600000); // +1 Hora
-
-        // 2. Salva o Token no banco de dados
-        await db.query(
-            'UPDATE usuarios SET reset_token = $1, reset_token_expira = $2 WHERE id = $3', 
-            [resetToken, tokenExpira, user.id]
+        // 🔐 GERAR TOKEN JWT (Stateless - não precisa salvar no banco!)
+        const token = jwt.sign(
+            { id: user.id, email: user.email }, 
+            JWT_SECRET, 
+            { expiresIn: '1h' }
         );
 
-        // 3. Monta o Link Mágico
-        const linkRecuperacao = `https://personalize-hub.onrender.com/redefinir-senha.html?token=${resetToken}`;
+        // Pega a URL dinâmica do servidor (funciona no localhost e no Render)
+        const host = req.get('host');
+        const protocolo = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+        const link = `${protocolo}://${host}/redefinir-senha.html?token=${token}`;
 
-        // 4. Dispara o e-mail com o Botão
-        const mailOptions = {
+        // 📧 ENVIO DE EMAIL
+        await transporter.sendMail({
             from: `"PERSONALIZE Hub" <${process.env.EMAIL_USER}>`,
             to: email,
-            subject: 'Recuperação de Senha - PERSONALIZE Hub',
+            subject: 'Recuperação de senha - PERSONALIZE Hub',
             html: `
-                <div style="font-family: Arial, sans-serif; color: #333; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
+                <div style="font-family: Arial, sans-serif; color: #333; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
                     <h2 style="color: #3b82f6; text-align: center;">PERSONALIZE Hub</h2>
                     <p>Olá, <strong>${user.nome}</strong>!</p>
-                    <p>Recebemos um pedido para redefinir sua senha de acesso. (Seu usuário é: <b>${user.usuario || user.email}</b>).</p>
-                    <p>Para criar uma nova senha, clique no botão abaixo. Este link é válido por 1 hora.</p>
+                    <p>Recebemos um pedido para redefinir sua senha de acesso.</p>
+                    <p>Seu usuário é: <b>${user.usuario || user.email}</b></p>
+                    <p>Clique no botão abaixo para criar uma nova senha:</p>
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="${linkRecuperacao}" style="background-color: #3b82f6; color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Redefinir Minha Senha</a>
+                        <a href="${link}" style="background-color: #10b981; color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Redefinir Minha Senha</a>
                     </div>
                     
-                    <p style="font-size: 12px; color: #9ca3af; text-align: center;">Se você não solicitou isso, pode ignorar este e-mail tranquilamente.</p>
+                    <p style="font-size: 13px; color: #ef4444; text-align: center;">Este link expira em 1 hora.</p>
                 </div>
             `
-        };
+        });
 
-        await transporter.sendMail(mailOptions);
-        res.status(200).json({ mensagem: "Link de recuperação enviado para o seu e-mail!" });
+        res.json({ mensagem: 'Link de recuperação enviado com sucesso!' });
 
     } catch (erro) {
-        console.error("❌ ERRO RECUPERAÇÃO:", erro);
-        res.status(500).json({ erro: "Erro no servidor ao tentar enviar o e-mail." });
+        console.error('❌ ERRO RECUPERAÇÃO DE SENHA:', erro);
+        res.status(500).json({ erro: 'Erro ao enviar email' });
     }
 });
 
 // ==========================================
-// 🔑 ROTA 2: RECEBER A NOVA SENHA E SALVAR
+// 🔑 ROTA 2: RECEBER A NOVA SENHA, VALIDAR JWT E SALVAR
 // ==========================================
 app.post('/api/usuarios/reset-password', async (req, res) => {
     try {
         const { token, novaSenha } = req.body;
-
         if (!token || !novaSenha) return res.status(400).json({ erro: "Dados inválidos." });
 
-        // 1. Procura se existe alguém com esse Token e se ainda tá na validade
-        const userRes = await db.query(
-            'SELECT * FROM usuarios WHERE reset_token = $1 AND reset_token_expira > NOW()',
-            [token]
-        );
-
-        if (userRes.rows.length === 0) {
-            return res.status(400).json({ erro: "Link inválido ou expirado. Solicite novamente." });
+        // Verifica se o Token é válido e se não expirou (A mágica do JWT)
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (err) {
+            return res.status(400).json({ erro: "Link expirado ou inválido. Solicite novamente." });
         }
 
-        const user = userRes.rows[0];
-
-        // 2. Criptografa a senha nova
+        // Criptografa a nova senha e salva usando o ID que estava dentro do Token!
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(novaSenha, salt);
 
-        // 3. Atualiza a senha no banco e DELETA o Token (para não ser usado de novo)
-        await db.query(
-            'UPDATE usuarios SET senha_hash = $1, reset_token = NULL, reset_token_expira = NULL WHERE id = $2',
-            [hash, user.id]
-        );
+        await db.query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [hash, decoded.id]);
 
         res.status(200).json({ mensagem: "Senha redefinida com sucesso!" });
 
@@ -166,6 +165,8 @@ app.post('/api/usuarios/reset-password', async (req, res) => {
         res.status(500).json({ erro: "Erro ao redefinir a senha." });
     }
 });
+
+// --- RESTO DAS ROTAS (Usuários, Lojas, Produtos, Vendas, Dashboard) ---
 
 app.get('/api/usuarios', async (req, res) => {
     try {
@@ -194,7 +195,6 @@ app.delete('/api/usuarios/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ erro: "Erro ao excluir usuário." }); }
 });
 
-
 // ==========================================
 // 🏪 GESTÃO DE PARCEIROS E LOJAS
 // ==========================================
@@ -215,15 +215,12 @@ app.get('/api/parceiros', async (req, res) => {
 
 app.post('/api/parceiros', async (req, res) => {
     try {
-        // Recebe e-mail E usuario
         const { nome_loja, responsavel, telefone, email, usuario, senha } = req.body;
-
         const checkUser = await db.query('SELECT id FROM usuarios WHERE email = $1 OR usuario = $2', [email, usuario]);
         if (checkUser.rows.length > 0) return res.status(400).json({ erro: "E-mail ou Nome de Usuário já em uso!" });
 
         const novaLoja = await db.query(
-            `INSERT INTO parceiros (nome_loja, responsavel, telefone, status) 
-             VALUES ($1, $2, $3, 'ATIVO') RETURNING id`, 
+            `INSERT INTO parceiros (nome_loja, responsavel, telefone, status) VALUES ($1, $2, $3, 'ATIVO') RETURNING id`, 
             [nome_loja, responsavel, telefone]
         );
 
@@ -232,8 +229,7 @@ app.post('/api/parceiros', async (req, res) => {
         const hash = await bcrypt.hash(senha, salt);
         
         await db.query(
-            `INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, parceiro_id, ativo) 
-             VALUES ($1, $2, $3, $4, 'PARCEIRO', $5, true)`, 
+            `INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, parceiro_id, ativo) VALUES ($1, $2, $3, $4, 'PARCEIRO', $5, true)`, 
             [responsavel, email, usuario, hash, parceiro_id]
         );
 
@@ -246,23 +242,19 @@ app.post('/api/parceiros', async (req, res) => {
 app.post('/api/parceiros/solicitar', async (req, res) => {
     try {
         const { nome_loja, responsavel, telefone, email_login, senha_login } = req.body;
-
         const check = await db.query('SELECT id FROM usuarios WHERE email = $1', [email_login]);
         if (check.rows.length > 0) return res.status(400).json({ erro: "Este e-mail já está em uso!" });
 
         const novaLoja = await db.query(
-            `INSERT INTO parceiros (nome_loja, responsavel, telefone, status) 
-             VALUES ($1, $2, $3, 'PENDENTE') RETURNING id`, 
+            `INSERT INTO parceiros (nome_loja, responsavel, telefone, status) VALUES ($1, $2, $3, 'PENDENTE') RETURNING id`, 
             [nome_loja, responsavel, telefone]
         );
 
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(senha_login, salt);
         
-        // Cadastra sem usuario definido (apenas e-mail) até o admin aprovar e criar um
         await db.query(
-            `INSERT INTO usuarios (nome, email, senha_hash, perfil, parceiro_id, ativo) 
-             VALUES ($1, $2, $3, 'PARCEIRO', $4, false)`, 
+            `INSERT INTO usuarios (nome, email, senha_hash, perfil, parceiro_id, ativo) VALUES ($1, $2, $3, 'PARCEIRO', $4, false)`, 
             [responsavel, email_login, hash, novaLoja.rows[0].id]
         );
 
@@ -276,24 +268,16 @@ app.put('/api/parceiros/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { nome_loja, responsavel, telefone, status } = req.body;
-
         const query = `
             UPDATE parceiros 
-            SET nome_loja = COALESCE($1, nome_loja), 
-                responsavel = COALESCE($2, responsavel), 
-                telefone = COALESCE($3, telefone), 
-                status = COALESCE($4, status) 
-            WHERE id = $5
-            RETURNING *`;
+            SET nome_loja = COALESCE($1, nome_loja), responsavel = COALESCE($2, responsavel), 
+                telefone = COALESCE($3, telefone), status = COALESCE($4, status) 
+            WHERE id = $5 RETURNING *`;
         
         const resultado = await db.query(query, [nome_loja, responsavel, telefone, status, id]);
-
         if (resultado.rowCount === 0) return res.status(404).json({ erro: "Loja não encontrada." });
 
-        if (status === 'ATIVO') {
-            await db.query('UPDATE usuarios SET ativo = true WHERE parceiro_id = $1', [id]);
-        }
-
+        if (status === 'ATIVO') await db.query('UPDATE usuarios SET ativo = true WHERE parceiro_id = $1', [id]);
         res.json({ mensagem: "✅ Loja atualizada com sucesso!", dados: resultado.rows[0] });
     } catch (erro) {
         res.status(500).json({ erro: "Erro interno: " + erro.message });
@@ -307,9 +291,7 @@ app.delete('/api/parceiros/:id', async (req, res) => {
         await db.query('DELETE FROM usuarios WHERE parceiro_id = $1', [id]);
         await db.query('DELETE FROM parceiros WHERE id = $1', [id]);
         res.json({ mensagem: "🗑️ Parceiro removido com sucesso!" });
-    } catch (e) { 
-        res.status(500).json({ erro: "Erro ao deletar parceiro." }); 
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao deletar parceiro." }); }
 });
 
 
@@ -367,7 +349,6 @@ app.delete('/api/produtos/:id', async (req, res) => {
 
 app.get('/api/consignacoes/:parceiro_id', async (req, res) => {
     try {
-        // CORREÇÃO: Agora a query devolve o "p.id as produto_id" para a frente de caixa saber de quem abater
         const query = `
             SELECT c.id, p.id as produto_id, p.nome as produto_nome, v.variacao, v.preco_repasse, c.quantidade_atual, c.variacao_id, p.imagem_url
             FROM consignacoes_estoque c 
@@ -378,9 +359,7 @@ app.get('/api/consignacoes/:parceiro_id', async (req, res) => {
         
         const d = await db.query(query, [req.params.parceiro_id]);
         res.json(d.rows);
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao buscar estoque da loja." });
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao buscar estoque da loja." }); }
 });
 
 app.post('/api/consignacoes', async (req, res) => {
@@ -395,7 +374,6 @@ app.post('/api/consignacoes', async (req, res) => {
         if (vRes.rows[0].estoque_central < qtd) return res.status(400).json({ erro: "Estoque central insuficiente!" });
 
         await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, vId]);
-
         const ex = await db.query('SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', [parceiro_id, vId]);
 
         if (ex.rows.length > 0) {
@@ -403,21 +381,16 @@ app.post('/api/consignacoes', async (req, res) => {
         } else {
             await db.query('INSERT INTO consignacoes_estoque (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual) VALUES ($1, $2, $3, $3)', [parceiro_id, vId, qtd]);
         }
-
         res.status(201).json({ mensagem: "✅ Remessa enviada com sucesso!" });
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao processar remessa: " + e.message });
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao processar remessa: " + e.message }); }
 });
 
 app.post('/api/consignacoes/lote', async (req, res) => {
     try {
         const { parceiro_id, itens } = req.body; 
-
         if (!itens || itens.length === 0) return res.status(400).json({ erro: "A lista de remessa está vazia." });
 
         await db.query('BEGIN');
-
         for (let item of itens) {
             const qtd = parseInt(item.quantidade);
             const vRes = await db.query(`SELECT id, estoque_central FROM produto_variacoes WHERE produto_id = $1`, [item.produto_id]);
@@ -426,7 +399,6 @@ app.post('/api/consignacoes/lote', async (req, res) => {
             
             const vId = vRes.rows[0].id;
             await db.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, vId]);
-
             const ex = await db.query('SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2', [parceiro_id, vId]);
 
             if (ex.rows.length > 0) {
@@ -435,10 +407,8 @@ app.post('/api/consignacoes/lote', async (req, res) => {
                 await db.query('INSERT INTO consignacoes_estoque (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual) VALUES ($1, $2, $3, $3)', [parceiro_id, vId, qtd]);
             }
         }
-
         await db.query('COMMIT');
         res.status(201).json({ mensagem: "📦 Remessa em lote enviada com sucesso!" });
-
     } catch (e) {
         await db.query('ROLLBACK');
         res.status(400).json({ erro: e.message });
@@ -465,9 +435,7 @@ app.put('/api/consignacoes/:id', async (req, res) => {
         await db.query('UPDATE consignacoes_estoque SET quantidade_atual = $1 WHERE id = $2', [nova_quantidade, id]);
 
         res.json({ mensagem: "✅ Quantidade ajustada!" });
-    } catch (e) {
-        res.status(500).json({ erro: "Erro no ajuste." });
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro no ajuste." }); }
 });
 
 app.delete('/api/consignacoes/:id', async (req, res) => {
@@ -480,9 +448,7 @@ app.delete('/api/consignacoes/:id', async (req, res) => {
         await db.query('DELETE FROM consignacoes_estoque WHERE id = $1', [id]);
 
         res.json({ mensagem: "🗑️ Remessa cancelada e estoque devolvido ao centro!" });
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao excluir remessa." });
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao excluir remessa." }); }
 });
 
 // ==========================================
@@ -557,9 +523,7 @@ app.get('/api/vendas', async (req, res) => {
         
         const result = await db.query(query);
         res.json(result.rows);
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao buscar extrato de vendas." });
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao buscar extrato de vendas." }); }
 });
 
 app.delete('/api/vendas/:id', async (req, res) => {
@@ -587,10 +551,7 @@ app.delete('/api/vendas/:id', async (req, res) => {
 
         await db.query('DELETE FROM vendas WHERE id = $1', [id]);
         res.json({ mensagem: "✅ Venda cancelada e estoque estornado!" });
-
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao cancelar venda." });
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao cancelar venda." }); }
 });
 
 // ==========================================
@@ -606,50 +567,30 @@ app.get('/api/dashboard', async (req, res) => {
             AND EXTRACT(YEAR FROM data_venda) = EXTRACT(YEAR FROM CURRENT_DATE)`);
 
         const estoquePatrimonio = await db.query(`
-            SELECT 
-                SUM(estoque_central) as qtd_total_central,
-                SUM(estoque_central * custo_producao) as valor_total_custo
-            FROM produto_variacoes`);
+            SELECT SUM(estoque_central) as qtd_total_central, SUM(estoque_central * custo_producao) as valor_total_custo FROM produto_variacoes`);
 
         const estoquePorParceiro = await db.query(`
-            SELECT 
-                p.nome_loja, 
-                COALESCE(SUM(c.quantidade_atual), 0) as total_produtos
-            FROM parceiros p
-            LEFT JOIN consignacoes_estoque c ON p.id = c.parceiro_id
-            GROUP BY p.nome_loja
-            ORDER BY total_produtos DESC`);
+            SELECT p.nome_loja, COALESCE(SUM(c.quantidade_atual), 0) as total_produtos
+            FROM parceiros p LEFT JOIN consignacoes_estoque c ON p.id = c.parceiro_id
+            GROUP BY p.nome_loja ORDER BY total_produtos DESC`);
 
         const eBaixo = await db.query(`
             SELECT p.nome, v.estoque_central, v.variacao 
-            FROM produto_variacoes v 
-            JOIN produtos p ON p.id = v.produto_id 
-            WHERE v.estoque_central < 5 
-            ORDER BY v.estoque_central ASC LIMIT 4`);
+            FROM produto_variacoes v JOIN produtos p ON p.id = v.produto_id 
+            WHERE v.estoque_central < 5 ORDER BY v.estoque_central ASC LIMIT 4`);
 
         const rank = await db.query(`
             SELECT p.nome, SUM(v.quantidade) as total_vendido 
-            FROM vendas v 
-            JOIN produto_variacoes var ON v.variacao_id = var.id 
+            FROM vendas v JOIN produto_variacoes var ON v.variacao_id = var.id 
             JOIN produtos p ON var.produto_id = p.id 
-            GROUP BY p.nome 
-            ORDER BY total_vendido DESC LIMIT 4`);
+            GROUP BY p.nome ORDER BY total_vendido DESC LIMIT 4`);
 
         res.json({ 
-            pedidos_mes: vMes.rows[0].total_pedidos, 
-            receita_mes: vMes.rows[0].receita_total,
-            patrimonio: {
-                quantidade: estoquePatrimonio.rows[0].qtd_total_central || 0,
-                valor: estoquePatrimonio.rows[0].valor_total_custo || 0
-            },
-            parceiros_estoque: estoquePorParceiro.rows,
-            estoque_lista: eBaixo.rows, 
-            ranking: rank.rows 
+            pedidos_mes: vMes.rows[0].total_pedidos, receita_mes: vMes.rows[0].receita_total,
+            patrimonio: { quantidade: estoquePatrimonio.rows[0].qtd_total_central || 0, valor: estoquePatrimonio.rows[0].valor_total_custo || 0 },
+            parceiros_estoque: estoquePorParceiro.rows, estoque_lista: eBaixo.rows, ranking: rank.rows 
         });
-
-    } catch (e) { 
-        res.status(500).json({ erro: "Erro ao processar dados do dashboard." }); 
-    }
+    } catch (e) { res.status(500).json({ erro: "Erro ao processar dados do dashboard." }); }
 });
 
 app.get('/api/grafico-vendas', async (req, res) => {
