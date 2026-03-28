@@ -216,15 +216,30 @@ app.post('/api/parceiros/solicitar', async (req, res) => {
 app.put('/api/parceiros/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { nome_loja, responsavel, telefone, status } = req.body;
-        const query = `UPDATE parceiros SET nome_loja = COALESCE($1, nome_loja), responsavel = COALESCE($2, responsavel), telefone = COALESCE($3, telefone), status = COALESCE($4, status) WHERE id = $5 RETURNING *`;
+        const { nome_loja, responsavel, telefone, status, usuario } = req.body;
         
+        // 1. Atualiza os dados da Loja
+        const query = `UPDATE parceiros SET nome_loja = COALESCE($1, nome_loja), responsavel = COALESCE($2, responsavel), telefone = COALESCE($3, telefone), status = COALESCE($4, status) WHERE id = $5 RETURNING *`;
         const resultado = await db.query(query, [nome_loja, responsavel, telefone, status, id]);
+        
         if (resultado.rowCount === 0) return res.status(404).json({ erro: "Loja não encontrada." });
 
-        if (status === 'ATIVO') await db.query('UPDATE usuarios SET ativo = true WHERE parceiro_id = $1', [id]);
+        // 2. Atualiza o Nome de Usuário na tabela de login
+        if (usuario) {
+            await db.query('UPDATE usuarios SET usuario = $1 WHERE parceiro_id = $2', [usuario, id]);
+        }
+
+        // 3. Bloqueia ou Desbloqueia o login baseado no Status
+        if (status === 'ATIVO') {
+            await db.query('UPDATE usuarios SET ativo = true WHERE parceiro_id = $1', [id]);
+        } else if (status === 'INATIVO' || status === 'PENDENTE') {
+            await db.query('UPDATE usuarios SET ativo = false WHERE parceiro_id = $1', [id]);
+        }
+
         res.json({ mensagem: "✅ Loja atualizada com sucesso!", dados: resultado.rows[0] });
-    } catch (erro) { res.status(500).json({ erro: "Erro interno: " + erro.message }); }
+    } catch (erro) { 
+        res.status(500).json({ erro: "Erro interno: " + erro.message }); 
+    }
 });
 
 app.delete('/api/parceiros/:id', async (req, res) => {
