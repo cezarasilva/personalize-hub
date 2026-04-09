@@ -459,5 +459,16 @@ app.get('/api/grafico-vendas', async (req, res) => {
     } catch (e) { res.status(500).json({ erro: "Erro no gráfico." }); }
 });
 
+// 🤖 ROTA KEEP-ALIVE (Mantém o Render e o Supabase acordados)
+app.get('/api/ping', async (req, res) => {
+    try {
+        // Faz uma consulta fantasma só pro Supabase ver movimento
+        await db.query('SELECT 1'); 
+        res.status(200).send('Pong! Render e Supabase estão 100% acordados! 🚀');
+    } catch (e) {
+        res.status(500).send('Erro ao acordar o banco.');
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🔥 PERSONALIZE Hub Online: http://localhost:${PORT}`));
