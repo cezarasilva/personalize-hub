@@ -4,96 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - PERSONALIZE Hub</title>
-    <style>
-        * { box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; margin: 0; padding: 0; }
-        body { background-color: #f3f4f6; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .login-box { background: white; padding: 45px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; border: 1px solid #e5e7eb; }
-        .brand { text-align: center; margin-bottom: 30px; }
-        .brand h1 { color: #1f2937; font-size: 30px; font-weight: 800; }
-        .brand span { color: #3b82f6; }
-        .brand p { color: #6b7280; font-size: 14px; margin-top: 5px; }
-        .input-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #374151; }
-        input { width: 100%; padding: 12px; border: 1.5px solid #d1d5db; border-radius: 10px; outline: none; font-size: 15px; background: #f9fafb; transition: 0.3s; }
-        input:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
-        .btn-login { width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 16px; transition: 0.3s; }
-        .btn-login:hover { background: #2563eb; transform: translateY(-1px); }
-        .btn-login:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
-        #mensagem { text-align: center; margin-top: 15px; font-size: 14px; min-height: 20px; font-weight: 500; }
-        .footer { text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #f3f4f6; font-size: 14px; }
-        .footer a { color: #3b82f6; text-decoration: none; font-weight: 700; display: block; margin-top: 8px; }
-    </style>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/auth.css">
+    <link rel="stylesheet" href="assets/css/app.css">
 </head>
-<body>
-    <div class="login-box">
-        <div class="brand"><h1>PERSONALIZE <span>Hub</span></h1><p>Gestão de Peças & Impressão 3D</p></div>
-        
+<body class="auth-body">
+    <main class="auth-box">
+        <section class="auth-brand">
+            <h1>PERSONALIZE <span>Hub</span></h1>
+            <p>Gestão de peças, consignação, vendas e parceiros.</p>
+        </section>
         <form id="formLogin">
-            <div class="input-group">
-                <label>Usuário</label>
-                <input type="text" id="usuario" placeholder="Ex: personalize.loja1" required>
+            <div class="form-group">
+                <label for="usuario">Usuário ou e-mail</label>
+                <input type="text" id="usuario" name="usuario" placeholder="Ex: personalize.loja1" required>
             </div>
-            <div class="input-group">
-                <label>Senha</label>
-                <input type="password" id="senha" placeholder="••••••••" required>
+            <div class="form-group mt-2">
+                <label for="senha">Senha</label>
+                <input type="password" id="senha" name="senha" placeholder="••••••••" required>
             </div>
-            <button type="submit" class="btn-login" id="btnEntrar">Entrar no Sistema</button>
+            <button type="submit" class="btn btn-primary w-full mt-3" id="btnEntrar">Entrar no Sistema</button>
         </form>
-        
-        <div id="mensagem"></div>
-        
-        <div class="footer">
+        <div id="mensagem" class="msg"></div>
+        <footer class="auth-footer">
             <a href="recuperar.html">Esqueci minha senha</a>
             <a href="registrar.html">Quero ser um revendedor</a>
-        </div>
-    </div>
-
-    <script>
-        document.getElementById('formLogin').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const msg = document.getElementById('mensagem');
-            const btn = document.getElementById('btnEntrar');
-            
-            msg.textContent = '⏳ Verificando...'; 
-            msg.style.color = '#6b7280';
-            btn.disabled = true;
-            btn.textContent = 'Acessando...';
-
-            try {
-                const res = await fetch('/api/login', {
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        usuario: document.getElementById('usuario').value.trim(), 
-                        senha: document.getElementById('senha').value 
-                    })
-                });
-                
-                const dados = await res.json();
-                
-                if (res.ok) {
-                    // Salva as credenciais no navegador
-                    localStorage.setItem('token_personalize', dados.token);
-                    localStorage.setItem('nome_usuario', dados.usuario.nome);
-                    localStorage.setItem('perfil_usuario', dados.usuario.perfil);
-                    localStorage.setItem('parceiro_id', dados.usuario.parceiro_id);
-                    localStorage.setItem('usuario_personalize', JSON.stringify(dados.usuario));
-                    
-                    window.location.href = 'dashboard.html';
-                } else {
-                    msg.textContent = '❌ ' + dados.erro; 
-                    msg.style.color = '#ef4444';
-                    btn.disabled = false;
-                    btn.textContent = 'Entrar no Sistema';
-                }
-            } catch (err) { 
-                msg.textContent = '❌ Erro de conexão com o servidor.'; 
-                msg.style.color = '#ef4444';
-                btn.disabled = false;
-                btn.textContent = 'Entrar no Sistema';
-            }
-        });
-    </script>
+        </footer>
+    </main>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/index.js"></script>
 </body>
 </html>

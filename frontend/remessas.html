@@ -2,506 +2,114 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remessas - PERSONALIZE Hub</title>
-    
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <style>
-        * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
-        
-        /* ==========================================
-           🖥️ MODO DESKTOP (PC) 
-           ========================================== */
-        body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; flex-direction: row; }
-        
-        .sidebar { width: 250px; background: #1f2937; color: #fff; display: flex; flex-direction: column; z-index: 1000; }
-        .sidebar-top { padding: 25px 20px; text-align: center; background: #111827; }
-        .sidebar-top h2 { color: #60a5fa; font-weight: 800; font-size: 1.5rem; margin: 0; }
-        .btn-menu { display: none; } /* Escondido no PC */
-        
-        .sidebar-links { display: flex; flex-direction: column; flex: 1; overflow-y: auto; }
-        .sidebar a { padding: 15px 20px; color: #d1d5db; text-decoration: none; border-left: 4px solid transparent; cursor: pointer; transition: 0.2s; font-size: 15px; }
-        .sidebar a:hover { background: #374151; color: #fff; }
-        .sidebar a.ativo { background: #374151; border-left-color: #3b82f6; color: #fff; }
-        .btn-sair { margin-top: auto; color: #f87171 !important; border-top: 1px solid #374151; }
-
-        .main { flex: 1; overflow-y: auto; padding: 30px; }
-        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e5e7eb;}
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: end; }
-        select, input { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; width: 100%; background: #f9fafb; }
-        select:focus, input:focus { border-color: #3b82f6; background: #fff; }
-        
-        .btn-add { background: #6b7280; color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; white-space: nowrap; }
-        .btn-add:hover { background: #4b5563; }
-        .btn-send-lote { background: #10b981; color: white; padding: 15px; border: none; border-radius: 8px; font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s; width: 100%; margin-top: 15px; display: none; }
-        .btn-send-lote:hover { background: #059669; }
-        .btn-pdf { background: #1f2937; color: white; padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; display: none; white-space: nowrap; }
-        .btn-pdf:hover { background: #111827; }
-        
-        .table-container { width: 100%; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; min-width: 600px; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
-        th { background: #f9fafb; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase; }
-        .badge-qtd { background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; white-space: nowrap; }
-        .empty-state { text-align: center; padding: 30px; color: #9ca3af; font-size: 14px; }
-        .btn-acao { background: none; border: none; cursor: pointer; font-size: 16px; margin-left: 10px; transition: 0.2s; }
-        .btn-acao:hover { transform: scale(1.2); }
-        .carrinho-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 15px; margin-top: 20px; }
-        .carrinho-box h3 { font-size: 14px; color: #475569; margin-bottom: 10px; }
-
-        /* ==========================================
-           📱 MODO CELULAR (Menu Hamburguer Funcional)
-           ========================================== */
-        @media (max-width: 768px) {
-            body { flex-direction: column; overflow: visible; }
-            
-            /* A barra superior vira um bloco fixo e visível */
-            .sidebar { width: 100%; height: auto; position: relative; overflow: visible; }
-            .sidebar-top { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #111827; }
-            .sidebar-top h2 { font-size: 1.3rem; text-align: left; }
-            
-            /* Botão Hamburguer visível e estlizado */
-            .btn-menu { 
-                display: flex; 
-                background: #3b82f6; 
-                color: white; 
-                border: none; 
-                font-size: 24px; 
-                width: 40px; 
-                height: 40px; 
-                border-radius: 6px; 
-                align-items: center; 
-                justify-content: center; 
-                cursor: pointer; 
-                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            }
-            
-            /* Menu oculto que vai descer (Dropdown) */
-            .sidebar-links { 
-                display: none; /* Escondido por padrão */
-                position: absolute; 
-                top: 100%; /* Gruda exatamente embaixo da barra superior */
-                left: 0; 
-                width: 100%; 
-                background: #1f2937; 
-                box-shadow: 0 10px 15px rgba(0,0,0,0.5); 
-                z-index: 9999; 
-            }
-            
-            /* Classe mágica que o JS ativa para mostrar o menu */
-            .sidebar-links.ativo-mobile { display: flex !important; }
-
-            .sidebar a { padding: 15px 20px; border-bottom: 1px solid #374151; border-left: none; }
-            .sidebar a.ativo { border-left: none; background: #374151; border-left: 4px solid #3b82f6; }
-            
-            /* Ajustes gerais de espaçamento para o celular */
-            .main { padding: 15px; overflow-y: visible; }
-            .card { padding: 15px; }
-            .form-grid { grid-template-columns: 1fr; }
-            .header-estoque { flex-direction: column; align-items: stretch !important; gap: 10px; }
-            .btn-pdf { width: 100%; text-align: center; }
-        }
-    </style>
 </head>
 <body>
-    
-    <!-- BARRA LATERAL (Vira barra superior no celular) -->
-    <div class="sidebar">
-        <div class="sidebar-top">
-            <h2>PERSONALIZE</h2>
-            <button class="btn-menu" onclick="toggleMenu()">☰</button>
-        </div>
-        <div class="sidebar-links" id="menuLinks">
-            <a href="dashboard.html">📊 Dashboard</a>
-            <a href="produtos.html">📦 Produtos</a>
-            <a href="parceiros.html">🏪 Lojas</a>
-            <a href="usuarios.html">👥 Usuários</a>
-            <a href="remessas.html" class="ativo">🚚 Remessas</a>
-            <a href="vendas.html">💰 Caixa</a>
-            <a class="btn-sair" onclick="logout()">🚪 Sair</a>
-        </div>
-    </div>
-
-    <div class="main">
-        <div class="card">
-            <h2>🚚 Nova Remessa (Em Lote)</h2><br>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 12px; font-weight: bold; color: #4b5563;">Loja de Destino:</label>
-                <select id="parc" required>
-                    <option value="">Selecione a Loja primeiro...</option>
-                </select>
-            </div>
-
-            <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 15px 0;">
-
-            <form id="formRem" class="form-grid">
-                <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="font-size: 12px; font-weight: bold; color: #4b5563;">Produto/Peça:</label>
-                    <select id="prod" required><option value="">Escolha a Peça...</option></select>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1>🚚 Remessas</h1>
+                    <p>Envie produtos, acompanhe remessas por loja, gere PDF com foto, valor consignado e assinatura digital, e estorne remessas quando necessário.</p>
                 </div>
-                <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="font-size: 12px; font-weight: bold; color: #4b5563;">Quantidade:</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="number" id="qtd" placeholder="0" min="1" required style="width: 100px;">
-                        <button type="submit" class="btn-add">➕ Add</button>
+                <div class="actions">
+                    <button class="btn btn-dark" id="btnPdfEstoque">PDF estoque atual</button>
+                    <button class="btn btn-primary" id="btnAtualizarTudo">Atualizar</button>
+                </div>
+            </header>
+
+            <section class="card">
+                <div class="card-title">Loja selecionada</div>
+                <div class="form-grid-3">
+                    <div class="form-group">
+                        <label for="parceiroDestino">Loja de destino / consulta</label>
+                        <select id="parceiroDestino"><option value="">Selecione uma loja...</option></select>
+                    </div>
+                    <div class="stat-card compact-stat">
+                        <span>Estoque atual</span>
+                        <strong id="statQtdEstoque">0</strong>
+                    </div>
+                    <div class="stat-card compact-stat">
+                        <span>Valor consignado atual</span>
+                        <strong id="statValorEstoque">R$ 0,00</strong>
                     </div>
                 </div>
-            </form>
+            </section>
 
-            <div class="carrinho-box">
-                <h3>📦 Itens Prontos para Envio</h3>
+            <section class="card" id="novaRemessaCard">
+                <div class="card-title">Nova remessa em lote</div>
+                <div class="form-grid-4">
+                    <div class="form-group search-wrap">
+                        <label for="buscaProdutoRemessa">Produto</label>
+                        <input id="buscaProdutoRemessa" type="search" placeholder="Digite para buscar produto...">
+                        <div id="sugestoesProduto" class="suggestions hidden"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="qtdRemessa">Quantidade</label>
+                        <input id="qtdRemessa" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="valorConsignacaoRemessa">Consignação desta remessa</label>
+                        <input id="valorConsignacaoRemessa" class="input-money" type="text" inputmode="decimal" placeholder="Ex.: 9,99">
+                        <small class="price-note">Não altera o preço padrão do produto.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary w-full" id="btnAddLote">Adicionar ao lote</button>
+                    </div>
+                </div>
+                <div id="produtoSelecionadoBox" class="preview-box mt-2 hidden"></div>
+                <div class="form-group mt-2">
+                    <label for="observacaoRemessa">Observação da remessa</label>
+                    <textarea id="observacaoRemessa" placeholder="Ex.: reposição semanal, entrega feita por Cezar, conferido com responsável..."></textarea>
+                </div>
+                <div class="hr"></div>
+                <div class="card-title">Itens prontos para envio</div>
                 <div class="table-container">
-                    <table style="margin-top: 0; min-width: unset;">
-                        <thead>
-                            <tr>
-                                <th>Produto</th>
-                                <th>Qtd</th>
-                                <th style="width: 60px;">Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabLote">
-                            <tr><td colspan="3" class="empty-state" style="padding: 15px;">Nenhum produto adicionado à caixa.</td></tr>
-                        </tbody>
+                    <table>
+                        <thead><tr><th>Produto</th><th>Qtd</th><th>Valor padrão</th><th>Valor nesta remessa</th><th>Total da remessa</th><th>Ações</th></tr></thead>
+                        <tbody id="tabelaLote"></tbody>
                     </table>
                 </div>
-                <button id="btnEnviarLote" class="btn-send-lote" onclick="enviarLoteCompleto()">🚀 Confirmar Envio da Remessa</button>
-            </div>
-        </div>
+                <button class="btn btn-success w-full mt-3" id="btnEnviarLote">Confirmar envio da remessa</button>
+            </section>
 
-        <div class="card">
-            <div class="header-estoque" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2>📋 Estoque Consignado Atual</h2>
-                <button id="btnImprimir" class="btn-pdf" onclick="gerarPDF()">🖨️ Imprimir PDF</button>
-            </div>
-            
-            <div style="margin-top: 5px;">
-                <select id="filtroParc">
-                    <option value="">Selecione para ver o estoque da loja...</option>
-                </select>
-            </div>
-            
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Produto</th>
-                            <th>Variação</th>
-                            <th>Qtd. na Loja</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabEst">
-                        <tr><td colspan="4" class="empty-state">Selecione uma loja para carregar o estoque.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            <section class="card">
+                <div class="card-title">
+                    Histórico de remessas da loja
+                    <small class="text-muted" id="avisoHistorico"></small>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Código</th><th>Data</th><th>Loja</th><th>Status</th><th>Itens</th><th>Qtd</th><th>Valor original</th><th>Saldo</th><th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaHistoricoRemessas"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-title">Estoque consignado atual da loja</div>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>Produto</th><th>Qtd atual</th><th>Qtd enviada</th><th>Qtd vendida</th><th>Preço consignação</th><th>Valor atual</th><th>Ações</th></tr></thead>
+                        <tbody id="tabelaEstoque"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
     </div>
-
-    <script>
-        const token = localStorage.getItem('token_personalize');
-        const API_BASE = '/api';
-        let listaRemessa = [];
-
-        if(!token) window.location.href='index.html';
-        function logout() { localStorage.clear(); window.location.href='index.html'; }
-
-        // ==========================================
-        // 🍔 FUNÇÃO DO MENU HAMBURGUER (Abre/Fecha)
-        // ==========================================
-        function toggleMenu() {
-            const menu = document.getElementById('menuLinks');
-            menu.classList.toggle('ativo-mobile');
-        }
-
-        // Configuração do SweetAlert
-        const Toast = Swal.mixin({
-            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
-        });
-
-        // 1. CARREGAR SELECTS
-        async function carregarDados() {
-            try {
-                const resPa = await fetch(`${API_BASE}/parceiros`, { headers: {'Authorization': `Bearer ${token}`} });
-                const parceiros = await resPa.json();
-                let optPa = '<option value="">Selecione a Loja...</option>';
-                parceiros.forEach(p => {
-                    if(p.status && p.status.toUpperCase() === 'ATIVO') optPa += `<option value="${p.id}">${p.nome_loja}</option>`;
-                });
-                document.getElementById('parc').innerHTML = optPa;
-                document.getElementById('filtroParc').innerHTML = optPa;
-
-                const resPr = await fetch(`${API_BASE}/produtos`, { headers: {'Authorization': `Bearer ${token}`} });
-                const prods = await resPr.json();
-                let optPr = '<option value="">Escolha a Peça...</option>';
-                prods.forEach(p => {
-                    optPr += `<option value="${p.id}">${p.nome} (${p.variacao}) - Disp: ${p.estoque_central}</option>`;
-                });
-                document.getElementById('prod').innerHTML = optPr;
-            } catch (err) { Toast.fire({ icon: 'error', title: 'Erro ao conectar com o servidor.' }); }
-        }
-
-        // 2. ADICIONAR AO LOTE (Carrinho de Remessa)
-        document.getElementById('formRem').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const parceiro = document.getElementById('parc').value;
-            if(!parceiro) {
-                Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Selecione a Loja de Destino primeiro!' });
-                return;
-            }
-
-            const prodSelect = document.getElementById('prod');
-            const produto_id = prodSelect.value;
-            const nomeProduto = prodSelect.options[prodSelect.selectedIndex].text.split(' - Disp:')[0]; 
-            const quantidade = parseInt(document.getElementById('qtd').value);
-
-            const indexExistente = listaRemessa.findIndex(i => i.produto_id === produto_id);
-            if(indexExistente >= 0) listaRemessa[indexExistente].quantidade += quantidade;
-            else listaRemessa.push({ produto_id, nomeProduto, quantidade });
-
-            atualizarTabelaLote();
-            prodSelect.value = ""; document.getElementById('qtd').value = ""; prodSelect.focus();
-        });
-
-        // 3. ATUALIZAR TABELA LOTE
-        function atualizarTabelaLote() {
-            const tbody = document.getElementById('tabLote');
-            const btnSend = document.getElementById('btnEnviarLote');
-            if(listaRemessa.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty-state" style="padding: 15px;">Nenhum produto adicionado à caixa.</td></tr>';
-                btnSend.style.display = 'none'; return;
-            }
-            tbody.innerHTML = '';
-            listaRemessa.forEach((item, index) => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${item.nomeProduto}</td>
-                        <td><span class="badge-qtd">${item.quantidade} un.</span></td>
-                        <td><button class="btn-acao" onclick="removerDoLote(${index})">❌</button></td>
-                    </tr>`;
-            });
-            btnSend.style.display = 'block';
-        }
-
-        function removerDoLote(index) {
-            listaRemessa.splice(index, 1);
-            atualizarTabelaLote();
-        }
-
-        // 4. ENVIAR LOTE PRO SERVIDOR
-        async function enviarLoteCompleto() {
-            const parceiro_id = document.getElementById('parc').value;
-            if(!parceiro_id || listaRemessa.length === 0) return;
-
-            const btn = document.getElementById('btnEnviarLote');
-            btn.innerText = "⏳ Enviando Remessa..."; btn.disabled = true;
-
-            try {
-                const res = await fetch(`${API_BASE}/consignacoes/lote`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ parceiro_id, itens: listaRemessa })
-                });
-
-                if (res.ok) {
-                    Toast.fire({ icon: 'success', title: '📦 Remessa enviada com sucesso!' });
-                    listaRemessa = []; atualizarTabelaLote();
-                    document.getElementById('parc').value = ""; carregarDados();
-                    document.getElementById('filtroParc').value = parceiro_id;
-                    document.getElementById('filtroParc').dispatchEvent(new Event('change'));
-                } else {
-                    const erro = await res.json();
-                    Swal.fire({ icon: 'error', title: 'Ops!', text: erro.erro });
-                }
-            } catch (err) { Swal.fire({ icon: 'error', title: 'Erro de conexão', text: 'Verifique sua internet.' }); } 
-            finally { btn.innerText = "🚀 Confirmar Envio da Remessa"; btn.disabled = false; }
-        }
-
-        // 5. FILTRAR ESTOQUE DA LOJA
-        document.getElementById('filtroParc').addEventListener('change', async (e) => {
-            const lojaId = e.target.value;
-            const btnPdf = document.getElementById('btnImprimir');
-            if(!lojaId) {
-                btnPdf.style.display = 'none';
-                document.getElementById('tabEst').innerHTML = '<tr><td colspan="4" class="empty-state">Selecione uma loja para carregar o estoque.</td></tr>';
-                return;
-            }
-            try {
-                const res = await fetch(`${API_BASE}/consignacoes/${lojaId}`, { headers: {'Authorization': `Bearer ${token}`} });
-                const est = await res.json();
-                const tbody = document.getElementById('tabEst'); 
-                if (est.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Sem estoque consignado nesta loja.</td></tr>';
-                    btnPdf.style.display = 'none'; return;
-                }
-                btnPdf.style.display = 'block'; tbody.innerHTML = '';
-                est.forEach(i => {
-                    tbody.innerHTML += `
-                        <tr class="linha-produto">
-                            <td class="td-nome"><strong>${i.produto_nome}</strong></td>
-                            <td class="td-var">${i.variacao}</td>
-                            <td class="td-qtd"><span class="badge-qtd">${i.quantidade_atual} un.</span></td>
-                            <td>
-                                <button title="Ajustar" class="btn-acao" onclick="ajustarRemessa(${i.id}, ${i.quantidade_atual})">✏️</button>
-                                <button title="Estornar" class="btn-acao" onclick="excluirRemessa(${i.id})">🗑️</button>
-                            </td>
-                        </tr>`;
-                });
-            } catch (err) { console.error(err); }
-        });
-
-        // 6. EXCLUIR E AJUSTAR
-        async function excluirRemessa(id) {
-            const confirmacao = await Swal.fire({ 
-                title: 'Estornar Remessa?', 
-                text: "O estoque voltará para o centro de distribuição.", 
-                icon: 'warning', 
-                showCancelButton: true, 
-                confirmButtonColor: '#d33', 
-                cancelButtonColor: '#3085d6', 
-                confirmButtonText: 'Sim, estornar!', 
-                cancelButtonText: 'Cancelar' 
-            });
-            if(confirmacao.isConfirmed) {
-                const res = await fetch(`${API_BASE}/consignacoes/${id}`, { method: 'DELETE', headers: {'Authorization': `Bearer ${token}`} });
-                if(res.ok) { 
-                    Toast.fire({ icon: 'success', title: 'Remessa estornada com sucesso' }); 
-                    document.getElementById('filtroParc').dispatchEvent(new Event('change')); 
-                    carregarDados(); 
-                }
-            }
-        }
-
-        async function ajustarRemessa(id, qtdAtual) {
-            const { value: novaQtd } = await Swal.fire({ 
-                title: 'Ajustar Quantidade', 
-                input: 'number', 
-                inputLabel: 'Qual a nova quantidade total exata na loja?', 
-                inputValue: qtdAtual, 
-                showCancelButton: true, 
-                confirmButtonText: 'Salvar',
-                cancelButtonText: 'Cancelar',
-                inputValidator: (value) => { if (!value || value < 0) return 'Insira um valor válido!' } 
-            });
-            
-            if(novaQtd && novaQtd != qtdAtual) {
-                const res = await fetch(`${API_BASE}/consignacoes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ nova_quantidade: parseInt(novaQtd) }) });
-                if(res.ok) { 
-                    Toast.fire({ icon: 'success', title: 'Quantidade ajustada!' }); 
-                    document.getElementById('filtroParc').dispatchEvent(new Event('change')); 
-                    carregarDados(); 
-                } 
-                else { 
-                    const erro = await res.json(); 
-                    Swal.fire({ icon: 'error', title: 'Erro de Estoque', text: erro.erro }); 
-                }
-            }
-        }
-
-        // ==========================================
-        // 🖨️ FUNÇÃO DE PDF DO RECIBO (COM TERMO JURÍDICO E SOMA TOTAL)
-        // ==========================================
-        function gerarPDF() {
-            const { jsPDF } = window.jspdf; 
-            const doc = new jsPDF();
-            
-            const selectLoja = document.getElementById('filtroParc'); 
-            const nomeLoja = selectLoja.options[selectLoja.selectedIndex].text;
-            
-            const dataAtual = new Date().toLocaleDateString('pt-BR'); 
-            const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            
-            // CABEÇALHO DO PDF
-            doc.setFont("helvetica", "bold"); 
-            doc.setFontSize(20); 
-            doc.text("PERSONALIZE 3D", 105, 20, { align: "center" }); 
-            doc.setFontSize(14); 
-            doc.text("RECIBO DE CONSIGNAÇÃO / ESTOQUE", 105, 30, { align: "center" });
-            
-            doc.setFont("helvetica", "normal"); 
-            doc.setFontSize(12); 
-            doc.text(`Empresa Parceira: ${nomeLoja}`, 14, 45); 
-            doc.text(`Data da Conferência: ${dataAtual} às ${horaAtual}`, 14, 53);
-            
-            // EXTRAIR DADOS DA TABELA E CALCULAR TOTAL
-            const linhasPdf = []; 
-            let totalPecas = 0;
-
-            document.querySelectorAll('.linha-produto').forEach(tr => { 
-                const nomeProd = tr.querySelector('.td-nome').innerText;
-                const varProd = tr.querySelector('.td-var').innerText;
-                const qtdTexto = tr.querySelector('.td-qtd').innerText;
-                
-                // Pega só os números da string (Ex: de "15 un." pega "15")
-                const qtdNumero = parseInt(qtdTexto.replace(/\D/g, ''));
-                totalPecas += qtdNumero;
-
-                linhasPdf.push([nomeProd, varProd, qtdNumero.toString()]); 
-            });
-
-            // Adiciona a linha de TOTAL no final da tabela
-            linhasPdf.push(['', 'TOTAL DE PEÇAS', totalPecas.toString()]);
-
-            // DESENHAR TABELA
-            doc.autoTable({ 
-                startY: 60, 
-                head: [['Produto', 'Variação / Modelo', 'Quantidade']], 
-                body: linhasPdf, 
-                theme: 'grid', 
-                headStyles: { fillColor: [59, 130, 246] },
-                // Deixa a última linha (Total) em negrito e com fundo diferente
-                didParseCell: function (data) {
-                    if (data.row.index === linhasPdf.length - 1) {
-                        data.cell.styles.fontStyle = 'bold';
-                        data.cell.styles.fillColor = [243, 244, 246]; // Cinza claro
-                    }
-                }
-            });
-
-            // TERMO DE RESPONSABILIDADE (JURÍDICO)
-            let finalY = doc.lastAutoTable.finalY + 15; // Inicia logo abaixo da tabela
-            
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
-            doc.text("TERMO DE RESPONSABILIDADE E GUARDA", 14, finalY);
-            
-            finalY += 6;
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(9);
-            const termo = "O parceiro consignado declara ter recebido os itens descritos neste documento em perfeito estado de conservação. Fica expressamente acordado que a guarda e o zelo dos produtos são de inteira responsabilidade do parceiro. Em caso de perda, roubo, dano ou extravio de qualquer peça sob sua posse, o parceiro assumirá o prejuízo, comprometendo-se a ressarcir a PERSONALIZE Hub no valor integral de repasse dos itens faltantes.";
-            
-            // splitTextToSize quebra o texto automaticamente nas margens da página
-            const linhasTermo = doc.splitTextToSize(termo, 180);
-            doc.text(linhasTermo, 14, finalY);
-
-            // ASSINATURAS
-            finalY += (linhasTermo.length * 5) + 30; // Desce o espaço do termo + 30px
-            
-            doc.setLineWidth(0.5); 
-            
-            // Assinatura Personalize (Esquerda)
-            doc.line(20, finalY, 90, finalY); 
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(10); 
-            doc.text("PERSONALIZE 3D", 35, finalY + 5); 
-            doc.setFont("helvetica", "normal");
-            doc.text("Conferente / Entregador", 34, finalY + 10);
-            
-            // Assinatura Parceiro (Direita)
-            doc.line(120, finalY, 190, finalY); 
-            doc.setFont("helvetica", "bold");
-            doc.text(nomeLoja.length > 25 ? nomeLoja.substring(0, 25) + '...' : nomeLoja, 135, finalY + 5); 
-            doc.setFont("helvetica", "normal");
-            doc.text("Responsável pelo Recebimento", 125, finalY + 10);
-            
-            // SALVAR
-            doc.save(`Recibo_Estoque_${nomeLoja.replace(/\s+/g, '_')}_${dataAtual.replace(/\//g, '-')}.pdf`);
-        }
-
-        carregarDados();
-    </script>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/remessas.js"></script>
 </body>
 </html>

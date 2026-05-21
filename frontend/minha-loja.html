@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minha Loja - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title"><h1>🏪 Minha Loja</h1><p>Estoque recebido, vendas e valor consignado da sua loja.</p></div>
+                <div class="actions"><a href="vendas.html" class="btn btn-success">Registrar venda</a><button class="btn btn-dark" id="btnPdfLoja">Gerar PDF</button></div>
+            </header>
+            <section class="grid grid-4 mb-2">
+                <div class="stat-card"><span>Loja</span><strong id="nomeLoja">-</strong></div>
+                <div class="stat-card"><span>Itens em estoque</span><strong id="qtdAtual">0</strong></div>
+                <div class="stat-card"><span>Valor consignado</span><strong id="valorConsignado">R$ 0,00</strong></div>
+                <div class="stat-card"><span>Vendas do mês</span><strong id="vendasMes">R$ 0,00</strong></div>
+            </section>
+            <section class="card">
+                <div class="card-title">📦 Estoque consignado atual</div>
+                <div class="table-container"><table><thead><tr><th>Produto</th><th>Variação</th><th>Qtd atual</th><th>Preço consignação</th><th>Valor total</th></tr></thead><tbody id="tabelaEstoqueLoja"></tbody></table></div>
+            </section>
+            <section class="card">
+                <div class="card-title">📜 Últimas vendas</div>
+                <div class="table-container"><table><thead><tr><th>Produto</th><th>Data</th><th>Qtd</th><th>Total</th></tr></thead><tbody id="tabelaVendasLoja"></tbody></table></div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/minha-loja.js"></script>
+</body>
+</html>

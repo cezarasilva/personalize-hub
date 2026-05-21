@@ -2,408 +2,82 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Frente de Caixa - PERSONALIZE Hub</title>
-    
-    <!-- Bibliotecas PDF e Alertas -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendas - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <style>
-        * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
-        
-        /* ==========================================
-           🖥️ MODO DESKTOP (PC) 
-           ========================================== */
-        body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; flex-direction: row; }
-        
-        .sidebar { width: 250px; background: #1f2937; color: #fff; display: flex; flex-direction: column; z-index: 1000; }
-        .sidebar-top { padding: 25px 20px; text-align: center; background: #111827; }
-        .sidebar-top h2 { color: #60a5fa; font-weight: 800; font-size: 1.5rem; margin: 0; }
-        .btn-menu { display: none; } 
-        
-        .sidebar-links { display: flex; flex-direction: column; flex: 1; overflow-y: auto; }
-        .sidebar a { padding: 15px 20px; color: #d1d5db; text-decoration: none; border-left: 4px solid transparent; cursor: pointer; transition: 0.2s; font-size: 15px; }
-        .sidebar a:hover { background: #374151; color: #fff; }
-        .sidebar a.ativo { background: #374151; border-left-color: #3b82f6; color: #fff; }
-        .btn-sair { margin-top: auto; color: #f87171 !important; border-top: 1px solid #374151; }
-
-        .main { flex: 1; overflow-y: auto; padding: 30px; }
-        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e5e7eb;}
-        
-        /* Formulário de Venda */
-        form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        input, select { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; background: #f9fafb; width: 100%; }
-        input:focus, select:focus { border-color: #3b82f6; background: #fff; }
-        
-        .btn-vender { background: #10b981; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; grid-column: span 2; font-size: 16px; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .btn-vender:hover { background: #059669; }
-        .btn-vender:disabled { background: #94a3b8; cursor: not-allowed; }
-        
-        /* Preview da Foto */
-        .preview-container { display: flex; align-items: center; gap: 15px; grid-column: span 2; background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px dashed #d1d5db; min-height: 80px; }
-        #fotoPreview { width: 65px; height: 65px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; display: none; }
-        .no-photo { width: 65px; height: 65px; background: #e5e7eb; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #6b7280; text-align: center; flex-shrink: 0; }
-
-        /* Tabela e PDF */
-        .header-tabela { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .btn-pdf { background: #1f2937; color: white; padding: 10px 18px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 13px; white-space: nowrap; }
-        .btn-pdf:hover { background: #111827; }
-
-        .table-container { width: 100%; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 600px; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; vertical-align: middle; }
-        th { background: #f9fafb; color: #6b7280; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-        
-        .foto-venda { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; }
-        .badge-loja { background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; white-space: nowrap; }
-        
-        .btn-acao { border: none; background: none; cursor: pointer; font-size: 18px; transition: 0.2s; }
-        .btn-acao:hover { transform: scale(1.2); }
-
-        /* ==========================================
-           📱 MODO CELULAR (Menu Hamburguer Funcional)
-           ========================================== */
-        @media (max-width: 768px) {
-            body { flex-direction: column; overflow: visible; }
-            
-            .sidebar { width: 100%; height: auto; position: relative; overflow: visible; }
-            .sidebar-top { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #111827; }
-            .sidebar-top h2 { font-size: 1.3rem; text-align: left; }
-            
-            .btn-menu { 
-                display: flex; background: #3b82f6; color: white; border: none; font-size: 24px; 
-                width: 40px; height: 40px; border-radius: 6px; align-items: center; justify-content: center; 
-                cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            }
-            
-            .sidebar-links { 
-                display: none; position: absolute; top: 100%; left: 0; width: 100%; 
-                background: #1f2937; box-shadow: 0 10px 15px rgba(0,0,0,0.5); z-index: 9999; 
-            }
-            .sidebar-links.ativo-mobile { display: flex !important; }
-
-            .sidebar a { padding: 15px 20px; border-bottom: 1px solid #374151; border-left: none; }
-            .sidebar a.ativo { border-left: none; background: #374151; border-left: 4px solid #3b82f6; }
-            
-            .main { padding: 15px; overflow-y: visible; }
-            .card { padding: 15px; }
-            h2 { font-size: 18px; }
-            
-            /* Ajustes Form Mobile */
-            form { grid-template-columns: 1fr; }
-            .preview-container, .btn-vender { grid-column: span 1; }
-            .preview-container { flex-direction: column; align-items: flex-start; }
-            select { width: 100%; }
-
-            /* Ajustes Cabeçalho Tabela Mobile */
-            .header-tabela { flex-direction: column; align-items: stretch; gap: 10px; }
-            .btn-pdf { width: 100%; text-align: center; }
-        }
-    </style>
 </head>
 <body>
-    
-    <!-- BARRA SUPERIOR / LATERAL -->
-    <div class="sidebar">
-        <div class="sidebar-top">
-            <h2>PERSONALIZE</h2>
-            <button class="btn-menu" onclick="toggleMenu()">☰</button>
-        </div>
-        <div class="sidebar-links" id="menuLinks">
-            <a href="dashboard.html">📊 Dashboard</a>
-            <a href="produtos.html" class="menu-admin">📦 Produtos & Peças</a>
-            <a href="parceiros.html" class="menu-admin">🏪 Lojas Parceiras</a>
-            <a href="usuarios.html" class="menu-admin">👥 Usuários do Sistema</a>
-            <a href="remessas.html" class="menu-admin">🚚 Remessas (Estoque)</a>
-            <a href="vendas.html" class="ativo">💰 Frente de Caixa</a>
-            <a class="btn-sair" onclick="logout()">🚪 Sair</a>
-        </div>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1>💰 Frente de Caixa</h1>
+                    <p>Registre vendas com busca digitável de produto e acompanhe o extrato.</p>
+                </div>
+                <button class="btn btn-dark" id="btnPdfVendas">Fechamento PDF</button>
+            </header>
+
+            <section class="card">
+                <div class="card-title">Registrar venda</div>
+                <form id="formVenda">
+                    <div class="form-grid mt-2">
+                        <div class="form-group" id="grupoOrigemVenda">
+                            <label for="origemVenda">Venda por</label>
+                            <select id="origemVenda" name="parceiro_id">
+                                <option value="">Sede Central</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="quantidadeVenda">Quantidade</label>
+                            <input id="quantidadeVenda" name="quantidade" type="number" min="1" value="1" required>
+                        </div>
+                        <div class="form-group hidden" id="grupoValorFinalVenda">
+                            <label for="valorFinalVenda">Valor total final da venda direta</label>
+                            <input id="valorFinalVenda" name="valor_total_manual" type="text" inputmode="decimal" placeholder="Ex: 39,90">
+                            <small class="text-muted">Esse é o valor TOTAL que será registrado na venda. Aceita 39,90 ou 39.90.</small>
+                            <div id="resumoValorVenda" class="text-success mt-1"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group search-wrap mt-2">
+                        <label for="buscaProdutoVenda">Produto</label>
+                        <input id="buscaProdutoVenda" type="search" placeholder="Digite o nome, variação ou SKU do produto..." autocomplete="off" required>
+                        <div id="sugestoesProdutoVenda" class="suggestions hidden"></div>
+                    </div>
+
+                    <div id="produtoVendaSelecionadoBox" class="preview-box mt-2 hidden"></div>
+
+                    <button class="btn btn-success w-full mt-3" id="btnConfirmarVenda">Confirmar venda</button>
+                </form>
+            </section>
+
+            <section class="card">
+                <div class="card-title">Extrato de vendas</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th>Data</th>
+                                <th>Qtd</th>
+                                <th>Total</th>
+                                <th>Origem</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaVendas"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
     </div>
 
-    <div class="main">
-        <div class="card">
-            <h2 style="margin-bottom: 15px;">🛒 Registrar Nova Venda</h2>
-            <form id="formVenda">
-                
-                <div class="preview-container">
-                    <img id="fotoPreview" src="" alt="Produto">
-                    <div id="placeholderFoto" class="no-photo">Sem<br>Foto</div>
-                    <select id="produto" required style="flex: 1;" onchange="atualizarPreview()">
-                        <option value="">Carregando produtos...</option>
-                    </select>
-                </div>
-
-                <div style="display:flex; flex-direction:column; gap:5px;">
-                    <label style="font-size: 12px; font-weight: bold; color: #4b5563;">Quantidade:</label>
-                    <input type="number" id="quantidade" placeholder="Qtd. Vendida" min="1" value="1" required>
-                </div>
-                
-                <div style="display:flex; flex-direction:column; gap:5px;" class="menu-admin">
-                    <label style="font-size: 12px; font-weight: bold; color: #4b5563;">Venda por:</label>
-                    <select id="venda_origem">
-                        <option value="">Sede Central (Venda Direta)</option>
-                    </select>
-                </div>
-
-                <button type="submit" class="btn-vender" id="btnVender">💸 Confirmar Venda</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <div class="header-tabela">
-                <h2 style="margin: 0;">📜 Extrato Recente de Vendas</h2>
-                <button class="btn-pdf" onclick="gerarPDF()">🖨️ Imprimir Fechamento</button>
-            </div>
-            
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Produto</th>
-                            <th>Data/Hora</th>
-                            <th>Qtd</th>
-                            <th>Total</th>
-                            <th class="col-loja">Loja</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelaVendas">
-                        <tr><td colspan="6" style="text-align: center; padding: 20px;">Carregando histórico...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const API = '/api';
-        const token = localStorage.getItem('token_personalize');
-        const usuarioLogado = JSON.parse(localStorage.getItem('usuario_personalize') || '{}');
-        let produtosGlobais = [];
-
-        if(!token) window.location.href='index.html';
-
-        // Ocultar menus se for parceiro
-        if (usuarioLogado.perfil === 'PARCEIRO') {
-            document.querySelectorAll('.menu-admin').forEach(el => el.style.display = 'none');
-            const colLoja = document.querySelector('.col-loja');
-            if(colLoja) colLoja.style.display = 'none';
-        }
-
-        function logout() { localStorage.clear(); window.location.href='index.html'; }
-
-        // 🍔 Função do Menu Hamburguer
-        function toggleMenu() {
-            const menu = document.getElementById('menuLinks');
-            menu.classList.toggle('ativo-mobile');
-        }
-
-        // SweetAlert
-        const Toast = Swal.mixin({
-            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
-        });
-
-        // 1. CARREGAR PRODUTOS DISPONÍVEIS
-        async function carregarProdutos() {
-            try {
-                const endpoint = (usuarioLogado.perfil === 'PARCEIRO') 
-                    ? `${API}/consignacoes/${usuarioLogado.parceiro_id}` 
-                    : `${API}/produtos`;
-
-                const res = await fetch(endpoint, { headers: {'Authorization': `Bearer ${token}`} });
-                produtosGlobais = await res.json();
-                
-                const sel = document.getElementById('produto');
-                
-                if(produtosGlobais.length === 0) {
-                    sel.innerHTML = '<option value="">Estoque Vazio (Nenhum produto disponível)</option>';
-                    return;
-                }
-
-                sel.innerHTML = '<option value="">Bipe ou selecione o produto...</option>';
-                
-                produtosGlobais.forEach(p => {
-                    const id = p.produto_id || p.id;
-                    const nome = p.produto_nome || p.nome;
-                    const estoque = (p.quantidade_atual !== undefined) ? p.quantidade_atual : p.estoque_central;
-                    sel.innerHTML += `<option value="${id}">${nome} - ${p.variacao} (Estoque: ${estoque})</option>`;
-                });
-
-                if(usuarioLogado.perfil === 'ADMIN') {
-                    const resL = await fetch(`${API}/parceiros`);
-                    const lojas = await resL.json();
-                    const selL = document.getElementById('venda_origem');
-                    lojas.forEach(l => {
-                        if(l.status === 'ATIVO') selL.innerHTML += `<option value="${l.id}">Venda pela Loja: ${l.nome_loja}</option>`;
-                    });
-                }
-            } catch (err) { Toast.fire({ icon: 'error', title: 'Erro ao carregar produtos.' }); }
-        }
-
-        function atualizarPreview() {
-            const id = document.getElementById('produto').value;
-            const imgEl = document.getElementById('fotoPreview');
-            const placeholder = document.getElementById('placeholderFoto');
-            
-            const prod = produtosGlobais.find(p => (p.produto_id || p.id) == id);
-            
-            if (prod && prod.imagem_url) {
-                imgEl.src = prod.imagem_url;
-                imgEl.style.display = 'block';
-                placeholder.style.display = 'none';
-            } else {
-                imgEl.style.display = 'none';
-                placeholder.style.display = 'flex';
-            }
-        }
-
-        // 2. CARREGAR EXTRATO DE VENDAS
-        async function carregarVendas() {
-            try {
-                const res = await fetch(`${API}/vendas`, { headers: {'Authorization': `Bearer ${token}`} });
-                const dados = await res.json();
-                const tbody = document.getElementById('tabelaVendas'); 
-                tbody.innerHTML = '';
-                
-                if (dados.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #9ca3af;">Nenhuma venda registrada hoje.</td></tr>';
-                    return;
-                }
-
-                dados.forEach(v => {
-                    const imgHTML = v.imagem_url 
-                        ? `<img src="${v.imagem_url}" class="foto-venda">` 
-                        : `<div class="foto-venda" style="background:#eee;"></div>`;
-                    
-                    const lojaHTML = (usuarioLogado.perfil === 'ADMIN') 
-                        ? `<td class="td-loja"><span class="badge-loja">${v.loja}</span></td>` 
-                        : '';
-
-                    tbody.innerHTML += `
-                        <tr class="linha-venda">
-                            <td>
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    ${imgHTML}
-                                    <div class="td-prod"><strong>${v.produto_nome}</strong><br><small style="color: #6b7280;">${v.variacao}</small></div>
-                                </div>
-                            </td>
-                            <td class="td-data" style="font-size: 11px;">${v.data_formatada}</td>
-                            <td class="td-qtd">${v.quantidade} un.</td>
-                            <td class="td-total" style="color:#059669; font-weight:bold;">R$ ${parseFloat(v.valor_total).toFixed(2)}</td>
-                            ${lojaHTML}
-                            <td>
-                                <button class="btn-acao" title="Cancelar Venda" onclick="cancelarVenda(${v.id})">🗑️</button>
-                            </td>
-                        </tr>`;
-                });
-            } catch (err) { console.error(err); }
-        }
-
-        // 3. REGISTRAR VENDA
-        document.getElementById('formVenda').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('btnVender');
-            btn.disabled = true;
-            btn.innerHTML = "⏳ Processando Venda...";
-
-            const payload = {
-                produto_id: document.getElementById('produto').value,
-                quantidade: document.getElementById('quantidade').value,
-                parceiro_id: document.getElementById('venda_origem')?.value || null
-            };
-
-            if(!payload.produto_id) {
-                Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Selecione um produto primeiro!'});
-                btn.disabled = false; btn.innerHTML = "💸 Confirmar Venda";
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API}/vendas`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    Toast.fire({ icon: 'success', title: 'Venda Concluída!' });
-                    document.getElementById('formVenda').reset();
-                    atualizarPreview();
-                    carregarVendas();
-                    carregarProdutos(); // Atualiza a quantidade no select
-                } else {
-                    const erro = await res.json();
-                    Swal.fire({ icon: 'error', title: 'Estoque Insuficiente', text: erro.erro });
-                }
-            } catch (err) { Swal.fire({ icon: 'error', title: 'Erro de Conexão' }); }
-            finally { btn.disabled = false; btn.innerHTML = "💸 Confirmar Venda"; }
-        });
-
-        // 4. CANCELAR / ESTORNAR VENDA
-        async function cancelarVenda(id) {
-            const confirmacao = await Swal.fire({
-                title: 'Estornar Venda?',
-                text: "O estoque será devolvido automaticamente para a prateleira.",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Sim, estornar!',
-                cancelButtonText: 'Manter Venda'
-            });
-
-            if (confirmacao.isConfirmed) {
-                try {
-                    const res = await fetch(`${API}/vendas/${id}`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if(res.ok) {
-                        Toast.fire({ icon: 'success', title: 'Estorno realizado!' });
-                        carregarVendas();
-                        carregarProdutos();
-                    } else {
-                        Swal.fire('Erro', 'Falha ao estornar a venda.', 'error');
-                    }
-                } catch (err) { Swal.fire('Erro', 'Sem conexão.', 'error'); }
-            }
-        }
-
-        // 5. GERAR PDF (EXTRATO) - (Lógica intacta para o jsPDF)
-        function gerarPDF() {
-            const { jsPDF } = window.jspdf; const doc = new jsPDF();
-            const dataAtual = new Date().toLocaleDateString('pt-BR'); const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const isAdmin = usuarioLogado.perfil === 'ADMIN';
-
-            doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.text("PERSONALIZE 3D", 105, 20, { align: "center" });
-            doc.setFontSize(14); doc.text("FECHAMENTO DE CAIXA / EXTRATO DE VENDAS", 105, 30, { align: "center" });
-            doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.text(`Data de Emissão: ${dataAtual} às ${horaAtual}`, 14, 45); doc.text(`Operador: ${usuarioLogado.nome || 'Administrador'}`, 14, 52);
-
-            const colunas = isAdmin ? [['Produto', 'Data', 'Qtd', 'Origem', 'Valor Total']] : [['Produto', 'Data', 'Qtd', 'Valor Total']];
-            const linhasPdf = []; let somaTotal = 0;
-            const trs = document.querySelectorAll('.linha-venda');
-            
-            if(trs.length === 0) return Swal.fire('Aviso', 'Não há vendas para imprimir!', 'info');
-
-            trs.forEach(tr => {
-                const prod = tr.querySelector('.td-prod').innerText.replace(/\n/g, ' - ');
-                const dataHora = tr.querySelector('.td-data').innerText;
-                const qtd = tr.querySelector('.td-qtd').innerText;
-                const valorLimpo = parseFloat(tr.querySelector('.td-total').innerText.replace('R$', '').trim());
-                somaTotal += valorLimpo;
-                if (isAdmin) { linhasPdf.push([prod, dataHora, qtd, tr.querySelector('.td-loja').innerText, `R$ ${valorLimpo.toFixed(2)}`]); } 
-                else { linhasPdf.push([prod, dataHora, qtd, `R$ ${valorLimpo.toFixed(2)}`]); }
-            });
-
-            doc.autoTable({ startY: 60, head: colunas, body: linhasPdf, theme: 'grid', headStyles: { fillColor: [16, 185, 129] }, styles: { fontSize: 10 } });
-            doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text(`TOTAL ARRECADADO: R$ ${somaTotal.toFixed(2)}`, 195, doc.lastAutoTable.finalY + 15, { align: 'right' });
-            doc.save(`Extrato_Vendas_${dataAtual.replace(/\//g, '-')}.pdf`);
-        }
-
-        carregarProdutos();
-        carregarVendas();
-    </script>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/vendas.js"></script>
 </body>
 </html>

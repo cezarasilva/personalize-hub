@@ -1,20 +1,26 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Agora ele vai puxar o link verde e seguro lá das configurações do Render (ou do seu .env local)
+if (!process.env.DATABASE_URL) {
+    console.warn('⚠️ DATABASE_URL não configurada no .env');
+}
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false // Obrigatório para a nuvem não barrar a conexão
-    }
+    ssl: { rejectUnauthorized: false }
 });
 
 pool.connect((err, client, release) => {
     if (err) {
-        return console.error('❌ Erro ao conectar no banco de dados:', err.stack);
+        console.error('❌ Erro ao conectar no banco de dados:', err.message);
+        return;
     }
-    console.log('✅ Banco de dados conectado com sucesso na Nuvem!');
+    console.log('✅ Banco de dados conectado com sucesso!');
     release();
+});
+
+pool.on('error', (err) => {
+    console.error('❌ Erro inesperado no pool do banco:', err.message);
 });
 
 module.exports = pool;

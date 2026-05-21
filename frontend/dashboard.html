@@ -2,271 +2,36 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        * { box-sizing: border-box; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
-        
-        /* ==========================================
-           🖥️ MODO DESKTOP (PC) 
-           ========================================== */
-        body { display: flex; background: #f3f4f6; height: 100vh; overflow: hidden; flex-direction: row; }
-        
-        .sidebar { width: 250px; background: #1f2937; color: #fff; display: flex; flex-direction: column; z-index: 1000; }
-        .sidebar-top { padding: 25px 20px; text-align: center; background: #111827; }
-        .sidebar-top h2 { color: #60a5fa; font-weight: 800; font-size: 1.5rem; margin: 0; }
-        .btn-menu { display: none; } 
-        
-        .sidebar-links { display: flex; flex-direction: column; flex: 1; overflow-y: auto; }
-        .sidebar a { padding: 15px 20px; color: #d1d5db; text-decoration: none; border-left: 4px solid transparent; cursor: pointer; transition: 0.2s; font-size: 15px; }
-        .sidebar a:hover { background: #374151; color: #fff; }
-        .sidebar a.ativo { background: #374151; border-left-color: #3b82f6; color: #fff; }
-        .btn-sair { margin-top: auto; color: #f87171 !important; border-top: 1px solid #374151; }
-
-        /* Layout Principal */
-        .main { flex: 1; overflow-y: auto; padding: 30px; }
-        h1 { margin-bottom: 20px; font-size: 24px; color: #1f2937; }
-        
-        /* Grade Superior (Resumos) */
-        .grid-resumo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px; }
-        
-        .card-info { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; }
-        .card-info h3 { color: #6b7280; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .card-info p { font-size: 24px; font-weight: 800; color: #111827; }
-
-        /* Gráfico Central */
-        .card-grafico { background: #fff; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #e5e7eb; height: 320px; }
-
-        /* Grade Inferior (Listas) */
-        .secao-detalhes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
-        
-        .item-visual { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6; }
-        
-        /* Badges (Etiquetas) */
-        .badge { padding: 2px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; white-space: nowrap; }
-        .badge-red { background: #fee2e2; color: #b91c1c; }
-        .badge-green { background: #dcfce7; color: #166534; }
-        .badge-blue { background: #e0e7ff; color: #3730a3; }
-
-        /* ==========================================
-           📱 MODO CELULAR (Menu Hamburguer + Grid Responsivo)
-           ========================================== */
-        @media (max-width: 768px) {
-            body { flex-direction: column; overflow: visible; }
-            
-            /* Sidebar vira Barra Superior */
-            .sidebar { width: 100%; height: auto; position: relative; overflow: visible; }
-            .sidebar-top { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #111827; }
-            .sidebar-top h2 { font-size: 1.3rem; text-align: left; }
-            
-            /* Botão Hamburguer Visível */
-            .btn-menu { 
-                display: flex; background: #3b82f6; color: white; border: none; font-size: 24px; 
-                width: 40px; height: 40px; border-radius: 6px; align-items: center; justify-content: center; 
-                cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            }
-            
-            /* Menu Dropdown Escondido */
-            .sidebar-links { 
-                display: none; position: absolute; top: 100%; left: 0; width: 100%; 
-                background: #1f2937; box-shadow: 0 10px 15px rgba(0,0,0,0.5); z-index: 9999; 
-            }
-            .sidebar-links.ativo-mobile { display: flex !important; }
-
-            .sidebar a { padding: 15px 20px; border-bottom: 1px solid #374151; border-left: none; }
-            .sidebar a.ativo { border-left: none; background: #374151; border-left: 4px solid #3b82f6; }
-            
-            /* Ajustes do Layout para Celular */
-            .main { padding: 15px; overflow-y: visible; }
-            h1 { font-size: 20px; }
-            
-            /* Quebrando as grades: Deixa 2 colunas para Resumo (ou 1 se for muito pequeno) */
-            .grid-resumo { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .card-info p { font-size: 18px; } /* Diminui a fonte dos números grandes */
-            
-            /* Quebrando as Listas de Detalhes para 1 coluna */
-            .secao-detalhes { grid-template-columns: 1fr; gap: 15px; }
-            
-            /* Ajuste de altura do gráfico */
-            .card-grafico { height: 250px; }
-        }
-
-        /* Ajuste extremo para celulares muito finos (ex: iPhone SE) */
-        @media (max-width: 400px) {
-            .grid-resumo { grid-template-columns: 1fr; }
-        }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
-    
-    <!-- BARRA SUPERIOR (Mobile) / LATERAL (PC) -->
-    <div class="sidebar">
-        <div class="sidebar-top">
-            <h2>PERSONALIZE</h2>
-            <button class="btn-menu" onclick="toggleMenu()">☰</button>
-        </div>
-        <div class="sidebar-links" id="menuLinks">
-            <a href="dashboard.html" class="ativo">📊 Dashboard</a>
-            <a href="produtos.html">📦 Produtos & Peças</a>
-            <a href="parceiros.html">🏪 Lojas Parceiras</a>
-            <a href="usuarios.html">👥 Usuários do Sistema</a>
-            <a href="remessas.html">🚚 Remessas (Estoque)</a>
-            <a href="vendas.html">💰 Frente de Caixa</a>
-            <a class="btn-sair" onclick="logout()">🚪 Sair</a>
-        </div>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title"><h1>📊 Dashboard</h1><p id="subtituloDashboard">Visão geral do sistema.</p></div>
+                <a href="vendas.html" class="btn btn-success">Registrar venda</a>
+            </header>
+            <section class="grid grid-4 mb-2">
+                <div class="stat-card"><span>Vendas do mês</span><strong id="pedidosMes">0</strong></div>
+                <div class="stat-card"><span>Receita/repasse do mês</span><strong id="receitaMes">R$ 0,00</strong></div>
+                <div class="stat-card"><span>Qtd. em estoque</span><strong id="qtdEstoque">0</strong></div>
+                <div class="stat-card"><span>Valor em estoque</span><strong id="valorEstoque">R$ 0,00</strong></div>
+            </section>
+            <section class="card chart-card"><div class="card-title">Vendas dos últimos 7 dias</div><canvas id="graficoVendas"></canvas></section>
+            <section class="grid grid-3">
+                <div class="card"><div class="card-title">🏪 Estoque por loja</div><div id="estoqueParceiros"></div></div>
+                <div class="card"><div class="card-title">⚠️ Estoque baixo</div><div id="estoqueBaixo"></div></div>
+                <div class="card"><div class="card-title">🏆 Mais vendidos</div><div id="rankingProdutos"></div></div>
+            </section>
+        </main>
     </div>
-
-    <!-- ÁREA PRINCIPAL -->
-    <div class="main">
-        <h1>Visão Geral da Operação 📈</h1>
-        
-        <!-- Cartões de Resumo -->
-        <div class="grid-resumo">
-            <div class="card-info">
-                <h3>Vendas (Mês)</h3>
-                <p id="totalVendas">0</p>
-            </div>
-            <div class="card-info">
-                <h3>Receita (Mês)</h3>
-                <p id="totalReceita" style="color: #10b981;">R$ 0,00</p>
-            </div>
-            <div class="card-info">
-                <h3>Estoque Central</h3>
-                <p id="qtdEstoque">0 un.</p>
-            </div>
-            <div class="card-info">
-                <h3>Valor em Estoque</h3>
-                <p id="valorEstoque" style="color: #3b82f6;">R$ 0,00</p>
-            </div>
-        </div>
-
-        <!-- Gráfico -->
-        <div class="card-grafico">
-            <h3 style="color: #6b7280; font-size: 13px; margin-bottom: 15px; font-weight: bold;">FATURAMENTO DOS ÚLTIMOS 7 DIAS</h3>
-            <canvas id="graficoVendas"></canvas>
-        </div>
-
-        <!-- Listas Inferiores -->
-        <div class="secao-detalhes">
-            <!-- Estoque Baixo -->
-            <div class="card-info" style="border-top: 4px solid #ef4444;">
-                <h2 style="font-size: 15px;">⚠️ Estoque Baixo (Centro)</h2>
-                <div id="listaEstoque"></div>
-            </div>
-            
-            <!-- Ranking de Vendas -->
-            <div class="card-info" style="border-top: 4px solid #10b981;">
-                <h2 style="font-size: 15px;">🏆 Top Mais Vendidos</h2>
-                <div id="listaRanking"></div>
-            </div>
-
-            <!-- Divisão de Parceiros -->
-            <div class="card-info" style="border-top: 4px solid #3b82f6;">
-                <h2 style="font-size: 15px;">🏪 Produtos por Parceiro</h2>
-                <div id="listaParceiros"></div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const token = localStorage.getItem('token_personalize');
-        if(!token) window.location.href='index.html';
-
-        // Função de Sair Limpa
-        function logout() { localStorage.clear(); window.location.href='index.html'; }
-
-        // 🍔 Função do Menu Hamburguer
-        function toggleMenu() {
-            const menu = document.getElementById('menuLinks');
-            menu.classList.toggle('ativo-mobile');
-        }
-
-        // Formatação Dinheiro
-        const formatarMoeda = (valor) => {
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
-        };
-
-        // Buscar Dados da API do Dashboard
-        async function carregarDashboard() {
-            try {
-                const res = await fetch('/api/dashboard', { 
-                    headers: {'Authorization': `Bearer ${token}`} 
-                });
-                const d = await res.json();
-
-                // Preencher Cards Superiores
-                document.getElementById('totalVendas').textContent = d.pedidos_mes;
-                document.getElementById('totalReceita').textContent = formatarMoeda(d.receita_mes);
-                document.getElementById('qtdEstoque').textContent = `${d.patrimonio.quantidade} un.`;
-                document.getElementById('valorEstoque').textContent = formatarMoeda(d.patrimonio.valor);
-
-                // Lista Estoque Baixo
-                const listaE = document.getElementById('listaEstoque');
-                listaE.innerHTML = d.estoque_lista.length ? '' : '<p style="font-size:12px; margin-top:10px;">Tudo em dia! ✅</p>';
-                d.estoque_lista.forEach(item => {
-                    listaE.innerHTML += `
-                        <div class="item-visual">
-                            <div style="flex:1; font-size: 13px;"><strong>${item.nome}</strong><br><small>${item.variacao}</small></div>
-                            <span class="badge badge-red">${item.estoque_central} un.</span>
-                        </div>`;
-                });
-
-                // Lista Ranking
-                const listaR = document.getElementById('listaRanking');
-                listaR.innerHTML = '';
-                d.ranking.forEach(item => {
-                    listaR.innerHTML += `
-                        <div class="item-visual">
-                            <div style="flex:1; font-size: 13px;"><strong>${item.nome}</strong></div>
-                            <span class="badge badge-green">${item.total_vendido} vendidos</span>
-                        </div>`;
-                });
-
-                // Lista Parceiros
-                const listaP = document.getElementById('listaParceiros');
-                listaP.innerHTML = '';
-                d.parceiros_estoque.forEach(p => {
-                    listaP.innerHTML += `
-                        <div class="item-visual">
-                            <div style="flex:1; font-size: 13px;"><strong>${p.nome_loja}</strong></div>
-                            <span class="badge badge-blue">${p.total_produtos} unid.</span>
-                        </div>`;
-                });
-
-            } catch (err) { console.error("Erro ao carregar dashboard:", err); }
-        }
-
-        // Inicializar Gráfico Chart.js
-        async function inicializarGrafico() {
-            try {
-                const res = await fetch('/api/grafico-vendas');
-                const dados = await res.json();
-                
-                const ctx = document.getElementById('graficoVendas').getContext('2d');
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: dados.map(d => d.dia),
-                        datasets: [{
-                            label: 'Faturamento Diário',
-                            data: dados.map(d => d.total),
-                            backgroundColor: '#3b82f6',
-                            borderRadius: 6
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: { y: { beginAtZero: true, grid: { display: false } }, x: { grid: { display: false } } }
-                    }
-                });
-            } catch (err) { console.error("Erro no gráfico:", err); }
-        }
-
-        carregarDashboard();
-        inicializarGrafico();
-    </script>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/dashboard.js"></script>
 </body>
 </html>

@@ -4,83 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recuperar Senha - PERSONALIZE Hub</title>
-    <style>
-        * { box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; margin: 0; padding: 0; }
-        body { background-color: #f3f4f6; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .login-box { background: white; padding: 45px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; border: 1px solid #e5e7eb; }
-        .brand { text-align: center; margin-bottom: 30px; }
-        .brand h2 { color: #1f2937; font-size: 24px; font-weight: 800; }
-        .input-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #374151; }
-        input { width: 100%; padding: 12px; border: 1.5px solid #d1d5db; border-radius: 10px; outline: none; font-size: 15px; background: #f9fafb; transition: 0.3s; }
-        input:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
-        .btn-login { width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 16px; transition: 0.3s; }
-        .btn-login:hover { background: #2563eb; }
-        .btn-login:disabled { background: #94a3b8; cursor: not-allowed; }
-        #mensagem { text-align: center; margin-top: 15px; font-size: 14px; min-height: 20px; font-weight: 500; }
-        .footer { text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #f3f4f6; font-size: 14px; }
-        .footer a { color: #3b82f6; text-decoration: none; font-weight: 700; }
-    </style>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/auth.css">
+    <link rel="stylesheet" href="assets/css/app.css">
 </head>
-<body>
-    <div class="login-box">
-        <div class="brand">
-            <h2>Esqueceu a senha?</h2>
-            <p style="color: #6b7280; font-size: 14px; margin-top: 5px;">Digite seu e-mail cadastrado para receber o link de recuperação seguro.</p>
-        </div>
-        
+<body class="auth-body">
+    <main class="auth-box">
+        <section class="auth-brand">
+            <h2>Recuperar senha</h2>
+            <p>Digite seu e-mail cadastrado para receber o link seguro.</p>
+        </section>
         <form id="formRecuperar">
-            <div class="input-group">
-                <label>E-mail de Recuperação</label>
-                <input type="email" id="email" placeholder="seu@email.com" required>
+            <div class="form-group">
+                <label for="email">E-mail de recuperação</label>
+                <input type="email" id="email" name="email" placeholder="seu@email.com" required>
             </div>
-            <button type="submit" class="btn-login" id="btnEnviar">Enviar Link de Acesso</button>
+            <button type="submit" class="btn btn-primary w-full mt-3" id="btnEnviar">Enviar link</button>
         </form>
-        
-        <div id="mensagem"></div>
-        
-        <div class="footer">
-            <a href="index.html">← Voltar para o Login</a>
-        </div>
-    </div>
-
-    <script>
-        document.getElementById('formRecuperar').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value;
-            const msg = document.getElementById('mensagem');
-            const btn = document.getElementById('btnEnviar');
-
-            btn.disabled = true;
-            btn.textContent = 'Enviando...';
-            msg.textContent = '⏳ Buscando e-mail...';
-            msg.style.color = '#6b7280';
-
-            try {
-                const res = await fetch('/api/usuarios/recuperar', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: email })
-                });
-
-                const dados = await res.json();
-
-                if (res.ok) {
-                    msg.innerHTML = '✅ ' + dados.mensagem;
-                    msg.style.color = '#10b981';
-                    document.getElementById('formRecuperar').reset();
-                } else {
-                    msg.textContent = '❌ ' + dados.erro;
-                    msg.style.color = '#ef4444';
-                }
-            } catch (err) {
-                msg.textContent = '❌ Erro ao conectar com o servidor.';
-                msg.style.color = '#ef4444';
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Enviar Link de Acesso';
-            }
-        });
-    </script>
+        <div id="mensagem" class="msg"></div>
+        <footer class="auth-footer"><a href="index.html">← Voltar para o login</a></footer>
+    </main>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/recuperar.js"></script>
 </body>
 </html>
