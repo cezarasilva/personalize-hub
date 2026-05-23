@@ -29,10 +29,10 @@
                         <div class="form-group"><label for="preco_venda">Preço venda</label><input id="preco_venda" name="preco_venda" type="number" step="0.01" min="0"></div>
                         <div class="form-group"><label for="estoque">Estoque central</label><input id="estoque" name="estoque" type="number" min="0" value="0"></div>
                         <div class="form-group"><label for="status">Status</label><select id="status" name="status"><option value="ATIVO">ATIVO</option><option value="INATIVO">INATIVO</option></select></div>
-                        <div class="form-group"><label for="imagem">Imagem do produto</label><input id="imagem" name="imagem" type="file" accept="image/*"></div>
+                        <div class="form-group"><label for="imagens">Fotos do produto (até 10)</label><input id="imagens" name="imagens" type="file" accept="image/*" multiple><small class="text-muted">Ao editar, selecionar novas fotos substitui a galeria atual. Cada foto será recortada antes de salvar.</small></div>
                     </div>
                     <div class="form-group mt-2"><label for="descricao">Descrição</label><textarea id="descricao" name="descricao"></textarea></div>
-                    <div class="preview-box mt-2"><div id="previewImagem" class="img-placeholder">Sem<br>foto</div><div><strong>Pré-visualização da imagem</strong><p class="text-muted">Ao editar, envie uma imagem apenas se quiser substituir a atual.</p></div></div>
+                    <div class="preview-box mt-2 gallery-preview-box"><div id="previewImagem" class="gallery-preview-empty">Sem fotos selecionadas</div><div><strong>Pré-visualização das fotos</strong><p class="text-muted">Você pode cadastrar até 10 fotos por produto. A primeira foto será usada como imagem principal nas listas, vendas, remessas e PDFs.</p></div></div>
                     <button type="submit" class="btn btn-primary w-full mt-3" id="btnSalvarProduto">Salvar produto</button>
                 </form>
             </section>
@@ -48,7 +48,7 @@
             <div class="crop-modal-header">
                 <div>
                     <h3>Recortar imagem do produto</h3>
-                    <p>Ajuste a imagem antes de salvar. O recorte será usado somente no produto atual.</p>
+                    <p id="cropStatusProduto">Ajuste a imagem antes de salvar. O recorte será usado somente no produto atual.</p>
                 </div>
                 <button type="button" class="icon-btn" id="btnFecharCropProduto" title="Fechar">✕</button>
             </div>

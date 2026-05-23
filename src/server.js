@@ -194,6 +194,47 @@ async function uploadImagemProduto(file) {
     return data.publicUrl;
 }
 
+
+function arquivosProduto(req) {
+    const arquivos = [];
+
+    if (req.files?.imagens?.length) arquivos.push(...req.files.imagens);
+    if (req.files?.imagem?.length && arquivos.length === 0) arquivos.push(req.files.imagem[0]);
+    if (req.file && arquivos.length === 0) arquivos.push(req.file);
+
+    return arquivos.slice(0, 10);
+}
+
+async function uploadImagensProduto(arquivos) {
+    const lista = Array.isArray(arquivos) ? arquivos.slice(0, 10) : [];
+    const urls = [];
+
+    for (const file of lista) {
+        const url = await uploadImagemProduto(file);
+        if (url) urls.push(url);
+    }
+
+    return urls;
+}
+
+async function salvarGaleriaProduto(client, produtoId, urls) {
+    const imagens = Array.isArray(urls) ? urls.filter(Boolean).slice(0, 10) : [];
+    if (!imagens.length) return null;
+
+    await client.query('DELETE FROM produto_imagens WHERE produto_id = $1', [produtoId]);
+
+    for (let i = 0; i < imagens.length; i++) {
+        await client.query(
+            `INSERT INTO produto_imagens (produto_id, imagem_url, ordem, principal)
+             VALUES ($1, $2, $3, $4)`,
+            [produtoId, imagens[i], i + 1, i === 0]
+        );
+    }
+
+    await client.query('UPDATE produtos SET imagem_url = $1 WHERE id = $2', [imagens[0], produtoId]);
+    return imagens[0];
+}
+
 function inicioFimMes(mesReferencia) {
     // Aceita YYYY-MM, MM/YYYY ou YYYY/MM
     let ano;
@@ -583,7 +624,33 @@ app.get('/api/produtos', autenticar, async (req, res) => {
     try {
         const p = await db.query(
             `SELECT
-                p.id, p.nome, p.descricao, p.categoria, p.status, p.imagem_url,
+                p.id, p.nome, p.descricao, p.categoria, p.status,
+                COALESCE(
+                    (SELECT pi.imagem_url
+                     FROM produto_imagens pi
+                     WHERE pi.produto_id = p.id
+                     ORDER BY pi.principal DESC, pi.ordem ASC, pi.id ASC
+                     LIMIT 1),
+                    p.imagem_url
+                ) AS imagem_url,
+                COALESCE(
+                    (SELECT jsonb_agg(
+                        jsonb_build_object(
+                            'id', pi.id,
+                            'url', pi.imagem_url,
+                            'imagem_url', pi.imagem_url,
+                            'ordem', pi.ordem,
+                            'principal', pi.principal
+                        ) ORDER BY pi.ordem ASC, pi.id ASC
+                     )
+                     FROM produto_imagens pi
+                     WHERE pi.produto_id = p.id),
+                    CASE
+                        WHEN p.imagem_url IS NOT NULL AND p.imagem_url <> ''
+                        THEN jsonb_build_array(jsonb_build_object('url', p.imagem_url, 'imagem_url', p.imagem_url, 'ordem', 1, 'principal', true))
+                        ELSE '[]'::jsonb
+                    END
+                ) AS galeria,
                 v.id AS variacao_id, v.sku, v.variacao,
                 v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central
              FROM produtos p
@@ -597,12 +664,13 @@ app.get('/api/produtos', autenticar, async (req, res) => {
     }
 });
 
-app.post('/api/produtos', autenticar, somenteAdmin, upload.single('imagem'), async (req, res) => {
+app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imagem', maxCount: 1 }, { name: 'imagens', maxCount: 10 }]), async (req, res) => {
     try {
         const { nome, categoria, descricao, variacao, sku, preco_venda, preco_repasse, custo_producao, estoque, status } = req.body;
         if (!nome || !variacao) return res.status(400).json({ erro: 'Nome e variação são obrigatórios.' });
 
-        const imagem_url = await uploadImagemProduto(req.file);
+        const imagensUrls = await uploadImagensProduto(arquivosProduto(req));
+        const imagem_url = imagensUrls[0] || null;
         const precoVenda = parseMoeda(preco_venda);
         const precoRepasse = parseMoeda(preco_repasse);
         const custo = parseMoeda(custo_producao);
@@ -625,6 +693,10 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.single('imagem'), asy
                 [produtoId, sku || null, variacao, precoVenda, precoRepasse, custo, qtdEstoque]
             );
 
+            if (imagensUrls.length) {
+                await salvarGaleriaProduto(client, produtoId, imagensUrls);
+            }
+
             if (qtdEstoque > 0) {
                 await registrarMovimentacao(client, {
                     produto_id: produtoId,
@@ -645,11 +717,12 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.single('imagem'), asy
     }
 });
 
-app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.single('imagem'), async (req, res) => {
+app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.fields([{ name: 'imagem', maxCount: 1 }, { name: 'imagens', maxCount: 10 }]), async (req, res) => {
     try {
         const { id } = req.params;
         const { nome, categoria, descricao, status, variacao, sku, preco_venda, preco_repasse, custo_producao, estoque_central, estoque } = req.body;
-        const imagem_url = await uploadImagemProduto(req.file);
+        const imagensUrls = await uploadImagensProduto(arquivosProduto(req));
+        const imagem_url = imagensUrls[0] || null;
         const novoEstoque = estoque_central !== undefined ? estoque_central : estoque;
 
         await transacao(async (client) => {
@@ -674,6 +747,10 @@ app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.single('imagem'), 
                  WHERE id = $6`,
                 [nome || null, categoria || null, descricao || null, status || null, imagem_url || null, id]
             );
+
+            if (imagensUrls.length) {
+                await salvarGaleriaProduto(client, id, imagensUrls);
+            }
 
             const variacaoId = produtoAtual.rows[0].variacao_id;
             const estoqueAnterior = toInt(produtoAtual.rows[0].estoque_central, 0);

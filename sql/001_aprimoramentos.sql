@@ -217,3 +217,49 @@ COMMIT;
 
 -- Conferência rápida após rodar:
 -- SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('movimentacoes_estoque','remessas','remessa_itens','remessa_assinaturas','financeiro_repasses') ORDER BY table_name;
+
+-- =========================================================
+-- V3.7 - GALERIA DE PRODUTOS COM ATÉ 10 FOTOS
+-- Seguro: não apaga produtos, vendas ou remessas.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS produto_imagens (
+    id SERIAL PRIMARY KEY,
+    produto_id INTEGER REFERENCES produtos(id) ON DELETE CASCADE,
+    imagem_url TEXT NOT NULL,
+    ordem INTEGER DEFAULT 1,
+    principal BOOLEAN DEFAULT false,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_produto_imagens_produto_id
+ON produto_imagens(produto_id);
+
+CREATE INDEX IF NOT EXISTS idx_produto_imagens_ordem
+ON produto_imagens(produto_id, ordem);
+
+-- Migra a imagem principal antiga para a galeria, quando ainda não existir.
+INSERT INTO produto_imagens (produto_id, imagem_url, ordem, principal)
+SELECT p.id, p.imagem_url, 1, true
+FROM produtos p
+WHERE p.imagem_url IS NOT NULL
+  AND p.imagem_url <> ''
+  AND NOT EXISTS (
+      SELECT 1
+      FROM produto_imagens pi
+      WHERE pi.produto_id = p.id
+  );
+
+-- Garante uma única imagem principal por produto quando houver dados antigos duplicados.
+WITH ordenadas AS (
+    SELECT
+        id,
+        produto_id,
+        ROW_NUMBER() OVER (PARTITION BY produto_id ORDER BY principal DESC, ordem ASC, id ASC) AS rn
+    FROM produto_imagens
+)
+UPDATE produto_imagens pi
+SET principal = (o.rn = 1),
+    ordem = o.rn
+FROM ordenadas o
+WHERE pi.id = o.id;
