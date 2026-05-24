@@ -175,8 +175,12 @@ async function registrarAuditoria(usuarioId, acao) {
 }
 
 async function registrarMovimentacao(clientOrDb, dados) {
+    const executor = clientOrDb || db;
+    const usarSavepoint = !!clientOrDb;
+    const sp = 'sp_movimentacao_estoque';
+
     try {
-        const executor = clientOrDb || db;
+        if (usarSavepoint) await executor.query(`SAVEPOINT ${sp}`);
         await executor.query(
             `INSERT INTO movimentacoes_estoque (
                 produto_id, variacao_id, parceiro_id, usuario_id,
@@ -197,8 +201,13 @@ async function registrarMovimentacao(clientOrDb, dados) {
                 dados.observacao || null
             ]
         );
+        if (usarSavepoint) await executor.query(`RELEASE SAVEPOINT ${sp}`);
     } catch (err) {
-        console.warn('⚠️ Falha ao registrar movimentação:', err.message);
+        if (usarSavepoint) {
+            try { await executor.query(`ROLLBACK TO SAVEPOINT ${sp}`); } catch (_) {}
+            try { await executor.query(`RELEASE SAVEPOINT ${sp}`); } catch (_) {}
+        }
+        console.warn('⚠️ Falha ao registrar movimentação. Operação principal continua:', err.message);
     }
 }
 
@@ -244,7 +253,9 @@ async function salvarGaleriaProduto(client, produtoId, urls) {
     const imagens = Array.isArray(urls) ? urls.filter(Boolean).slice(0, 10) : [];
     if (!imagens.length) return null;
 
+    const sp = 'sp_galeria_produto';
     try {
+        await client.query(`SAVEPOINT ${sp}`);
         await client.query('DELETE FROM produto_imagens WHERE produto_id = $1', [produtoId]);
 
         for (let i = 0; i < imagens.length; i++) {
@@ -254,9 +265,13 @@ async function salvarGaleriaProduto(client, produtoId, urls) {
                 [produtoId, imagens[i], i + 1, i === 0]
             );
         }
+        await client.query(`RELEASE SAVEPOINT ${sp}`);
     } catch (err) {
+        try { await client.query(`ROLLBACK TO SAVEPOINT ${sp}`); } catch (_) {}
+        try { await client.query(`RELEASE SAVEPOINT ${sp}`); } catch (_) {}
+
         if (String(err.message || '').includes('produto_imagens')) {
-            console.warn('⚠️ Tabela produto_imagens não existe. Salvando apenas imagem principal em produtos.imagem_url. Rode o SQL V3.8 para galeria completa.');
+            console.warn('⚠️ Tabela produto_imagens não existe. Salvando apenas imagem principal em produtos.imagem_url. Rode o SQL de correção.');
         } else {
             throw err;
         }
@@ -277,6 +292,11 @@ function gerarSkuAutomatico(nome, categoria, produtoId) {
         return (s.slice(0, 3) || fallback);
     };
     return `${limpar(categoria, 'PRD')}-${limpar(nome, 'PRO')}-${String(produtoId || Date.now()).padStart(4, '0')}`;
+}
+
+function normalizarSku(valor) {
+    const sku = String(valor || '').trim();
+    return sku ? sku : null;
 }
 
 async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, usuarioId) {
@@ -318,7 +338,9 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
         tipo_precificacao: 'IMPRESSAO_3D'
     };
 
+    const sp = 'sp_precificacao_produto';
     try {
+        await client.query(`SAVEPOINT ${sp}`);
         await client.query(
             `INSERT INTO precificacoes (
                 produto_id, variacao_id, usuario_id, tipo_precificacao, canal_venda,
@@ -343,8 +365,11 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
                 dados.preco_sugerido, dados.preco_sugerido_unitario, dados.preco_venda_final, dados.preco_final_unitario, dados.preco_total_lote, dados.preco_repasse_final
             ]
         );
+        await client.query(`RELEASE SAVEPOINT ${sp}`);
     } catch (err) {
-        console.warn('⚠️ Falha ao salvar histórico de precificação:', err.message);
+        try { await client.query(`ROLLBACK TO SAVEPOINT ${sp}`); } catch (_) {}
+        try { await client.query(`RELEASE SAVEPOINT ${sp}`); } catch (_) {}
+        console.warn('⚠️ Falha ao salvar histórico de precificação. Produto será salvo normalmente:', err.message);
     }
 }
 
@@ -899,7 +924,7 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imag
             );
             produtoId = nP.rows[0].id;
 
-            const skuFinal = sku || gerarSkuAutomatico(nome, categoria || 'Impressão 3D', produtoId);
+            const skuFinal = normalizarSku(sku) || gerarSkuAutomatico(nome, categoria || 'Impressão 3D', produtoId);
             const vNova = await client.query(
                 `INSERT INTO produto_variacoes
                     (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central)
@@ -983,7 +1008,7 @@ app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.fields([{ name: 'i
                      estoque_central = COALESCE($6, estoque_central)
                  WHERE produto_id = $7`,
                 [
-                    sku || null,
+                    sku !== undefined ? normalizarSku(sku) : null,
                     variacao || null,
                     preco_venda !== undefined && preco_venda !== '' ? parseMoeda(preco_venda) : null,
                     preco_repasse !== undefined && preco_repasse !== '' ? parseMoeda(preco_repasse) : null,
