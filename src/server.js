@@ -77,6 +77,29 @@ function money(valor) {
     return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
 }
 
+function calcularCustosMaquina(dados = {}) {
+    const valorCompra = parseMoeda(dados.valor_compra);
+    const vidaUtilHoras = parseMoeda(dados.vida_util_horas);
+    const potenciaKw = parseMoeda(dados.potencia_kw);
+    const valorKwh = parseMoeda(dados.valor_kwh);
+    const manutencao = parseMoeda(dados.custo_manutencao_hora);
+    const custoHoraManual = parseMoeda(dados.custo_hora_manual);
+    const usarManual = dados.usar_custo_manual === true || String(dados.usar_custo_manual).toLowerCase() === 'true';
+
+    const depreciacao = vidaUtilHoras > 0 ? valorCompra / vidaUtilHoras : 0;
+    const energia = potenciaKw * valorKwh;
+    const calculado = depreciacao + energia + manutencao;
+    const total = usarManual && custoHoraManual > 0 ? custoHoraManual : calculado;
+
+    return {
+        custo_depreciacao_hora: Number(depreciacao.toFixed(4)),
+        custo_energia_hora: Number(energia.toFixed(4)),
+        custo_total_hora: Number(total.toFixed(4)),
+        custo_hora_manual: custoHoraManual,
+        usar_custo_manual: usarManual
+    };
+}
+
 function normalizarPerfil(perfil) {
     return String(perfil || '').trim().toUpperCase();
 }
@@ -263,6 +286,10 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
     const dados = {
         peso_gramas: parseMoeda(body.peso_gramas),
         valor_kg_material: parseMoeda(body.valor_kg_material),
+        quantidade_produzida: Math.max(1, toInt(body.quantidade_produzida, 1)),
+        unidade_precificacao: body.unidade_precificacao || 'UNIDADE',
+        maquina_id: body.maquina_id ? toInt(body.maquina_id, 0) : null,
+        maquina_nome_snapshot: body.maquina_nome_snapshot || null,
         tempo_maquina_horas: parseMoeda(body.tempo_maquina_horas),
         valor_hora_maquina: parseMoeda(body.valor_hora_maquina),
         custo_material: parseMoeda(body.custo_material),
@@ -274,11 +301,18 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
         custo_perdas: parseMoeda(body.custo_perdas),
         custo_extra: parseMoeda(body.custo_extra),
         custo_total: parseMoeda(body.custo_total || body.custo_producao),
+        custo_total_producao: parseMoeda(body.custo_total_producao || body.custo_total || body.custo_producao),
+        custo_unitario: parseMoeda(body.custo_unitario || body.custo_producao),
+        custo_hora_maquina: parseMoeda(body.custo_hora_maquina || body.valor_hora_maquina),
+        custo_total_maquina: parseMoeda(body.custo_total_maquina || body.custo_maquina),
         margem_percentual: parseMoeda(body.margem_percentual),
         taxa_canal_percentual: parseMoeda(body.taxa_canal_percentual),
         taxa_canal_fixa: parseMoeda(body.taxa_canal_fixa),
         preco_sugerido: parseMoeda(body.preco_sugerido || body.preco_venda),
+        preco_sugerido_unitario: parseMoeda(body.preco_sugerido_unitario || body.preco_sugerido || body.preco_venda),
         preco_venda_final: parseMoeda(body.preco_venda_final || body.preco_venda),
+        preco_final_unitario: parseMoeda(body.preco_final_unitario || body.preco_venda_final || body.preco_venda),
+        preco_total_lote: parseMoeda(body.preco_total_lote),
         preco_repasse_final: parseMoeda(body.preco_repasse),
         canal_venda: body.canal_venda || 'Venda direta',
         tipo_precificacao: 'IMPRESSAO_3D'
@@ -288,21 +322,25 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
         await client.query(
             `INSERT INTO precificacoes (
                 produto_id, variacao_id, usuario_id, tipo_precificacao, canal_venda,
-                peso_gramas, valor_kg_material, tempo_maquina_horas, valor_hora_maquina,
+                peso_gramas, valor_kg_material, quantidade_produzida, unidade_precificacao,
+                maquina_id, maquina_nome_snapshot, tempo_maquina_horas, valor_hora_maquina, custo_hora_maquina, custo_total_maquina,
                 custo_material, custo_maquina, custo_energia, custo_mao_obra,
                 custo_embalagem, custo_acessorios, custo_perdas, custo_extra,
-                custo_total, margem_percentual, taxa_canal_percentual, taxa_canal_fixa,
-                preco_sugerido, preco_venda_final, preco_repasse_final
+                custo_total, custo_total_producao, custo_unitario,
+                margem_percentual, taxa_canal_percentual, taxa_canal_fixa,
+                preco_sugerido, preco_sugerido_unitario, preco_venda_final, preco_final_unitario, preco_total_lote, preco_repasse_final
             ) VALUES (
-                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
             )`,
             [
                 produtoId, variacaoId || null, usuarioId || null, dados.tipo_precificacao, dados.canal_venda,
-                dados.peso_gramas, dados.valor_kg_material, dados.tempo_maquina_horas, dados.valor_hora_maquina,
+                dados.peso_gramas, dados.valor_kg_material, dados.quantidade_produzida, dados.unidade_precificacao,
+                dados.maquina_id, dados.maquina_nome_snapshot, dados.tempo_maquina_horas, dados.valor_hora_maquina, dados.custo_hora_maquina, dados.custo_total_maquina,
                 dados.custo_material, dados.custo_maquina, dados.custo_energia, dados.custo_mao_obra,
                 dados.custo_embalagem, dados.custo_acessorios, dados.custo_perdas, dados.custo_extra,
-                dados.custo_total, dados.margem_percentual, dados.taxa_canal_percentual, dados.taxa_canal_fixa,
-                dados.preco_sugerido, dados.preco_venda_final, dados.preco_repasse_final
+                dados.custo_total, dados.custo_total_producao, dados.custo_unitario,
+                dados.margem_percentual, dados.taxa_canal_percentual, dados.taxa_canal_fixa,
+                dados.preco_sugerido, dados.preco_sugerido_unitario, dados.preco_venda_final, dados.preco_final_unitario, dados.preco_total_lote, dados.preco_repasse_final
             ]
         );
     } catch (err) {
@@ -691,6 +729,82 @@ app.delete('/api/parceiros/:id', autenticar, somenteAdmin, async (req, res) => {
     }
 });
 
+
+// =========================================================
+// MÁQUINAS / EQUIPAMENTOS PARA PRECIFICAÇÃO
+// =========================================================
+
+app.get('/api/maquinas', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const r = await db.query(`SELECT * FROM maquinas ORDER BY status ASC, nome ASC, id DESC`);
+        res.json(r.rows);
+    } catch (e) {
+        console.error('❌ Erro máquinas:', e);
+        res.status(500).json({ erro: 'Erro ao listar máquinas: ' + e.message });
+    }
+});
+
+app.post('/api/maquinas', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const body = req.body || {};
+        if (!body.nome) return res.status(400).json({ erro: 'Nome da máquina é obrigatório.' });
+        const c = calcularCustosMaquina(body);
+        const r = await db.query(`
+            INSERT INTO maquinas (
+                nome, modelo, tipo, valor_compra, vida_util_horas, potencia_kw, valor_kwh,
+                custo_manutencao_hora, custo_depreciacao_hora, custo_energia_hora, custo_total_hora,
+                custo_hora_manual, usar_custo_manual, status
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+            [
+                body.nome, body.modelo || null, body.tipo || 'OUTRA', parseMoeda(body.valor_compra), parseMoeda(body.vida_util_horas),
+                parseMoeda(body.potencia_kw), parseMoeda(body.valor_kwh), parseMoeda(body.custo_manutencao_hora),
+                c.custo_depreciacao_hora, c.custo_energia_hora, c.custo_total_hora, c.custo_hora_manual, c.usar_custo_manual, body.status || 'ATIVA'
+            ]
+        );
+        await registrarAuditoria(req.user.id, `Cadastrou máquina ${body.nome}`);
+        res.status(201).json(r.rows[0]);
+    } catch (e) {
+        console.error('❌ Erro cadastrar máquina:', e);
+        res.status(500).json({ erro: 'Erro ao cadastrar máquina: ' + e.message });
+    }
+});
+
+app.put('/api/maquinas/:id', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const c = calcularCustosMaquina(body);
+        const r = await db.query(`
+            UPDATE maquinas SET
+                nome = COALESCE($1, nome), modelo = $2, tipo = COALESCE($3, tipo),
+                valor_compra = $4, vida_util_horas = $5, potencia_kw = $6, valor_kwh = $7,
+                custo_manutencao_hora = $8, custo_depreciacao_hora = $9, custo_energia_hora = $10, custo_total_hora = $11,
+                custo_hora_manual = $12, usar_custo_manual = $13, status = COALESCE($14, status), atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = $15 RETURNING *`,
+            [
+                body.nome || null, body.modelo || null, body.tipo || null, parseMoeda(body.valor_compra), parseMoeda(body.vida_util_horas),
+                parseMoeda(body.potencia_kw), parseMoeda(body.valor_kwh), parseMoeda(body.custo_manutencao_hora),
+                c.custo_depreciacao_hora, c.custo_energia_hora, c.custo_total_hora, c.custo_hora_manual, c.usar_custo_manual, body.status || null, req.params.id
+            ]
+        );
+        if (r.rows.length === 0) return res.status(404).json({ erro: 'Máquina não encontrada.' });
+        await registrarAuditoria(req.user.id, `Editou máquina ID ${req.params.id}`);
+        res.json(r.rows[0]);
+    } catch (e) {
+        console.error('❌ Erro editar máquina:', e);
+        res.status(500).json({ erro: 'Erro ao editar máquina: ' + e.message });
+    }
+});
+
+app.delete('/api/maquinas/:id', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        await db.query('DELETE FROM maquinas WHERE id = $1', [req.params.id]);
+        await registrarAuditoria(req.user.id, `Excluiu máquina ID ${req.params.id}`);
+        res.json({ mensagem: 'Máquina excluída.' });
+    } catch (e) {
+        res.status(500).json({ erro: 'Erro ao excluir máquina: ' + e.message });
+    }
+});
+
 // =========================================================
 // PRODUTOS
 // =========================================================
@@ -878,6 +992,8 @@ app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.fields([{ name: 'i
                     id
                 ]
             );
+
+            await salvarPrecificacaoProduto(client, id, variacaoId, req.body, req.user.id);
 
             if (estoqueNovo !== estoqueAnterior) {
                 await registrarMovimentacao(client, {

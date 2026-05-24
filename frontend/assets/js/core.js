@@ -97,8 +97,10 @@ window.App = (() => {
         const nome = user().nome || 'Usuário';
         const adminLinks = [
             ['dashboard', 'dashboard.html', '📊 Dashboard'],
-            ['produtos-lista', 'produtos-lista.html', '📦 Lista de Produtos'],
-            ['produtos-cadastro', 'produtos-cadastro.html', '➕ Cadastrar Produto'],
+            ['produtos-grupo', '#', '📦 Produtos'],
+            ['produtos-lista', 'produtos-lista.html', '↳ 📋 Lista de Produtos'],
+            ['produtos-cadastro', 'produtos-cadastro.html', '↳ ➕ Cadastrar Produto'],
+            ['maquinas', 'maquinas.html', '🖨️ Máquinas'],
             ['parceiros', 'parceiros.html', '🏪 Lojas Parceiras'],
             ['usuarios', 'usuarios.html', '👥 Usuários'],
             ['remessas', 'remessas.html', '🚚 Remessas'],
@@ -121,7 +123,7 @@ window.App = (() => {
                 <button class="btn-menu" id="btnMenu" type="button">☰</button>
             </div>
             <nav class="sidebar-links" id="menuLinks">
-                ${links.map(([key, href, label]) => `<a href="${href}" class="${key === active ? 'ativo' : ''}">${label}</a>`).join('')}
+                ${links.map(([key, href, label]) => key === 'produtos-grupo' ? `<a href="#" class="sidebar-group" onclick="return false;">${label}</a>` : `<a href="${href}" class="${key === active ? 'ativo' : ''} ${key.startsWith('produtos-') ? 'submenu-link' : ''}">${label}</a>`).join('')}
                 <a href="#" class="btn-sair" id="btnSair">🚪 Sair</a>
             </nav>`;
         document.getElementById('btnMenu')?.addEventListener('click', () => document.getElementById('menuLinks')?.classList.toggle('ativo-mobile'));

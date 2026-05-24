@@ -42,12 +42,15 @@
                 </div>
 
                 <div id="blocoPrecificacao" class="pricing-panel mt-3">
-                    <h3>🧮 Precificação</h3>
+                    <h3>🧮 Precificação por lote e máquina</h3>
                     <div class="form-grid">
-                        <div class="form-group"><label>Peso/filamento (g)</label><input id="peso_gramas" name="peso_gramas" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Quantidade produzida</label><input id="quantidade_produzida" name="quantidade_produzida" type="number" step="1" min="1" value="1"><small class="text-muted">Ex: 1 saboneteira, 30 chaveiros, 10 cartelas.</small></div>
+                        <div class="form-group"><label>Unidade de precificação</label><select id="unidade_precificacao" name="unidade_precificacao"><option value="UNIDADE">Unidade</option><option value="KIT">Kit</option><option value="CARTELA">Cartela</option><option value="PAR">Par</option><option value="LOTE">Lote</option></select></div>
+                        <div class="form-group"><label>Peso/material total do lote (g)</label><input id="peso_gramas" name="peso_gramas" type="number" step="0.01" min="0"><small class="text-muted">Informe o consumo total para produzir a quantidade acima.</small></div>
                         <div class="form-group"><label>Valor do kg material</label><input id="valor_kg_material" name="valor_kg_material" type="number" step="0.01" min="0" value="100"></div>
-                        <div class="form-group"><label>Tempo máquina (h)</label><input id="tempo_maquina_horas" name="tempo_maquina_horas" type="number" step="0.01" min="0"></div>
-                        <div class="form-group"><label>Valor hora máquina</label><input id="valor_hora_maquina" name="valor_hora_maquina" type="number" step="0.01" min="0" value="1"></div>
+                        <div class="form-group"><label>Máquina utilizada</label><select id="maquina_id" name="maquina_id"><option value="">Sem máquina cadastrada/manual</option></select><small id="infoMaquina" class="text-muted">Cadastre máquinas no menu Máquinas.</small></div>
+                        <div class="form-group"><label>Tempo total de máquina (h)</label><input id="tempo_maquina_horas" name="tempo_maquina_horas" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Valor hora máquina</label><input id="valor_hora_maquina" name="valor_hora_maquina" type="number" step="0.01" min="0" value="1"><small class="text-muted">Preenchido automaticamente ao selecionar uma máquina.</small></div>
                         <div class="form-group"><label>Energia</label><input id="custo_energia" name="custo_energia" type="number" step="0.01" min="0"></div>
                         <div class="form-group"><label>Mão de obra</label><input id="custo_mao_obra" name="custo_mao_obra" type="number" step="0.01" min="0"></div>
                         <div class="form-group"><label>Embalagem</label><input id="custo_embalagem" name="custo_embalagem" type="number" step="0.01" min="0"></div>
@@ -60,10 +63,12 @@
                         <div class="form-group"><label>Taxa fixa canal</label><input id="taxa_canal_fixa" name="taxa_canal_fixa" type="number" step="0.01" min="0" value="0"></div>
                     </div>
                     <div class="pricing-result">
-                        <div><small>Custo material</small><strong id="resMaterial">R$ 0,00</strong></div>
-                        <div><small>Custo máquina</small><strong id="resMaquina">R$ 0,00</strong></div>
-                        <div><small>Custo total</small><strong id="resCustoTotal">R$ 0,00</strong></div>
-                        <div><small>Preço sugerido</small><strong id="resPrecoSugerido">R$ 0,00</strong></div>
+                        <div><small>Custo material/lote</small><strong id="resMaterial">R$ 0,00</strong></div>
+                        <div><small>Custo máquina/lote</small><strong id="resMaquina">R$ 0,00</strong></div>
+                        <div><small>Custo total/lote</small><strong id="resCustoTotal">R$ 0,00</strong></div>
+                        <div><small>Custo unitário</small><strong id="resCustoUnitario">R$ 0,00</strong></div>
+                        <div><small>Preço sugerido unitário</small><strong id="resPrecoSugerido">R$ 0,00</strong></div>
+                        <div><small>Preço total do lote</small><strong id="resPrecoLote">R$ 0,00</strong></div>
                     </div>
                     <button type="button" class="btn btn-light mt-2" id="btnAplicarPrecificacao">Aplicar valores calculados</button>
                 </div>

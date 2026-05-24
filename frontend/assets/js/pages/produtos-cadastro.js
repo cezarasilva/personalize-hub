@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     App.renderSidebar('produtos-cadastro');
 
     let produtos = [];
+    let maquinas = [];
     let editando = null;
     let modoPrecificacao = true;
 
@@ -29,6 +30,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function moedaNumero(id) { return Number(String(document.getElementById(id)?.value || '0').replace(',', '.')) || 0; }
     function setValor(id, valor) { const el = document.getElementById(id); if (el) el.value = Number(valor || 0).toFixed(2); }
+
+    async function carregarMaquinas() {
+        const select = document.getElementById('maquina_id');
+        if (!select) return;
+        try {
+            maquinas = await App.api('/maquinas');
+            select.innerHTML = '<option value="">Sem máquina cadastrada/manual</option>' + maquinas.filter(m => String(m.status || 'ATIVA') !== 'INATIVA').map(m => `<option value="${m.id}">${App.escapeHtml(m.nome)} ${m.modelo ? '- ' + App.escapeHtml(m.modelo) : ''} • ${App.money(m.custo_total_hora)}/h</option>`).join('');
+        } catch (err) {
+            maquinas = [];
+            select.innerHTML = '<option value="">Cadastre máquinas no menu Máquinas</option>';
+        }
+    }
+
+    function aplicarMaquinaSelecionada() {
+        const id = document.getElementById('maquina_id')?.value;
+        const m = maquinas.find(x => String(x.id) === String(id));
+        const info = document.getElementById('infoMaquina');
+        if (!m) { if (info) info.textContent = 'Sem máquina selecionada. Informe o valor hora manualmente.'; return; }
+        setValor('valor_hora_maquina', m.custo_total_hora || 0);
+        if (info) info.textContent = `Custo/h: ${App.money(m.custo_total_hora)} (${m.usar_custo_manual ? 'manual' : 'depreciação + energia + manutenção'})`;
+    }
 
     function destruirCropper() {
         if (cropperProduto) { cropperProduto.destroy(); cropperProduto = null; }
@@ -104,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function calcular() {
+        const quantidade = Math.max(1, Math.floor(moedaNumero('quantidade_produzida') || 1));
         const material = (moedaNumero('peso_gramas') / 1000) * moedaNumero('valor_kg_material');
         const maquina = moedaNumero('tempo_maquina_horas') * moedaNumero('valor_hora_maquina');
         const energia = moedaNumero('custo_energia');
@@ -116,22 +139,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const taxaPerc = moedaNumero('taxa_canal_percentual');
         const taxaFixa = moedaNumero('taxa_canal_fixa');
         const custoTotal = material + maquina + energia + mao + embalagem + acessorios + perdas + extra;
-        let sugerido = custoTotal;
-        if (margem > 0 && margem < 100) sugerido = custoTotal / (1 - (margem / 100));
-        if (taxaPerc > 0 && taxaPerc < 100) sugerido = (sugerido + taxaFixa) / (1 - (taxaPerc / 100));
-        else sugerido += taxaFixa;
-        const repasse = custoTotal > 0 ? Math.max(custoTotal * 1.35, custoTotal + 1) : 0;
+        const custoUnitario = custoTotal / quantidade;
+        let sugeridoUnitario = custoUnitario;
+        if (margem > 0 && margem < 100) sugeridoUnitario = custoUnitario / (1 - (margem / 100));
+        if (taxaPerc > 0 && taxaPerc < 100) sugeridoUnitario = (sugeridoUnitario + (taxaFixa / quantidade)) / (1 - (taxaPerc / 100));
+        else sugeridoUnitario += (taxaFixa / quantidade);
+        const precoTotalLote = sugeridoUnitario * quantidade;
+        const repasse = custoUnitario > 0 ? Math.max(custoUnitario * 1.35, custoUnitario + 1) : 0;
         document.getElementById('resMaterial').textContent = App.money(material);
         document.getElementById('resMaquina').textContent = App.money(maquina);
         document.getElementById('resCustoTotal').textContent = App.money(custoTotal);
-        document.getElementById('resPrecoSugerido').textContent = App.money(sugerido);
-        return { material, maquina, custoTotal, sugerido, repasse };
+        document.getElementById('resCustoUnitario').textContent = App.money(custoUnitario);
+        document.getElementById('resPrecoSugerido').textContent = App.money(sugeridoUnitario);
+        document.getElementById('resPrecoLote').textContent = App.money(precoTotalLote);
+        return { quantidade, material, maquina, custoTotal, custoUnitario, sugerido: sugeridoUnitario, precoTotalLote, repasse };
     }
 
     document.querySelectorAll('#blocoPrecificacao input, #blocoPrecificacao select').forEach(el => el.addEventListener('input', calcular));
+    document.getElementById('maquina_id')?.addEventListener('change', () => { aplicarMaquinaSelecionada(); calcular(); });
     document.getElementById('btnAplicarPrecificacao').addEventListener('click', () => {
         const r = calcular();
-        setValor('custo_producao', r.custoTotal);
+        setValor('custo_producao', r.custoUnitario);
         setValor('preco_venda', r.sugerido);
         if (!moedaNumero('preco_repasse')) setValor('preco_repasse', r.repasse);
         App.toast('success', 'Valores calculados aplicados. Você ainda pode editar o preço final.');
@@ -183,6 +211,18 @@ document.addEventListener('DOMContentLoaded', () => {
             fd.set('custo_total', r.custoTotal.toFixed(2));
             fd.set('preco_sugerido', r.sugerido.toFixed(2));
             fd.set('preco_venda_final', document.getElementById('preco_venda').value || r.sugerido.toFixed(2));
+            fd.set('quantidade_produzida', String(r.quantidade));
+            fd.set('unidade_precificacao', document.getElementById('unidade_precificacao')?.value || 'UNIDADE');
+            fd.set('custo_total_producao', r.custoTotal.toFixed(2));
+            fd.set('custo_unitario', r.custoUnitario.toFixed(2));
+            fd.set('preco_sugerido_unitario', r.sugerido.toFixed(2));
+            fd.set('preco_final_unitario', document.getElementById('preco_venda').value || r.sugerido.toFixed(2));
+            fd.set('preco_total_lote', r.precoTotalLote.toFixed(2));
+            fd.set('maquina_id', document.getElementById('maquina_id')?.value || '');
+            const maquinaAtual = maquinas.find(m => String(m.id) === String(document.getElementById('maquina_id')?.value));
+            fd.set('maquina_nome_snapshot', maquinaAtual ? `${maquinaAtual.nome}${maquinaAtual.modelo ? ' - ' + maquinaAtual.modelo : ''}` : '');
+            fd.set('custo_hora_maquina', document.getElementById('valor_hora_maquina')?.value || '0');
+            fd.set('custo_total_maquina', r.maquina.toFixed(2));
         }
         imagensCortadasFiles.forEach(file => fd.append('imagens', file));
         try {
@@ -198,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnCancelarEdicao').addEventListener('click', limparForm);
 
     const id = new URLSearchParams(window.location.search).get('id');
+    carregarMaquinas().catch(() => {});
     if (id) carregarParaEdicao(id).catch(err => App.toast('error', err.message));
-    else { setModoPrecificacao(true); calcular(); renderPreviewGaleria([]); }
+    else { setModoPrecificacao(true); carregarMaquinas().then(() => { calcular(); }); renderPreviewGaleria([]); }
 });

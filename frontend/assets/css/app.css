@@ -229,3 +229,20 @@ tr:hover td { background: #fcfcfd; }
   .page-actions { width:100%; }
   .page-actions .btn { width:100%; }
 }
+
+/* V3.9 - Submenu Produtos e Máquinas */
+.sidebar a.sidebar-group {
+    opacity: .85;
+    font-weight: 800;
+    color: #93c5fd;
+    cursor: default;
+    background: rgba(59, 130, 246, .08);
+}
+.sidebar a.submenu-link {
+    padding-left: 34px;
+    font-size: 14px;
+}
+.machine-hint {
+    color: #6b7280;
+    font-size: 12px;
+}
