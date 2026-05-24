@@ -135,15 +135,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const acessorios = moedaNumero('custo_acessorios');
         const perdas = moedaNumero('custo_perdas');
         const extra = moedaNumero('custo_extra');
-        const margem = Math.min(moedaNumero('margem_percentual'), 95);
-        const taxaPerc = moedaNumero('taxa_canal_percentual');
-        const taxaFixa = moedaNumero('taxa_canal_fixa');
+        // Margem no PERSONALIZE é tratada como MARKUP/LUCRO SOBRE O CUSTO.
+        // Ex.: 100% = custo x 2; 50% = custo x 1,5.
+        // A fórmula antiga usava margem sobre preço de venda e quebrava com 100%.
+        const margem = Math.max(0, moedaNumero('margem_percentual'));
+        const taxaPerc = Math.max(0, moedaNumero('taxa_canal_percentual'));
+        const taxaFixa = Math.max(0, moedaNumero('taxa_canal_fixa'));
         const custoTotal = material + maquina + energia + mao + embalagem + acessorios + perdas + extra;
         const custoUnitario = custoTotal / quantidade;
-        let sugeridoUnitario = custoUnitario;
-        if (margem > 0 && margem < 100) sugeridoUnitario = custoUnitario / (1 - (margem / 100));
-        if (taxaPerc > 0 && taxaPerc < 100) sugeridoUnitario = (sugeridoUnitario + (taxaFixa / quantidade)) / (1 - (taxaPerc / 100));
-        else sugeridoUnitario += (taxaFixa / quantidade);
+
+        let sugeridoUnitario = custoUnitario * (1 + (margem / 100));
+
+        // Taxa fixa é rateada por unidade. Taxa percentual é considerada sobre o preço final do canal.
+        const taxaFixaUnitario = taxaFixa / quantidade;
+        if (taxaPerc > 0 && taxaPerc < 100) {
+            sugeridoUnitario = (sugeridoUnitario + taxaFixaUnitario) / (1 - (taxaPerc / 100));
+        } else {
+            sugeridoUnitario += taxaFixaUnitario;
+        }
         const precoTotalLote = sugeridoUnitario * quantidade;
         const repasse = custoUnitario > 0 ? Math.max(custoUnitario * 1.35, custoUnitario + 1) : 0;
         document.getElementById('resMaterial').textContent = App.money(material);
