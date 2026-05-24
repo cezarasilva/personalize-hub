@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Produto - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+</head>
+<body>
+<div class="layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    <main class="main">
+        <header class="page-header">
+            <div class="page-title"><h1 id="tituloPaginaProduto">➕ Cadastrar Produto</h1><p>Cadastre manualmente ou calcule a precificação antes de salvar.</p></div>
+            <div class="page-actions"><a href="produtos-lista.html" class="btn btn-light">📋 Lista de produtos</a></div>
+        </header>
+
+        <section class="card" id="cardDecisaoPrecificacao">
+            <div class="card-title"><span>Como deseja cadastrar?</span></div>
+            <div class="choice-grid">
+                <button type="button" class="choice-card ativo" data-precificar="sim"><strong>Sim, calcular precificação</strong><small>Informo material, máquina, energia, acessórios e margem.</small></button>
+                <button type="button" class="choice-card" data-precificar="nao"><strong>Não, informar valores manualmente</strong><small>Já sei custo, preço de venda e valor de repasse.</small></button>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card-title"><span id="tituloFormProduto">Dados do produto</span><button type="button" class="btn btn-light hidden" id="btnCancelarEdicao">Cancelar edição</button></div>
+            <form id="formProduto" enctype="multipart/form-data">
+                <input type="hidden" id="produtoId" name="produtoId">
+                <input type="hidden" id="precificado" name="precificado" value="true">
+                <div class="form-grid">
+                    <div class="form-group"><label for="nome">Nome</label><input id="nome" name="nome" required></div>
+                    <div class="form-group"><label for="categoria">Categoria</label><input id="categoria" name="categoria" placeholder="Impressão 3D"></div>
+                    <div class="form-group"><label for="variacao">Variação</label><input id="variacao" name="variacao" required placeholder="Cor, tamanho, modelo..."></div>
+                    <div class="form-group"><label for="sku">SKU</label><input id="sku" name="sku" placeholder="Opcional: será gerado se ficar vazio"></div>
+                    <div class="form-group"><label for="status">Status</label><select id="status" name="status"><option value="ATIVO">ATIVO</option><option value="INATIVO">INATIVO</option><option value="EM TESTE">EM TESTE</option><option value="SEM ESTOQUE">SEM ESTOQUE</option><option value="SOB ENCOMENDA">SOB ENCOMENDA</option></select></div>
+                    <div class="form-group"><label for="estoque">Estoque central</label><input id="estoque" name="estoque" type="number" min="0" value="0"></div>
+                </div>
+
+                <div id="blocoPrecificacao" class="pricing-panel mt-3">
+                    <h3>🧮 Precificação</h3>
+                    <div class="form-grid">
+                        <div class="form-group"><label>Peso/filamento (g)</label><input id="peso_gramas" name="peso_gramas" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Valor do kg material</label><input id="valor_kg_material" name="valor_kg_material" type="number" step="0.01" min="0" value="100"></div>
+                        <div class="form-group"><label>Tempo máquina (h)</label><input id="tempo_maquina_horas" name="tempo_maquina_horas" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Valor hora máquina</label><input id="valor_hora_maquina" name="valor_hora_maquina" type="number" step="0.01" min="0" value="1"></div>
+                        <div class="form-group"><label>Energia</label><input id="custo_energia" name="custo_energia" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Mão de obra</label><input id="custo_mao_obra" name="custo_mao_obra" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Embalagem</label><input id="custo_embalagem" name="custo_embalagem" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Acessórios/argola</label><input id="custo_acessorios" name="custo_acessorios" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Perdas/refugo</label><input id="custo_perdas" name="custo_perdas" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Extras</label><input id="custo_extra" name="custo_extra" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Margem %</label><input id="margem_percentual" name="margem_percentual" type="number" step="0.01" min="0" max="95" value="40"></div>
+                        <div class="form-group"><label>Canal de venda</label><select id="canal_venda" name="canal_venda"><option value="Venda direta">Venda direta</option><option value="Consignação">Consignação</option><option value="Revendedor">Revendedor</option><option value="Atacado">Atacado</option><option value="Shopee">Shopee</option><option value="Mercado Livre">Mercado Livre</option></select></div>
+                        <div class="form-group"><label>Taxa canal %</label><input id="taxa_canal_percentual" name="taxa_canal_percentual" type="number" step="0.01" min="0" value="0"></div>
+                        <div class="form-group"><label>Taxa fixa canal</label><input id="taxa_canal_fixa" name="taxa_canal_fixa" type="number" step="0.01" min="0" value="0"></div>
+                    </div>
+                    <div class="pricing-result">
+                        <div><small>Custo material</small><strong id="resMaterial">R$ 0,00</strong></div>
+                        <div><small>Custo máquina</small><strong id="resMaquina">R$ 0,00</strong></div>
+                        <div><small>Custo total</small><strong id="resCustoTotal">R$ 0,00</strong></div>
+                        <div><small>Preço sugerido</small><strong id="resPrecoSugerido">R$ 0,00</strong></div>
+                    </div>
+                    <button type="button" class="btn btn-light mt-2" id="btnAplicarPrecificacao">Aplicar valores calculados</button>
+                </div>
+
+                <div class="manual-values mt-3">
+                    <h3>💰 Valores finais</h3>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="custo_producao">Custo produção</label><input id="custo_producao" name="custo_producao" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label for="preco_repasse">Valor consignação/repasse</label><input id="preco_repasse" name="preco_repasse" type="number" step="0.01" min="0"></div>
+                        <div class="form-group"><label for="preco_venda">Preço venda final</label><input id="preco_venda" name="preco_venda" type="number" step="0.01" min="0"></div>
+                    </div>
+                </div>
+
+                <div class="form-group mt-2"><label for="descricao">Descrição</label><textarea id="descricao" name="descricao"></textarea></div>
+                <div class="form-group"><label for="imagens">Fotos do produto (até 10)</label><input id="imagens" name="imagens" type="file" accept="image/*" multiple><small class="text-muted">Ao editar, selecionar novas fotos substitui a galeria atual. Cada foto será recortada antes de salvar.</small></div>
+                <div class="preview-box mt-2 gallery-preview-box"><div id="previewImagem" class="gallery-preview-empty">Sem fotos selecionadas</div><div><strong>Pré-visualização das fotos</strong><p class="text-muted">Você pode cadastrar até 10 fotos por produto. A primeira foto será a principal.</p></div></div>
+                <button type="submit" class="btn btn-primary w-full mt-3" id="btnSalvarProduto">Salvar produto</button>
+            </form>
+        </section>
+    </main>
+</div>
+
+<div id="modalCropProduto" class="crop-modal hidden" aria-hidden="true">
+    <div class="crop-modal-card">
+        <div class="crop-modal-header"><div><h3>Recortar imagem do produto</h3><p id="cropStatusProduto">Ajuste a imagem antes de salvar.</p></div><button type="button" class="icon-btn" id="btnFecharCropProduto" title="Fechar">✕</button></div>
+        <div class="crop-image-wrap"><img id="imagemCropProduto" alt="Imagem para recorte"></div>
+        <div class="crop-modal-actions"><button type="button" class="btn btn-light" id="btnCancelarCropProduto">Cancelar</button><button type="button" class="btn btn-primary" id="btnAplicarCropProduto">Aplicar recorte</button></div>
+    </div>
+</div>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/pages/produtos-cadastro.js"></script>
+</body>
+</html>

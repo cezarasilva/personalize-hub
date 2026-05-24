@@ -263,3 +263,94 @@ SET principal = (o.rn = 1),
     ordem = o.rn
 FROM ordenadas o
 WHERE pi.id = o.id;
+
+-- =========================================================
+-- V3.8 - PRODUTOS + PRECIFICAÇÃO PROFISSIONAL
+-- Seguro: não apaga dados. Cria histórico de precificação e configurações padrão.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS precificacoes (
+    id SERIAL PRIMARY KEY,
+    produto_id INTEGER REFERENCES produtos(id) ON DELETE CASCADE,
+    variacao_id INTEGER REFERENCES produto_variacoes(id) ON DELETE SET NULL,
+    usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+
+    tipo_precificacao VARCHAR(60) DEFAULT 'IMPRESSAO_3D',
+    canal_venda VARCHAR(60) DEFAULT 'Venda direta',
+
+    peso_gramas NUMERIC(10,2) DEFAULT 0,
+    valor_kg_material NUMERIC(10,2) DEFAULT 0,
+    tempo_maquina_horas NUMERIC(10,2) DEFAULT 0,
+    valor_hora_maquina NUMERIC(10,2) DEFAULT 0,
+
+    custo_material NUMERIC(10,2) DEFAULT 0,
+    custo_maquina NUMERIC(10,2) DEFAULT 0,
+    custo_energia NUMERIC(10,2) DEFAULT 0,
+    custo_mao_obra NUMERIC(10,2) DEFAULT 0,
+    custo_embalagem NUMERIC(10,2) DEFAULT 0,
+    custo_acessorios NUMERIC(10,2) DEFAULT 0,
+    custo_perdas NUMERIC(10,2) DEFAULT 0,
+    custo_extra NUMERIC(10,2) DEFAULT 0,
+    custo_total NUMERIC(10,2) DEFAULT 0,
+
+    margem_percentual NUMERIC(10,2) DEFAULT 0,
+    taxa_canal_percentual NUMERIC(10,2) DEFAULT 0,
+    taxa_canal_fixa NUMERIC(10,2) DEFAULT 0,
+
+    preco_sugerido NUMERIC(10,2) DEFAULT 0,
+    preco_venda_final NUMERIC(10,2) DEFAULT 0,
+    preco_repasse_final NUMERIC(10,2) DEFAULT 0,
+
+    observacao TEXT,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS produto_id INTEGER REFERENCES produtos(id) ON DELETE CASCADE;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS variacao_id INTEGER REFERENCES produto_variacoes(id) ON DELETE SET NULL;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS tipo_precificacao VARCHAR(60) DEFAULT 'IMPRESSAO_3D';
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS canal_venda VARCHAR(60) DEFAULT 'Venda direta';
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS peso_gramas NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS valor_kg_material NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS tempo_maquina_horas NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS valor_hora_maquina NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_material NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_maquina NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_energia NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_mao_obra NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_embalagem NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_acessorios NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_perdas NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_extra NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_total NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS margem_percentual NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS taxa_canal_percentual NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS taxa_canal_fixa NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS preco_sugerido NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS preco_venda_final NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS preco_repasse_final NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS observacao TEXT;
+ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_precificacoes_produto_id ON precificacoes(produto_id);
+CREATE INDEX IF NOT EXISTS idx_precificacoes_variacao_id ON precificacoes(variacao_id);
+CREATE INDEX IF NOT EXISTS idx_precificacoes_canal ON precificacoes(canal_venda);
+CREATE INDEX IF NOT EXISTS idx_precificacoes_criado_em ON precificacoes(criado_em);
+
+CREATE TABLE IF NOT EXISTS configuracoes_precificacao (
+    id SERIAL PRIMARY KEY,
+    chave VARCHAR(100) UNIQUE NOT NULL,
+    valor NUMERIC(12,2) DEFAULT 0,
+    descricao TEXT,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO configuracoes_precificacao (chave, valor, descricao) VALUES
+('valor_kg_filamento_padrao', 100.00, 'Valor padrão do kg do filamento'),
+('valor_hora_maquina_padrao', 1.00, 'Valor padrão da hora de máquina'),
+('custo_argola_padrao', 0.60, 'Custo padrão de argola/acessório'),
+('margem_padrao', 40.00, 'Margem padrão de lucro percentual'),
+('taxa_shopee_percentual', 14.00, 'Taxa percentual Shopee'),
+('taxa_shopee_fixa', 4.00, 'Taxa fixa Shopee'),
+('taxa_mercado_livre_percentual', 16.00, 'Taxa percentual Mercado Livre')
+ON CONFLICT (chave) DO NOTHING;

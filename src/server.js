@@ -221,18 +221,93 @@ async function salvarGaleriaProduto(client, produtoId, urls) {
     const imagens = Array.isArray(urls) ? urls.filter(Boolean).slice(0, 10) : [];
     if (!imagens.length) return null;
 
-    await client.query('DELETE FROM produto_imagens WHERE produto_id = $1', [produtoId]);
+    try {
+        await client.query('DELETE FROM produto_imagens WHERE produto_id = $1', [produtoId]);
 
-    for (let i = 0; i < imagens.length; i++) {
-        await client.query(
-            `INSERT INTO produto_imagens (produto_id, imagem_url, ordem, principal)
-             VALUES ($1, $2, $3, $4)`,
-            [produtoId, imagens[i], i + 1, i === 0]
-        );
+        for (let i = 0; i < imagens.length; i++) {
+            await client.query(
+                `INSERT INTO produto_imagens (produto_id, imagem_url, ordem, principal)
+                 VALUES ($1, $2, $3, $4)`,
+                [produtoId, imagens[i], i + 1, i === 0]
+            );
+        }
+    } catch (err) {
+        if (String(err.message || '').includes('produto_imagens')) {
+            console.warn('⚠️ Tabela produto_imagens não existe. Salvando apenas imagem principal em produtos.imagem_url. Rode o SQL V3.8 para galeria completa.');
+        } else {
+            throw err;
+        }
     }
 
     await client.query('UPDATE produtos SET imagem_url = $1 WHERE id = $2', [imagens[0], produtoId]);
     return imagens[0];
+}
+
+
+function gerarSkuAutomatico(nome, categoria, produtoId) {
+    const limpar = (texto, fallback) => {
+        const s = String(texto || '')
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .toUpperCase();
+        return (s.slice(0, 3) || fallback);
+    };
+    return `${limpar(categoria, 'PRD')}-${limpar(nome, 'PRO')}-${String(produtoId || Date.now()).padStart(4, '0')}`;
+}
+
+async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, usuarioId) {
+    const precificado = String(body.precificado || '').toLowerCase() === 'true' || String(body.precificado || '').toLowerCase() === 'sim';
+    if (!precificado) return;
+
+    const dados = {
+        peso_gramas: parseMoeda(body.peso_gramas),
+        valor_kg_material: parseMoeda(body.valor_kg_material),
+        tempo_maquina_horas: parseMoeda(body.tempo_maquina_horas),
+        valor_hora_maquina: parseMoeda(body.valor_hora_maquina),
+        custo_material: parseMoeda(body.custo_material),
+        custo_maquina: parseMoeda(body.custo_maquina),
+        custo_energia: parseMoeda(body.custo_energia),
+        custo_mao_obra: parseMoeda(body.custo_mao_obra),
+        custo_embalagem: parseMoeda(body.custo_embalagem),
+        custo_acessorios: parseMoeda(body.custo_acessorios),
+        custo_perdas: parseMoeda(body.custo_perdas),
+        custo_extra: parseMoeda(body.custo_extra),
+        custo_total: parseMoeda(body.custo_total || body.custo_producao),
+        margem_percentual: parseMoeda(body.margem_percentual),
+        taxa_canal_percentual: parseMoeda(body.taxa_canal_percentual),
+        taxa_canal_fixa: parseMoeda(body.taxa_canal_fixa),
+        preco_sugerido: parseMoeda(body.preco_sugerido || body.preco_venda),
+        preco_venda_final: parseMoeda(body.preco_venda_final || body.preco_venda),
+        preco_repasse_final: parseMoeda(body.preco_repasse),
+        canal_venda: body.canal_venda || 'Venda direta',
+        tipo_precificacao: 'IMPRESSAO_3D'
+    };
+
+    try {
+        await client.query(
+            `INSERT INTO precificacoes (
+                produto_id, variacao_id, usuario_id, tipo_precificacao, canal_venda,
+                peso_gramas, valor_kg_material, tempo_maquina_horas, valor_hora_maquina,
+                custo_material, custo_maquina, custo_energia, custo_mao_obra,
+                custo_embalagem, custo_acessorios, custo_perdas, custo_extra,
+                custo_total, margem_percentual, taxa_canal_percentual, taxa_canal_fixa,
+                preco_sugerido, preco_venda_final, preco_repasse_final
+            ) VALUES (
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
+            )`,
+            [
+                produtoId, variacaoId || null, usuarioId || null, dados.tipo_precificacao, dados.canal_venda,
+                dados.peso_gramas, dados.valor_kg_material, dados.tempo_maquina_horas, dados.valor_hora_maquina,
+                dados.custo_material, dados.custo_maquina, dados.custo_energia, dados.custo_mao_obra,
+                dados.custo_embalagem, dados.custo_acessorios, dados.custo_perdas, dados.custo_extra,
+                dados.custo_total, dados.margem_percentual, dados.taxa_canal_percentual, dados.taxa_canal_fixa,
+                dados.preco_sugerido, dados.preco_venda_final, dados.preco_repasse_final
+            ]
+        );
+    } catch (err) {
+        console.warn('⚠️ Falha ao salvar histórico de precificação:', err.message);
+    }
 }
 
 function inicioFimMes(mesReferencia) {
@@ -622,8 +697,7 @@ app.delete('/api/parceiros/:id', autenticar, somenteAdmin, async (req, res) => {
 
 app.get('/api/produtos', autenticar, async (req, res) => {
     try {
-        const p = await db.query(
-            `SELECT
+        const queryComGaleria = `SELECT
                 p.id, p.nome, p.descricao, p.categoria, p.status,
                 COALESCE(
                     (SELECT pi.imagem_url
@@ -651,16 +725,41 @@ app.get('/api/produtos', autenticar, async (req, res) => {
                         ELSE '[]'::jsonb
                     END
                 ) AS galeria,
+                EXISTS (SELECT 1 FROM precificacoes pr WHERE pr.produto_id = p.id) AS precificado,
                 v.id AS variacao_id, v.sku, v.variacao,
                 v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central
              FROM produtos p
              JOIN produto_variacoes v ON p.id = v.produto_id
-             ORDER BY p.id DESC`
-        );
-        res.json(p.rows);
+             ORDER BY p.id DESC`;
+
+        const querySemGaleria = `SELECT
+                p.id, p.nome, p.descricao, p.categoria, p.status, p.imagem_url,
+                CASE
+                    WHEN p.imagem_url IS NOT NULL AND p.imagem_url <> ''
+                    THEN jsonb_build_array(jsonb_build_object('url', p.imagem_url, 'imagem_url', p.imagem_url, 'ordem', 1, 'principal', true))
+                    ELSE '[]'::jsonb
+                END AS galeria,
+                false AS precificado,
+                v.id AS variacao_id, v.sku, v.variacao,
+                v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central
+             FROM produtos p
+             JOIN produto_variacoes v ON p.id = v.produto_id
+             ORDER BY p.id DESC`;
+
+        try {
+            const p = await db.query(queryComGaleria);
+            return res.json(p.rows);
+        } catch (err) {
+            if (String(err.message || '').includes('produto_imagens') || String(err.message || '').includes('precificacoes')) {
+                console.warn('⚠️ Produto_imagens/precificacoes ainda não existe. Usando fallback de produtos:', err.message);
+                const p = await db.query(querySemGaleria);
+                return res.json(p.rows);
+            }
+            throw err;
+        }
     } catch (e) {
         console.error('❌ Erro produtos:', e);
-        res.status(500).json({ erro: 'Erro ao buscar produtos.' });
+        res.status(500).json({ erro: 'Erro ao buscar produtos: ' + e.message });
     }
 });
 
@@ -686,12 +785,16 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imag
             );
             produtoId = nP.rows[0].id;
 
-            await client.query(
+            const skuFinal = sku || gerarSkuAutomatico(nome, categoria || 'Impressão 3D', produtoId);
+            const vNova = await client.query(
                 `INSERT INTO produto_variacoes
                     (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [produtoId, sku || null, variacao, precoVenda, precoRepasse, custo, qtdEstoque]
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 RETURNING id`,
+                [produtoId, skuFinal, variacao, precoVenda, precoRepasse, custo, qtdEstoque]
             );
+
+            await salvarPrecificacaoProduto(client, produtoId, vNova.rows[0].id, req.body, req.user.id);
 
             if (imagensUrls.length) {
                 await salvarGaleriaProduto(client, produtoId, imagensUrls);
@@ -840,6 +943,33 @@ app.delete('/api/produtos/:id', autenticar, somenteAdmin, async (req, res) => {
     } catch (e) {
         console.error('❌ Erro deletar produto:', e);
         res.status(500).json({ erro: 'Erro ao deletar produto: ' + e.message });
+    }
+});
+
+
+app.get('/api/produtos/:id/precificacoes', autenticar, async (req, res) => {
+    try {
+        const r = await db.query(
+            `SELECT pr.*, u.nome AS usuario_nome
+             FROM precificacoes pr
+             LEFT JOIN usuarios u ON u.id = pr.usuario_id
+             WHERE pr.produto_id = $1
+             ORDER BY pr.id DESC`,
+            [req.params.id]
+        );
+        res.json(r.rows);
+    } catch (e) {
+        console.error('❌ Erro precificações:', e);
+        res.status(500).json({ erro: 'Erro ao buscar histórico de precificação: ' + e.message });
+    }
+});
+
+app.get('/api/configuracoes-precificacao', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const r = await db.query('SELECT chave, valor, descricao FROM configuracoes_precificacao ORDER BY chave ASC');
+        res.json(r.rows);
+    } catch (e) {
+        res.json([]);
     }
 });
 

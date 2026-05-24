@@ -1,7 +1,7 @@
 {
   "name": "personalize-hub",
-  "version": "3.0.0",
-  "description": "PERSONALIZE Hub V3 - financeiro de repasses, remessas, assinatura digital e consignação",
+  "version": "3.8.0",
+  "description": "PERSONALIZE Hub V3.8 - produtos separados, precificação, galeria, financeiro, remessas e assinatura digital",
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",

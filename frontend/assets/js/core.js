@@ -97,7 +97,8 @@ window.App = (() => {
         const nome = user().nome || 'Usuário';
         const adminLinks = [
             ['dashboard', 'dashboard.html', '📊 Dashboard'],
-            ['produtos', 'produtos.html', '📦 Produtos'],
+            ['produtos-lista', 'produtos-lista.html', '📦 Lista de Produtos'],
+            ['produtos-cadastro', 'produtos-cadastro.html', '➕ Cadastrar Produto'],
             ['parceiros', 'parceiros.html', '🏪 Lojas Parceiras'],
             ['usuarios', 'usuarios.html', '👥 Usuários'],
             ['remessas', 'remessas.html', '🚚 Remessas'],

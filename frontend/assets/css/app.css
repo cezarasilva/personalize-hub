@@ -205,3 +205,27 @@ tr:hover td { background: #fcfcfd; }
     .gallery-preview-grid { grid-template-columns: repeat(3, 86px); max-width: 100%; }
     .gallery-preview-empty { width: 100%; }
 }
+
+/* V3.8 - Produtos separados + precificação */
+.page-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.product-list-header { gap:16px; align-items:center; flex-wrap:wrap; }
+.product-list-header input { max-width: 360px; }
+.choice-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:16px; }
+.choice-card { text-align:left; border:1px solid #e5e7eb; background:#fff; border-radius:14px; padding:18px; cursor:pointer; transition:.2s; display:flex; flex-direction:column; gap:8px; }
+.choice-card:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(15, 23, 42, .08); }
+.choice-card.ativo { border-color:#2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, .12); }
+.choice-card strong { color:#111827; font-size:16px; }
+.choice-card small { color:#6b7280; line-height:1.35; }
+.pricing-panel { border:1px solid #dbeafe; background:#eff6ff; border-radius:16px; padding:18px; }
+.pricing-panel h3, .manual-values h3 { margin:0 0 14px; color:#111827; }
+.pricing-result { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px; margin-top:14px; }
+.pricing-result div { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
+.pricing-result small { display:block; color:#6b7280; margin-bottom:4px; }
+.pricing-result strong { color:#111827; font-size:18px; }
+.manual-values { border:1px solid #e5e7eb; background:#fff; border-radius:16px; padding:18px; }
+@media (max-width: 768px) {
+  .choice-grid, .pricing-result { grid-template-columns: 1fr; }
+  .product-list-header input { max-width: 100%; width: 100%; }
+  .page-actions { width:100%; }
+  .page-actions .btn { width:100%; }
+}

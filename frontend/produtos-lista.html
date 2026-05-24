@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Produtos - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+<div class="layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    <main class="main">
+        <header class="page-header">
+            <div class="page-title"><h1>📦 Lista de Produtos</h1><p>Consulte, edite, ative/inative e acompanhe estoque, preço e fotos.</p></div>
+            <div class="page-actions"><a href="produtos-cadastro.html" class="btn btn-primary">➕ Cadastrar produto</a></div>
+        </header>
+        <section class="card">
+            <div class="card-title product-list-header">
+                <span>Produtos cadastrados</span>
+                <input type="search" id="buscaProduto" placeholder="Buscar por nome, SKU, categoria...">
+            </div>
+            <div id="erroProdutos" class="msg text-red hidden"></div>
+            <div class="table-container"><table><thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Repasse</th><th>Custo</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tabelaProdutos"></tbody></table></div>
+        </section>
+    </main>
+</div>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/pages/produtos-lista.js"></script>
+</body>
+</html>
