@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${App.money(p.custo_producao)}</td>
                 <td><strong>${App.number(p.estoque_central)}</strong></td>
                 <td>${App.badgeStatus(p.status)}</td>
-                <td><div class="actions"><a class="icon-btn" href="produtos-cadastro.html?id=${p.id}" title="Editar">✏️</a><button class="icon-btn" data-del="${p.id}" title="Excluir">🗑️</button></div></td>
+                <td><div class="actions"><a class="icon-btn" href="produtos-cadastro.html?id=${p.id}" title="Editar"><i class="bx bx-edit"></i></a><button class="icon-btn" data-del="${p.id}" title="Excluir"><i class="bx bx-trash"></i></button></div></td>
             </tr>`;
         }).join('');
     }

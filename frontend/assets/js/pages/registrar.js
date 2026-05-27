@@ -8,10 +8,10 @@ document.addEventListener('DOMContentLoaded', () => {
         App.setMsg('mensagem', '⏳ Enviando solicitação...', 'muted');
         try {
             const dados = await App.api('/parceiros/solicitar', { method: 'POST', body: JSON.stringify(App.formDataToObject(form)) });
-            App.setMsg('mensagem', `✅ ${dados.mensagem}`, 'success');
+            App.setMsg('mensagem', ` ${dados.mensagem}`, 'success');
             form.reset();
         } catch (err) {
-            App.setMsg('mensagem', `❌ ${err.message}`, 'danger');
+            App.setMsg('mensagem', ` ${err.message}`, 'danger');
         } finally {
             btn.disabled = false;
             btn.textContent = 'Enviar solicitação';

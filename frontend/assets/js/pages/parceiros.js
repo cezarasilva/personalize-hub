@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function render() {
         if (!parceiros.length) return tabela.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma loja encontrada.</td></tr>';
-        tabela.innerHTML = parceiros.map(p => `<tr><td>${App.badgeStatus(p.status)}</td><td><strong>${App.escapeHtml(p.nome_loja)}</strong><br><small>${App.escapeHtml(p.cnpj_cpf || '')}</small></td><td>${App.escapeHtml(p.responsavel || '-')}</td><td>${App.escapeHtml(p.telefone || '-')}</td><td>${App.escapeHtml(p.usuario || p.email_login || '-')}</td><td><div class="actions"><button class="icon-btn" data-edit="${p.id}">✏️</button><button class="icon-btn" data-del="${p.id}">🗑️</button></div></td></tr>`).join('');
+        tabela.innerHTML = parceiros.map(p => `<tr><td>${App.badgeStatus(p.status)}</td><td><strong>${App.escapeHtml(p.nome_loja)}</strong><br><small>${App.escapeHtml(p.cnpj_cpf || '')}</small></td><td>${App.escapeHtml(p.responsavel || '-')}</td><td>${App.escapeHtml(p.telefone || '-')}</td><td>${App.escapeHtml(p.usuario || p.email_login || '-')}</td><td><div class="actions"><button class="icon-btn" data-edit="${p.id}"><i class="bx bx-edit"></i></button><button class="icon-btn" data-del="${p.id}"><i class="bx bx-trash"></i></button></div></td></tr>`).join('');
     }
 
     async function carregar() { parceiros = await App.api('/parceiros'); render(); }

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leads e Pedidos - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-message-square-dots"></i> Leads / Pedidos do Catálogo</h1>
+                    <p>Pedidos gerados pelos catálogos públicos.</p>
+                </div>
+                <select id="filtroStatus" style="max-width:220px;">
+                    <option value="">Todos os status</option>
+                    <option value="NOVO">Novo</option>
+                    <option value="EM_ATENDIMENTO">Em atendimento</option>
+                    <option value="ORCADO">Orçado</option>
+                    <option value="FECHADO">Fechado</option>
+                    <option value="PERDIDO">Perdido</option>
+                    <option value="CANCELADO">Cancelado</option>
+                </select>
+            </header>
+            <section class="card">
+                <div class="card-title"><span><i class="bx bx-list-ul"></i> Pedidos recebidos</span></div>
+                <div id="listaPedidos"></div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/catalogo-pedidos.js"></script>
+</body>
+</html>

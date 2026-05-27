@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td><strong>${App.money(m.custo_total_hora)}</strong><br><small>${m.usar_custo_manual ? 'manual' : 'calculado'}</small></td>
                 <td><small>Dep: ${App.money(m.custo_depreciacao_hora)} • Energia: ${App.money(m.custo_energia_hora)} • Manut: ${App.money(m.custo_manutencao_hora)}</small></td>
                 <td>${App.badgeStatus(m.status || 'ATIVA')}</td>
-                <td><button class="btn btn-small" onclick="editarMaquina(${m.id})">✏️</button> <button class="btn btn-small btn-danger" onclick="excluirMaquina(${m.id})">🗑️</button></td>
+                <td><button class="btn btn-small" onclick="editarMaquina(${m.id})"><i class="bx bx-edit"></i></button> <button class="btn btn-small btn-danger" onclick="excluirMaquina(${m.id})"><i class="bx bx-trash"></i></button></td>
             </tr>
         `).join('');
     }

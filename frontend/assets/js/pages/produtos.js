@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${App.money(p.custo_producao)}</td>
                 <td><strong>${App.number(p.estoque_central)}</strong></td>
                 <td>${App.badgeStatus(p.status)}</td>
-                <td><div class="actions"><button class="icon-btn" data-edit="${p.id}" title="Editar">✏️</button><button class="icon-btn" data-del="${p.id}" title="Excluir">🗑️</button></div></td>
+                <td><div class="actions"><button class="icon-btn" data-edit="${p.id}" title="Editar"><i class="bx bx-edit"></i></button><button class="icon-btn" data-del="${p.id}" title="Excluir"><i class="bx bx-trash"></i></button></div></td>
             </tr>`;
         }).join('');
     }

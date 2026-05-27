@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produção - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+<div class="layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    <main class="main">
+        <header class="page-header">
+            <div class="page-title">
+                <h1> Produção</h1>
+                <p>Registre produções reais, calcule custo do lote e dê entrada automática no estoque central.</p>
+            </div>
+            <a href="produtos-cadastro.html" class="btn btn-light"> Cadastrar produto</a>
+        </header>
+
+        <section class="grid grid-4 mb-2">
+            <div class="stat-card compact-stat"><span>Produções</span><strong id="statTotalProducoes">0</strong></div>
+            <div class="stat-card compact-stat"><span>Finalizadas</span><strong id="statFinalizadas">0</strong></div>
+            <div class="stat-card compact-stat"><span>Unidades produzidas</span><strong id="statUnidades">0</strong></div>
+            <div class="stat-card compact-stat"><span>Custo total</span><strong id="statCusto">R$ 0,00</strong></div>
+        </section>
+
+        <section class="card">
+            <div class="card-title">
+                <span>Nova produção / entrada de estoque</span>
+                <small>Ao salvar como FINALIZADA, o estoque central aumenta automaticamente.</small>
+            </div>
+            <form id="formProducao">
+                <div class="form-grid">
+                    <div class="form-group search-wrap">
+                        <label>Produto / variação</label>
+                        <input id="buscaProduto" autocomplete="off" placeholder="Digite para buscar produto, variação ou SKU..." required>
+                        <input type="hidden" id="produto_id">
+                        <input type="hidden" id="variacao_id">
+                        <div class="suggestions hidden" id="sugestoesProdutos"></div>
+                        <small class="machine-hint" id="produtoSelecionadoHint">Nenhum produto selecionado.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Máquina utilizada</label>
+                        <select id="maquina_id"><option value="">Selecione uma máquina...</option></select>
+                        <small class="machine-hint" id="maquinaHint">Custo/hora será preenchido ao selecionar.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Status da produção</label>
+                        <select id="status">
+                            <option value="FINALIZADA">FINALIZADA e lançar estoque</option>
+                            <option value="PLANEJADA">PLANEJADA</option>
+                            <option value="EM_PRODUCAO">EM PRODUÇÃO</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Data da produção</label>
+                        <input type="datetime-local" id="data_producao">
+                    </div>
+                </div>
+
+                <div class="form-grid mt-3">
+                    <div class="form-group"><label>Quantidade planejada</label><input id="quantidade_planejada" type="number" min="0" step="1" value="0"></div>
+                    <div class="form-group"><label>Quantidade produzida boa</label><input id="quantidade_produzida" type="number" min="0" step="1" value="0" required></div>
+                    <div class="form-group"><label>Quantidade perdida/refugo</label><input id="quantidade_perdida" type="number" min="0" step="1" value="0"></div>
+                    <div class="form-group"><label>Unidade</label><select id="unidade"><option value="UNIDADE">Unidade</option><option value="KIT">Kit</option><option value="CARTELA">Cartela</option><option value="PAR">Par</option><option value="LOTE">Lote</option></select></div>
+                </div>
+
+                <div class="pricing-panel mt-3">
+                    <h3>Custos reais da produção</h3>
+                    <div class="form-grid">
+                        <div class="form-group"><label>Peso/material total usado (g)</label><input id="peso_gramas" type="number" min="0" step="0.01" value="0"></div>
+                        <div class="form-group"><label>Valor kg material</label><input id="valor_kg_material" type="number" min="0" step="0.01" value="100"></div>
+                        <div class="form-group"><label>Tempo real de máquina (h)</label><input id="tempo_maquina_horas" type="number" min="0" step="0.01" value="0"></div>
+                        <div class="form-group"><label>Custo/hora máquina</label><input id="custo_hora_maquina" type="number" min="0" step="0.01" value="0"></div>
+                        <div class="form-group"><label>Energia extra</label><input id="custo_energia" type="number" min="0" step="0.01" value="0"></div>
+                        <div class="form-group"><label>Mão de obra</label><input id="custo_mao_obra" type="number" min="0" step="0.01" value="0"></div>
+                        <div class="form-group"><label>Embalagem</label><input id="custo_embalagem" type="number" min="0" step="0.01" value="0"></div>
+                        <div class="form-group"><label>Acessórios</label><input id="custo_acessorios" type="number" min="0" step="0.01" value="0"></div>
+                        <div class="form-group"><label>Perdas em R$</label><input id="custo_perdas" type="number" min="0" step="0.01" value="0"></div>
+                        <div class="form-group"><label>Extras</label><input id="custo_extra" type="number" min="0" step="0.01" value="0"></div>
+                    </div>
+                    <div class="pricing-result">
+                        <div><small>Custo material</small><strong id="resCustoMaterial">R$ 0,00</strong></div>
+                        <div><small>Custo máquina</small><strong id="resCustoMaquina">R$ 0,00</strong></div>
+                        <div><small>Custo total lote</small><strong id="resCustoTotal">R$ 0,00</strong></div>
+                        <div><small>Custo unitário real</small><strong id="resCustoUnitario">R$ 0,00</strong></div>
+                    </div>
+                </div>
+
+                <div class="form-group mt-3"><label>Observação</label><textarea id="observacao" placeholder="Ex: lote produzido sem falhas, ajuste de temperatura, cliente, cor usada..."></textarea></div>
+                <button class="btn btn-primary w-full mt-3" id="btnSalvarProducao">Salvar produção</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <div class="card-title"><span>Histórico de produção</span><button class="btn btn-light" id="btnAtualizarProducoes">Atualizar</button></div>
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Código</th><th>Produto</th><th>Data</th><th>Qtd</th><th>Máquina</th><th>Custo</th><th>Status</th><th>Ações</th></tr></thead>
+                    <tbody id="tabelaProducoes"><tr><td colspan="8">Carregando...</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/pages/producoes.js"></script>
+</body>
+</html>

@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${App.number(v.quantidade)}</td>
                 <td><strong>${App.money(v.valor_total)}</strong></td>
                 <td>${App.escapeHtml(v.loja || '-')}</td>
-                <td><button class="icon-btn" data-estornar="${v.id}" title="Estornar venda">↩️</button></td>
+                <td><button class="icon-btn" data-estornar="${v.id}" title="Estornar venda"><i class="bx bx-undo"></i></button></td>
             </tr>`).join('');
     }
 

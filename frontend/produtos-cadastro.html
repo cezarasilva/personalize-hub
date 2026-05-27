@@ -15,8 +15,8 @@
     <aside id="sidebar" class="sidebar"></aside>
     <main class="main">
         <header class="page-header">
-            <div class="page-title"><h1 id="tituloPaginaProduto">➕ Cadastrar Produto</h1><p>Cadastre manualmente ou calcule a precificação antes de salvar.</p></div>
-            <div class="page-actions"><a href="produtos-lista.html" class="btn btn-light">📋 Lista de produtos</a></div>
+            <div class="page-title"><h1 id="tituloPaginaProduto"> Cadastrar Produto</h1><p>Cadastre manualmente ou calcule a precificação antes de salvar.</p></div>
+            <div class="page-actions"><a href="produtos-lista.html" class="btn btn-light"> Lista de produtos</a></div>
         </header>
 
         <section class="card" id="cardDecisaoPrecificacao">
@@ -42,7 +42,7 @@
                 </div>
 
                 <div id="blocoPrecificacao" class="pricing-panel mt-3">
-                    <h3>🧮 Precificação por lote e máquina</h3>
+                    <h3> Precificação por lote e máquina</h3>
                     <div class="form-grid">
                         <div class="form-group"><label>Quantidade produzida</label><input id="quantidade_produzida" name="quantidade_produzida" type="number" step="1" min="1" value="1"><small class="text-muted">Ex: 1 saboneteira, 30 chaveiros, 10 cartelas.</small></div>
                         <div class="form-group"><label>Unidade de precificação</label><select id="unidade_precificacao" name="unidade_precificacao"><option value="UNIDADE">Unidade</option><option value="KIT">Kit</option><option value="CARTELA">Cartela</option><option value="PAR">Par</option><option value="LOTE">Lote</option></select></div>
@@ -74,7 +74,7 @@
                 </div>
 
                 <div class="manual-values mt-3">
-                    <h3>💰 Valores finais</h3>
+                    <h3> Valores finais</h3>
                     <div class="form-grid">
                         <div class="form-group"><label for="custo_producao">Custo produção</label><input id="custo_producao" name="custo_producao" type="number" step="0.01" min="0"></div>
                         <div class="form-group"><label for="preco_repasse">Valor consignação/repasse</label><input id="preco_repasse" name="preco_repasse" type="number" step="0.01" min="0"></div>
@@ -93,7 +93,7 @@
 
 <div id="modalCropProduto" class="crop-modal hidden" aria-hidden="true">
     <div class="crop-modal-card">
-        <div class="crop-modal-header"><div><h3>Recortar imagem do produto</h3><p id="cropStatusProduto">Ajuste a imagem antes de salvar.</p></div><button type="button" class="icon-btn" id="btnFecharCropProduto" title="Fechar">✕</button></div>
+        <div class="crop-modal-header"><div><h3>Recortar imagem do produto</h3><p id="cropStatusProduto">Ajuste a imagem antes de salvar.</p></div><button type="button" class="icon-btn" id="btnFecharCropProduto" title="Fechar"><i class="bx bx-x"></i></button></div>
         <div class="crop-image-wrap"><img id="imagemCropProduto" alt="Imagem para recorte"></div>
         <div class="crop-modal-actions"><button type="button" class="btn btn-light" id="btnCancelarCropProduto">Cancelar</button><button type="button" class="btn btn-primary" id="btnAplicarCropProduto">Aplicar recorte</button></div>
     </div>

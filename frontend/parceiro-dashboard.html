@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel da Loja - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title"><h1><i class="bx bxs-home"></i> Painel da Loja</h1><p>Produtos disponíveis, solicitações e cotações da sua loja.</p></div>
+                <div class="actions"><a href="catalogo-parceiro.html" class="btn btn-primary">Ver produtos</a><a href="solicitar-produto.html" class="btn btn-success">Solicitar produto</a></div>
+            </header>
+            <section class="grid grid-4 mb-2">
+                <div class="stat-card"><span>Loja</span><strong id="nomeLoja">-</strong></div>
+                <div class="stat-card"><span>Estoque atual</span><strong id="qtdAtual">0</strong></div>
+                <div class="stat-card"><span>Valor consignado</span><strong id="valorConsignado">R$ 0,00</strong></div>
+                <div class="stat-card"><span>Vendas do mês</span><strong id="vendasMes">R$ 0,00</strong></div>
+            </section>
+            <section class="grid grid-3">
+                <div class="card"><div class="card-title"><i class="bx bx-grid-alt"></i> Produtos disponíveis</div><p class="text-muted">Veja o catálogo que a PERSONALIZE tem disponível e peça reposição para sua loja.</p><a href="catalogo-parceiro.html" class="btn btn-primary mt-2 w-full">Abrir catálogo</a></div>
+                <div class="card"><div class="card-title"> Solicitar modelos</div><p class="text-muted">Peça mais unidades de um produto existente ou solicite um modelo que ainda não está disponível.</p><a href="solicitar-produto.html" class="btn btn-success mt-2 w-full">Nova solicitação</a></div>
+                <div class="card"><div class="card-title"><i class="bx bx-list-check"></i> Acompanhamento</div><p class="text-muted"><strong id="pendencias">0</strong> solicitação(ões) em análise.</p><a href="minhas-cotacoes.html" class="btn btn-dark mt-2 w-full">Ver solicitações</a></div>
+            </section>
+            <section class="card"><div class="card-title"> Estoque consignado atual</div><div class="table-container"><table><thead><tr><th>Produto</th><th>Variação</th><th>Qtd atual</th><th>Preço consignação</th><th>Total</th></tr></thead><tbody id="tabelaEstoque"></tbody></table></div></section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/parceiro-dashboard.js"></script>
+</body>
+</html>

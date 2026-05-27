@@ -65,8 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td><strong>${App.money(l.valor_liquido_receber || 0)}</strong></td>
                 <td>${statusBadge(l.status_fechamento)}</td>
                 <td><div class="actions">
-                    <button class="icon-btn" title="Gerar/atualizar fechamento desta loja" data-gerar-loja="${l.parceiro_id}">✅</button>
-                    <button class="icon-btn" title="PDF da loja" data-pdf-loja="${l.parceiro_id}">🖨️</button>
+                    <button class="icon-btn" title="Gerar/atualizar fechamento desta loja" data-gerar-loja="${l.parceiro_id}"><i class="bx bx-check-circle"></i></button>
+                    <button class="icon-btn" title="PDF da loja" data-pdf-loja="${l.parceiro_id}"><i class="bx bx-printer"></i></button>
                 </div></td>
             </tr>`).join('');
     }
@@ -88,11 +88,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${statusBadge(r.status_pagamento)}</td>
                 <td>${App.escapeHtml(r.atualizado_em_formatado || '')}</td>
                 <td><div class="actions">
-                    <button class="icon-btn" title="Ver detalhes" data-detalhe-repasse="${r.id}">👁️</button>
-                    <button class="icon-btn" title="PDF do repasse" data-pdf-repasse="${r.id}">🖨️</button>
+                    <button class="icon-btn" title="Ver detalhes" data-detalhe-repasse="${r.id}"><i class="bx bx-show"></i></button>
+                    <button class="icon-btn" title="PDF do repasse" data-pdf-repasse="${r.id}"><i class="bx bx-printer"></i></button>
                     ${String(r.status_pagamento).toUpperCase() === 'PAGO'
-                        ? `<button class="icon-btn" title="Reabrir como pendente" data-status-repasse="${r.id}" data-status="PENDENTE">🔓</button>`
-                        : `<button class="icon-btn" title="Marcar como pago" data-status-repasse="${r.id}" data-status="PAGO">💵</button>`}
+                        ? `<button class="icon-btn" title="Reabrir como pendente" data-status-repasse="${r.id}" data-status="PENDENTE"><i class="bx bx-lock-open"></i></button>`
+                        : `<button class="icon-btn" title="Marcar como pago" data-status-repasse="${r.id}" data-status="PAGO"><i class="bx bx-dollar-circle"></i></button>`}
                 </div></td>
             </tr>`).join('');
     }

@@ -10,9 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = App.formDataToObject(form);
             const dados = await App.api('/login', { method: 'POST', body: JSON.stringify(payload) });
             App.setUser(dados);
-            window.location.href = dados.usuario?.perfil === 'PARCEIRO' ? 'minha-loja.html' : 'dashboard.html';
+            window.location.href = dados.usuario?.perfil === 'PARCEIRO' ? 'parceiro-dashboard.html' : 'dashboard.html';
         } catch (err) {
-            App.setMsg('mensagem', `❌ ${err.message}`, 'danger');
+            App.setMsg('mensagem', ` ${err.message}`, 'danger');
         } finally {
             btn.disabled = false;
             btn.textContent = 'Entrar no Sistema';

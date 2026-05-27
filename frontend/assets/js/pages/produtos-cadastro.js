@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const key = idCampo === 'estoque' ? 'estoque_central' : idCampo;
             el.value = p[key] ?? '';
         });
-        document.getElementById('tituloPaginaProduto').textContent = '✏️ Editar Produto';
+        document.getElementById('tituloPaginaProduto').innerHTML = '<i class="bx bx-edit"></i> Editar Produto';
         document.getElementById('tituloFormProduto').textContent = `Editando: ${p.nome}`;
         document.getElementById('btnSalvarProduto').textContent = 'Salvar alterações';
         document.getElementById('btnCancelarEdicao').classList.remove('hidden');

@@ -1,7 +1,7 @@
 {
   "name": "personalize-hub",
-  "version": "3.8.0",
-  "description": "PERSONALIZE Hub V3.8 - produtos separados, precificação, galeria, financeiro, remessas e assinatura digital",
+  "version": "5.0.0",
+  "description": "PERSONALIZE Hub V5.0 - Multi Catálogo SaaS com produtos por loja, leads e dashboard dark",
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",

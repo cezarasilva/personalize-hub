@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="/assets/css/base.css">
+    <link rel="stylesheet" href="/assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="catalogo-publico">
+    <header class="catalogo-header" id="catalogoHeader">
+        <div class="catalogo-banner-layer" id="bannerLayer"></div>
+        <div class="catalogo-wrap">
+            <div class="catalogo-hero-content">
+                <img id="logoLoja" class="catalogo-logo" src="" alt="" style="display:none;">
+                <div class="catalogo-title">
+                    <h1 id="nomeLoja">Catálogo</h1>
+                    <p id="descricaoLoja">Carregando produtos...</p>
+                    <div class="catalogo-actions" id="linksContato"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="catalogo-main">
+        <div class="catalogo-wrap">
+            <div id="catalogoGrid" class="catalogo-grid"></div>
+
+            <section class="catalogo-custom-panel custom-last-section">
+                <div class="card-title"><span class="catalogo-section-title"><i class="bx bx-palette"></i> Produto personalizado</span></div>
+                <p class="text-muted mb-2">Não encontrou o que queria? Descreva o produto e envie uma referência.</p>
+                <form id="formPedidoPersonalizado" class="form-grid" enctype="multipart/form-data">
+                    <div class="form-group"><label>Seu nome</label><input name="cliente_nome" required></div>
+                    <div class="form-group"><label>WhatsApp</label><input name="cliente_whatsapp" required></div>
+                    <div class="form-group"><label>Título do pedido</label><input name="titulo" placeholder="Ex.: chaveiro personalizado" required></div>
+                    <div class="form-group"><label>Quantidade desejada</label><input name="quantidade_desejada" type="number" min="1" value="1"></div>
+                    <div class="form-group" style="grid-column:1/-1;"><label>Descrição do que deseja</label><textarea name="descricao" required placeholder="Explique modelo, cores, tamanho, nome, tema, prazo etc."></textarea></div>
+                    <div class="form-group" style="grid-column:1/-1;"><label>Imagem de referência</label><input type="file" name="arquivo" accept="image/jpeg,image/png,image/webp"></div>
+                    <button class="btn btn-primary" style="grid-column:1/-1;" type="submit"><i class="bx bx-upload"></i> Solicitar orçamento personalizado</button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <a href="#" class="whatsapp-float" id="whatsappFloat" target="_blank" rel="noopener noreferrer" aria-label="Falar no WhatsApp">
+        <i class='bx bxl-whatsapp'></i>
+    </a>
+
+    <div class="floating-search" id="floatingSearch">
+        <input type="text" id="floatingSearchInput" placeholder="Buscar produtos...">
+        <button class="btn-search-close" id="floatingSearchClose" type="button" aria-label="Fechar busca"><i class='bx bx-x'></i></button>
+        <button class="btn-search-icon" id="floatingSearchIcon" type="button" aria-label="Buscar"><i class='bx bx-search'></i></button>
+    </div>
+
+    <button class="floating-cart-btn" id="floatingCartBtn" type="button" aria-label="Abrir carrinho">
+        <i class='bx bx-shopping-bag'></i>
+        <span class="cart-badge" id="cartCount">0</span>
+    </button>
+
+    <div class="cart-overlay" id="cartOverlay"></div>
+    <aside class="cart-sidebar" id="cartSidebar" aria-label="Carrinho de pedidos">
+        <div class="cart-header">
+            <h2><i class='bx bx-shopping-bag'></i> Minha sacola <span class="cart-badge-inside" id="cartBadgeInside">0</span></h2>
+            <button class="close-cart" id="btnCloseCart" type="button" aria-label="Fechar carrinho"><i class='bx bx-x'></i></button>
+        </div>
+        <div id="listaPedido" class="cart-items"><p class="text-muted">Sua sacola está vazia.</p></div>
+        <div class="cart-footer">
+            <div class="total-linha"><span>Subtotal</span><strong id="subtotalPedido">R$ 0,00</strong></div>
+            <div class="total-linha destaque"><span>Total estimado</span><strong id="cartTotal">R$ 0,00</strong></div>
+            <p class="cart-disclaimer">O pedido será enviado para a loja responsável pelo catálogo. Valores e disponibilidade podem ser confirmados no atendimento.</p>
+            <div class="cart-customer-info">
+                <input id="cartNomeCliente" placeholder="Seu nome" autocomplete="name">
+                <input id="cartTelefoneCliente" placeholder="WhatsApp" autocomplete="tel">
+                <input id="cartEmailCliente" placeholder="E-mail opcional" autocomplete="email">
+                <textarea id="cartObservacaoCliente" placeholder="Observação, personalização ou dúvida"></textarea>
+            </div>
+            <button id="btnFinalizarPedido" class="btn-checkout" type="button"><i class='bx bx-send'></i> Enviar pedido</button>
+        </div>
+    </aside>
+
+    <footer class="catalogo-footer" id="catalogoFooter"></footer>
+
+    <script src="/assets/js/pages/catalogo-publico.js"></script>
+</body>
+</html>

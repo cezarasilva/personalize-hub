@@ -43,6 +43,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    function ajustarTelaParceiro(loja) {
+        const novaRemessaCard = document.getElementById('novaRemessaCard');
+        const pageTitle = document.querySelector('.page-title h1');
+        const pageSubtitle = document.querySelector('.page-title p');
+        const lojaCardTitle = parceiroDestino?.closest('.card')?.querySelector('.card-title');
+        const grupoSelect = parceiroDestino?.closest('.form-group');
+
+        if (App.isParceiro()) {
+            if (pageTitle) pageTitle.textContent = ' Minhas Remessas';
+            if (pageSubtitle) pageSubtitle.textContent = 'Acompanhe as remessas, estoque consignado, assinatura e PDFs da sua loja.';
+            if (lojaCardTitle) lojaCardTitle.textContent = 'Minha loja';
+            if (grupoSelect) {
+                grupoSelect.innerHTML = `
+                    <label>Loja</label>
+                    <div class="readonly-box"><strong>${App.escapeHtml(loja?.nome_loja || 'Minha loja')}</strong><br><small class="text-muted">Consulta automática pelo seu acesso de parceiro.</small></div>
+                `;
+            }
+            novaRemessaCard?.classList.add('hidden');
+        } else {
+            if (pageTitle) pageTitle.textContent = ' Remessas';
+            if (pageSubtitle) pageSubtitle.textContent = 'Envie produtos, acompanhe remessas por loja, gere PDF com foto, valor consignado e assinatura digital, e estorne remessas quando necessário.';
+            if (lojaCardTitle) lojaCardTitle.textContent = 'Loja selecionada';
+            novaRemessaCard?.classList.remove('hidden');
+        }
+    }
+
     async function carregarBase() {
         const selecionado = parceiroDestino.value;
         if (App.isAdmin()) {
@@ -54,15 +80,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 .filter(p => String(p.status || '').toUpperCase() === 'ATIVO')
                 .map(p => `<option value="${p.id}">${App.escapeHtml(p.nome_loja)}</option>`).join('');
             if (selecionado) parceiroDestino.value = selecionado;
+            ajustarTelaParceiro(null);
         } else {
             const parceiroId = App.user().parceiro_id;
-            const loja = await App.api(`/parceiros/${parceiroId}`);
-            parceiros = [loja];
+            if (!parceiroId) {
+                App.toast('error', 'Seu usuário parceiro não possui loja vinculada. Peça ao administrador para vincular o usuário a uma loja.');
+                return;
+            }
+            const lista = await App.api('/parceiros');
+            const loja = Array.isArray(lista) ? (lista.find(p => String(p.id) === String(parceiroId)) || lista[0]) : lista;
+            parceiros = loja ? [loja] : [];
             produtos = [];
-            parceiroDestino.innerHTML = `<option value="${loja.id}">${App.escapeHtml(loja.nome_loja)}</option>`;
-            parceiroDestino.value = loja.id;
+            parceiroDestino.innerHTML = `<option value="${parceiroId}">${App.escapeHtml(loja?.nome_loja || 'Minha loja')}</option>`;
+            parceiroDestino.value = parceiroId;
             parceiroDestino.disabled = true;
-            document.getElementById('novaRemessaCard')?.classList.add('hidden');
+            ajustarTelaParceiro(loja || { id: parceiroId, nome_loja: 'Minha loja' });
         }
         renderLote();
         await carregarDadosLoja();
@@ -115,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${App.money(item.preco_repasse_padrao)}</td>
                 <td><strong>${App.money(item.preco_repasse)}</strong></td>
                 <td><strong>${App.money(item.preco_repasse * item.quantidade)}</strong></td>
-                <td><button class="icon-btn" data-remover-lote="${idx}" title="Remover do lote">🗑️</button></td>
+                <td><button class="icon-btn" data-remover-lote="${idx}" title="Remover do lote"><i class="bx bx-trash"></i></button></td>
             </tr>`).join('');
     }
 
@@ -158,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${App.number(item.quantidade_vendida)}</td>
                 <td>${App.money(item.preco_repasse)}${Number(item.preco_repasse_padrao || item.preco_repasse) !== Number(item.preco_repasse || 0) ? `<br><small class="text-muted">padrão ${App.money(item.preco_repasse_padrao)}</small>` : ''}</td>
                 <td><strong>${App.money(item.valor_consignado_atual)}</strong></td>
-                <td>${App.isAdmin() ? `<div class="actions"><button class="icon-btn" data-ajustar="${item.consignacao_id}" title="Ajustar saldo">✏️</button><button class="icon-btn" data-devolver="${item.consignacao_id}" title="Devolver saldo atual">↩️</button></div>` : '<span class="text-muted">Somente consulta</span>'}</td>
+                <td>${App.isAdmin() ? `<div class="actions"><button class="icon-btn" data-ajustar="${item.consignacao_id}" title="Ajustar saldo"><i class="bx bx-edit"></i></button><button class="icon-btn" data-devolver="${item.consignacao_id}" title="Devolver saldo atual"><i class="bx bx-undo"></i></button></div>` : '<span class="text-muted">Somente consulta</span>'}</td>
             </tr>`).join('');
     }
 
@@ -182,10 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td><strong>${App.money(r.valor_total)}</strong></td>
                 <td><strong>${App.money(r.valor_saldo)}</strong></td>
                 <td><div class="actions">
-                    <button class="icon-btn" data-ver-remessa="${r.id}" title="Ver detalhes">👁️</button>
-                    <button class="icon-btn" data-pdf-remessa="${r.id}" title="PDF da remessa">🖨️</button>
-                    ${String(r.status_assinatura || '').toUpperCase() !== 'ASSINADA' ? `<button class="icon-btn" data-assinar-remessa="${r.id}" title="Assinar recebimento">✍️</button>` : ''}
-                    ${App.isAdmin() ? `<button class="icon-btn" data-estornar-remessa="${r.id}" title="Estornar remessa">↩️</button>` : ''}
+                    <button class="icon-btn" data-ver-remessa="${r.id}" title="Ver detalhes"><i class="bx bx-show"></i></button>
+                    <button class="icon-btn" data-pdf-remessa="${r.id}" title="PDF da remessa"><i class="bx bx-printer"></i></button>
+                    ${String(r.status_assinatura || '').toUpperCase() !== 'ASSINADA' ? `<button class="icon-btn" data-assinar-remessa="${r.id}" title="Assinar recebimento"><i class="bx bx-pen"></i></button>` : ''}
+                    ${App.isAdmin() ? `<button class="icon-btn" data-estornar-remessa="${r.id}" title="Estornar remessa"><i class="bx bx-undo"></i></button>` : ''}
                 </div></td>
             </tr>`).join('');
     }

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kanban de Solicitações - PERSONALIZE Hub</title>
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    <main class="main">
+      <header class="page-header">
+        <div class="page-title">
+          <h1><i class="bx bx-task"></i> Kanban de Solicitações / Orçamentos</h1>
+          <p>Controle o fluxo completo: orçamento → aprovação da loja → produção → remessa/conclusão.</p>
+        </div>
+        <button class="btn btn-primary" id="btnAtualizar">Atualizar</button>
+      </header>
+
+      <section class="card">
+        <div class="kanban-toolbar">
+          <div class="form-group">
+            <label>Buscar</label>
+            <input id="filtroBusca" placeholder="Código, loja, produto, descrição...">
+          </div>
+          <div class="form-group">
+            <label>Tipo</label>
+            <select id="filtroTipo">
+              <option value="">Todos</option>
+              <option value="SOLICITACAO">Solicitações</option>
+              <option value="COTACAO">Cotações</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Prioridade</label>
+            <select id="filtroPrioridade">
+              <option value="">Todas</option>
+              <option value="BAIXA">Baixa</option>
+              <option value="NORMAL">Normal</option>
+              <option value="ALTA">Alta</option>
+              <option value="URGENTE">Urgente</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Loja</label>
+            <select id="filtroLoja"><option value="">Todas as lojas</option></select>
+          </div>
+        </div>
+        <div id="kanban" class="kanban-board"></div>
+      </section>
+    </main>
+  </div>
+  <script src="assets/js/core.js"></script>
+  <script src="assets/js/pages/solicitacoes.js"></script>
+</body>
+</html>

@@ -27,12 +27,12 @@ window.App = (() => {
 
     function requireAdmin() {
         requireAuth();
-        if (!isAdmin()) window.location.href = 'minha-loja.html';
+        if (!isAdmin()) window.location.href = 'parceiro-dashboard.html';
     }
 
     function protectPage({ adminOnly = false, parceiroOnly = false } = {}) {
         requireAuth();
-        if (adminOnly && !isAdmin()) window.location.href = 'minha-loja.html';
+        if (adminOnly && !isAdmin()) window.location.href = 'parceiro-dashboard.html';
         if (parceiroOnly && !isParceiro()) window.location.href = 'dashboard.html';
     }
 
@@ -71,8 +71,8 @@ window.App = (() => {
 
     function badgeStatus(status) {
         const st = String(status || '').toUpperCase();
-        if (['ATIVO', 'CONCLUIDA', 'PAGO', 'RECEBIDA', 'ASSINADA'].includes(st)) return `<span class="badge badge-green">${escapeHtml(st)}</span>`;
-        if (['PENDENTE', 'ESTORNO_PARCIAL'].includes(st)) return `<span class="badge badge-yellow">${escapeHtml(st)}</span>`;
+        if (['ATIVO', 'CONCLUIDA', 'CONCLUÍDA', 'PAGO', 'RECEBIDA', 'ASSINADA', 'APROVADA'].includes(st)) return `<span class="badge badge-green">${escapeHtml(st)}</span>`;
+        if (['PENDENTE', 'ESTORNO_PARCIAL', 'SEPARACAO', 'DESENVOLVIMENTO', 'AGUARDANDO_APROVACAO', 'PRODUCAO', 'TRANSPORTE'].includes(st)) return `<span class="badge badge-yellow">${escapeHtml(st)}</span>`;
         if (['ENVIADA', 'ABERTA'].includes(st)) return `<span class="badge badge-blue">${escapeHtml(st)}</span>`;
         return `<span class="badge badge-red">${escapeHtml(st || 'INATIVO')}</span>`;
     }
@@ -90,41 +90,62 @@ window.App = (() => {
         return Swal.fire({ title, text, icon, showCancelButton: true, confirmButtonText: confirmText, cancelButtonText: 'Cancelar', confirmButtonColor: '#dc2626' });
     }
 
+    function icon(name) {
+        return `<i class="bx ${name}"></i>`;
+    }
+
     function renderSidebar(active = '') {
         const side = document.getElementById('sidebar');
         if (!side) return;
         const perfil = user().perfil;
         const nome = user().nome || 'Usuário';
         const adminLinks = [
-            ['dashboard', 'dashboard.html', '📊 Dashboard'],
-            ['produtos-grupo', '#', '📦 Produtos'],
-            ['produtos-lista', 'produtos-lista.html', '↳ 📋 Lista de Produtos'],
-            ['produtos-cadastro', 'produtos-cadastro.html', '↳ ➕ Cadastrar Produto'],
-            ['maquinas', 'maquinas.html', '🖨️ Máquinas'],
-            ['parceiros', 'parceiros.html', '🏪 Lojas Parceiras'],
-            ['usuarios', 'usuarios.html', '👥 Usuários'],
-            ['remessas', 'remessas.html', '🚚 Remessas'],
-            ['vendas', 'vendas.html', '💰 Vendas'],
-            ['financeiro', 'financeiro.html', '💳 Financeiro'],
-            ['movimentacoes', 'movimentacoes.html', '🔄 Movimentações'],
-            ['auditoria', 'auditoria.html', '🛡️ Auditoria']
+            ['dashboard', 'dashboard.html', 'bxs-dashboard', 'Dashboard'],
+            ['produtos-grupo', '#', 'bxs-package', 'Produtos'],
+            ['produtos-lista', 'produtos-lista.html', 'bx-list-ul', 'Lista de Produtos'],
+            ['produtos-cadastro', 'produtos-cadastro.html', 'bx-plus-circle', 'Cadastrar Produto'],
+            ['catalogo-admin', 'catalogo.html?loja=personalize', 'bx-store-alt', 'Catálogo Admin'],
+            ['meu-catalogo', 'meu-catalogo.html', 'bx-slider-alt', 'Config. Catálogo'],
+            ['catalogo-pedidos', 'catalogo-pedidos.html', 'bx-message-square-dots', 'Leads / Pedidos'],
+            ['maquinas', 'maquinas.html', 'bx-printer', 'Máquinas'],
+            ['producoes', 'producoes.html', 'bx-cog', 'Produção'],
+            ['parceiros', 'parceiros.html', 'bx-buildings', 'Lojas Parceiras'],
+            ['usuarios', 'usuarios.html', 'bx-group', 'Usuários'],
+            ['solicitacoes', 'solicitacoes.html', 'bx-task', 'Solicitações'],
+            ['remessas', 'remessas.html', 'bx-package', 'Remessas'],
+            ['vendas', 'vendas.html', 'bx-cart-add', 'Vendas'],
+            ['financeiro', 'financeiro.html', 'bx-credit-card', 'Financeiro'],
+            ['movimentacoes', 'movimentacoes.html', 'bx-transfer', 'Movimentações'],
+            ['auditoria', 'auditoria.html', 'bx-shield-quarter', 'Auditoria']
         ];
         const parceiroLinks = [
-            ['minha-loja', 'minha-loja.html', '🏪 Minha Loja'],
-            ['dashboard', 'dashboard.html', '📊 Dashboard'],
-            ['remessas', 'remessas.html', '🚚 Minhas Remessas'],
-            ['vendas', 'vendas.html', '💰 Registrar Venda'],
-            ['movimentacoes', 'movimentacoes.html', '🔄 Meu Histórico']
+            ['parceiro-dashboard', 'parceiro-dashboard.html', 'bxs-home', 'Painel da Loja'],
+            ['meu-catalogo', 'meu-catalogo.html', 'bx-store', 'Meu Catálogo'],
+            ['meus-produtos', 'meus-produtos.html', 'bx-purchase-tag', 'Meus Produtos'],
+            ['catalogo-parceiro', 'catalogo-parceiro.html', 'bx-grid-alt', 'Produtos Disponíveis'],
+            ['catalogo-pedidos', 'catalogo-pedidos.html', 'bx-message-square-dots', 'Leads / Pedidos'],
+            ['solicitar-produto', 'solicitar-produto.html', 'bx-message-square-add', 'Solicitar Produto'],
+            ['minhas-cotacoes', 'minhas-cotacoes.html', 'bx-list-check', 'Minhas Solicitações'],
+            ['remessas', 'remessas.html', 'bx-package', 'Minhas Remessas'],
+            ['vendas', 'vendas.html', 'bx-cart', 'Registrar Venda'],
+            ['movimentacoes', 'movimentacoes.html', 'bx-transfer', 'Meu Histórico']
         ];
         const links = perfil === 'ADMIN' ? adminLinks : parceiroLinks;
         side.innerHTML = `
             <div class="sidebar-top">
                 <div class="sidebar-brand"><strong>PERSONALIZE</strong><small>${escapeHtml(perfil || '')} • ${escapeHtml(nome)}</small></div>
-                <button class="btn-menu" id="btnMenu" type="button">☰</button>
+                <button class="btn-menu" id="btnMenu" type="button"><i class="bx bx-menu"></i></button>
             </div>
             <nav class="sidebar-links" id="menuLinks">
-                ${links.map(([key, href, label]) => key === 'produtos-grupo' ? `<a href="#" class="sidebar-group" onclick="return false;">${label}</a>` : `<a href="${href}" class="${key === active ? 'ativo' : ''} ${key.startsWith('produtos-') ? 'submenu-link' : ''}">${label}</a>`).join('')}
-                <a href="#" class="btn-sair" id="btnSair">🚪 Sair</a>
+                ${links.map(([key, href, iconName, label]) => {
+                    const isGroup = key === 'produtos-grupo';
+                    const cls = `${key === active ? 'ativo' : ''} ${key.startsWith('produtos-') ? 'submenu-link' : ''}`;
+                    const content = `${icon(iconName)}<span>${escapeHtml(label)}</span>`;
+                    return isGroup
+                        ? `<a href="#" class="sidebar-group" onclick="return false;">${content}</a>`
+                        : `<a href="${href}" class="${cls}">${content}</a>`;
+                }).join('')}
+                <a href="#" class="btn-sair" id="btnSair">${icon('bx-log-out')}<span>Sair</span></a>
             </nav>`;
         document.getElementById('btnMenu')?.addEventListener('click', () => document.getElementById('menuLinks')?.classList.toggle('ativo-mobile'));
         document.getElementById('btnSair')?.addEventListener('click', (e) => { e.preventDefault(); logout(); });
@@ -164,5 +185,5 @@ window.App = (() => {
         el.className = `msg text-${type}`;
     }
 
-    return { API_BASE, token, user, isAdmin, isParceiro, setUser, logout, requireAuth, requireAdmin, protectPage, api, money, number, formDataToObject, imageTag, escapeHtml, badgeStatus, toast, confirmDialog, renderSidebar, bindPasswordToggle, imageToDataURL, setMsg };
+    return { API_BASE, token, user, isAdmin, isParceiro, setUser, logout, requireAuth, requireAdmin, protectPage, api, money, number, formDataToObject, imageTag, escapeHtml, badgeStatus, toast, confirmDialog, icon, renderSidebar, bindPasswordToggle, imageToDataURL, setMsg };
 })();
