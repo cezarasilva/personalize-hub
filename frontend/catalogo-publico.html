@@ -11,42 +11,21 @@
 <body class="catalogo-publico">
     <header class="catalogo-header" id="catalogoHeader">
         <div class="catalogo-banner-layer" id="bannerLayer"></div>
-        <div class="catalogo-wrap catalogo-hero-grid">
+        <div class="catalogo-wrap">
             <div class="catalogo-hero-content">
                 <img id="logoLoja" class="catalogo-logo" src="" alt="" style="display:none;">
                 <div class="catalogo-title">
-                    <span class="catalogo-eyebrow"><i class='bx bx-sparkles'></i> Catálogo premium</span>
                     <h1 id="nomeLoja">Catálogo</h1>
                     <p id="descricaoLoja">Carregando produtos...</p>
                     <div class="catalogo-actions" id="linksContato"></div>
                 </div>
-            </div>
-            <div class="catalogo-hero-card">
-                <span><i class='bx bx-check-shield'></i> Atendimento direto</span>
-                <span><i class='bx bx-package'></i> Produtos personalizados</span>
-                <span><i class='bx bx-cart-add'></i> Pedido rápido</span>
             </div>
         </div>
     </header>
 
     <main class="catalogo-main">
         <div class="catalogo-wrap">
-            <section class="catalogo-benefits" aria-label="Benefícios">
-                <div><i class='bx bx-message-rounded-dots'></i><span>Atendimento via WhatsApp</span></div>
-                <div><i class='bx bx-palette'></i><span>Personalização sob medida</span></div>
-                <div><i class='bx bx-credit-card'></i><span>Pagamento combinado com a loja</span></div>
-                <div><i class='bx bx-package'></i><span>Retirada ou entrega combinada</span></div>
-            </section>
-
-            <div class="catalogo-toolbar">
-                <div>
-                    <h2>Produtos em destaque</h2>
-                    <p>Escolha produtos prontos ou peça um orçamento personalizado.</p>
-                </div>
-                <div id="categoryChips" class="category-chips"></div>
-            </div>
-
-            <div id="catalogoGrid" class="catalogo-grid premium-grid"></div>
+            <div id="catalogoGrid" class="catalogo-grid"></div>
 
             <section class="catalogo-custom-panel custom-last-section">
                 <div class="card-title"><span class="catalogo-section-title"><i class="bx bx-palette"></i> Produto personalizado</span></div>
@@ -99,13 +78,6 @@
             <button id="btnFinalizarPedido" class="btn-checkout" type="button"><i class='bx bx-send'></i> Enviar pedido</button>
         </div>
     </aside>
-
-    <div class="product-detail-overlay" id="productDetailOverlay" aria-hidden="true">
-        <div class="product-detail-modal" role="dialog" aria-modal="true">
-            <button class="product-detail-close" id="productDetailClose" type="button"><i class='bx bx-x'></i></button>
-            <div id="productDetailContent"></div>
-        </div>
-    </div>
 
     <footer class="catalogo-footer" id="catalogoFooter"></footer>
 
