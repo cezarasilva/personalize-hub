@@ -1219,3 +1219,46 @@ body.catalogo-publico .catalogo-footer {
         min-height: 218px;
     }
 }
+
+/* =========================================
+   V5.3 - ASSINATURAS DO CATÁLOGO
+   ========================================= */
+.responsive-table {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.responsive-table table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+}
+.responsive-table th,
+.responsive-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+}
+.table-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.assinatura-panel {
+    display: grid;
+    gap: 8px;
+}
+.action-wrap {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+}
+@media (max-width: 768px) {
+    .action-wrap { width: 100%; justify-content: stretch; }
+    .action-wrap .btn { flex: 1; min-width: 180px; justify-content: center; }
+    .responsive-table table { min-width: 760px; }
+}

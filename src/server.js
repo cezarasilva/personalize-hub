@@ -3842,7 +3842,9 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
             if (!lojaRes.rows.length) return res.status(404).json({ erro: 'Catálogo não encontrado.' });
             loja = catalogoPublicPayload(lojaRes.rows[0], {});
             parceiroId = loja.id;
-            if (loja.catalogo_ativo === false) return res.status(403).json({ erro: 'Catálogo indisponível no momento.' });
+            const assinaturaLoja = await db.query('SELECT status, fim_teste, proxima_cobranca FROM assinaturas_catalogo WHERE parceiro_id = $1 ORDER BY id DESC LIMIT 1', [parceiroId]).catch(() => ({ rows: [] }));
+            const stAss = String(assinaturaLoja.rows[0]?.status || loja.catalogo_plano_status || 'TESTE_GRATIS').toUpperCase();
+            if (loja.catalogo_ativo === false || ['BLOQUEADA','CANCELADA'].includes(stAss)) return res.status(403).json({ erro: 'Catálogo indisponível no momento.' });
         }
 
         const params = [];
@@ -4135,6 +4137,204 @@ app.get('/api/dashboard/crescimento', autenticar, somenteAdmin, async (req, res)
 // =========================================================
 // KEEP ALIVE / FALLBACK
 // =========================================================
+
+
+// =========================================================
+// ASSINATURAS DO CATÁLOGO - V5.3
+// =========================================================
+
+async function garantirAssinaturaParceiro(client, parceiroId) {
+    const existe = await client.query('SELECT * FROM assinaturas_catalogo WHERE parceiro_id = $1 ORDER BY id DESC LIMIT 1', [parceiroId]);
+    if (existe.rows.length) return existe.rows[0];
+    const parceiro = await client.query('SELECT id, catalogo_teste_inicio, catalogo_teste_fim, catalogo_plano_status, catalogo_valor_mensal FROM parceiros WHERE id = $1', [parceiroId]);
+    const p = parceiro.rows[0] || {};
+    const criada = await client.query(
+        `INSERT INTO assinaturas_catalogo (parceiro_id, status, inicio_teste, fim_teste, valor_mensal, proxima_cobranca)
+         VALUES ($1, COALESCE($2,'TESTE_GRATIS'), COALESCE($3,CURRENT_DATE), COALESCE($4,(CURRENT_DATE + INTERVAL '3 months')::date), COALESCE($5,0), COALESCE($4,(CURRENT_DATE + INTERVAL '3 months')::date))
+         RETURNING *`,
+        [parceiroId, p.catalogo_plano_status, p.catalogo_teste_inicio, p.catalogo_teste_fim, p.catalogo_valor_mensal]
+    );
+    return criada.rows[0];
+}
+
+function assinaturaDiasRestantes(assinatura) {
+    const base = assinatura.proxima_cobranca || assinatura.fim_teste;
+    if (!base) return null;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const fim = new Date(base); fim.setHours(0,0,0,0);
+    return Math.ceil((fim - hoje) / 86400000);
+}
+
+app.get('/api/assinaturas/minha', autenticar, async (req, res) => {
+    try {
+        if (normalizarPerfil(req.user.perfil) !== 'PARCEIRO') return res.status(403).json({ erro: 'Acesso permitido somente para loja parceira.' });
+        const parceiroId = req.user.parceiro_id;
+        const assinatura = await garantirAssinaturaParceiro(db, parceiroId);
+        const cobrancas = await db.query(
+            `SELECT * FROM cobrancas_catalogo WHERE parceiro_id = $1 ORDER BY criado_em DESC LIMIT 12`,
+            [parceiroId]
+        ).catch(() => ({ rows: [] }));
+        res.json({ assinatura: { ...assinatura, dias_restantes: assinaturaDiasRestantes(assinatura) }, cobrancas: cobrancas.rows });
+    } catch (e) {
+        console.error('❌ Erro minha assinatura:', e);
+        res.status(500).json({ erro: 'Erro ao carregar assinatura: ' + e.message });
+    }
+});
+
+app.get('/api/assinaturas/admin', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        // garante assinatura para todos os parceiros existentes
+        const parceiros = await db.query('SELECT id FROM parceiros ORDER BY id');
+        for (const p of parceiros.rows) await garantirAssinaturaParceiro(db, p.id);
+        const result = await db.query(
+            `SELECT a.*, p.nome_loja, p.responsavel, p.telefone, p.catalogo_ativo,
+                    GREATEST(0, (COALESCE(a.proxima_cobranca, a.fim_teste)::date - CURRENT_DATE))::int AS dias_restantes,
+                    COALESCE(c.pendentes, 0) AS cobrancas_pendentes,
+                    COALESCE(c.valor_pendente, 0) AS valor_pendente
+             FROM assinaturas_catalogo a
+             JOIN parceiros p ON p.id = a.parceiro_id
+             LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS pendentes, SUM(valor)::numeric(10,2) AS valor_pendente
+                FROM cobrancas_catalogo cc
+                WHERE cc.parceiro_id = a.parceiro_id AND cc.status = 'PENDENTE'
+             ) c ON true
+             ORDER BY p.nome_loja ASC`
+        );
+        res.json(result.rows);
+    } catch (e) {
+        console.error('❌ Erro assinaturas admin:', e);
+        res.status(500).json({ erro: 'Erro ao listar assinaturas: ' + e.message });
+    }
+});
+
+app.post('/api/assinaturas/:id/status', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const status = String(req.body.status || '').toUpperCase();
+        const permitidos = ['TESTE_GRATIS','ATIVA','PENDENTE','BLOQUEADA','CANCELADA'];
+        if (!permitidos.includes(status)) return res.status(400).json({ erro: 'Status inválido.' });
+        const result = await db.query(
+            `UPDATE assinaturas_catalogo
+             SET status = $1::varchar,
+                 observacao = COALESCE($2, observacao),
+                 valor_mensal = COALESCE($3, valor_mensal),
+                 proxima_cobranca = COALESCE($4, proxima_cobranca),
+                 atualizado_em = CURRENT_TIMESTAMP
+             WHERE id = $5
+             RETURNING *`,
+            [status, req.body.observacao || null, req.body.valor_mensal !== undefined && req.body.valor_mensal !== '' ? parseMoeda(req.body.valor_mensal) : null, req.body.proxima_cobranca || null, id]
+        );
+        if (!result.rows.length) return res.status(404).json({ erro: 'Assinatura não encontrada.' });
+        await db.query(
+            `UPDATE parceiros SET catalogo_plano_status = $1::varchar, catalogo_ativo = CASE WHEN $1::varchar IN ('BLOQUEADA','CANCELADA') THEN false ELSE true END WHERE id = $2`,
+            [status, result.rows[0].parceiro_id]
+        );
+        await registrarAuditoria(req.user.id, `Alterou assinatura ${id} para ${status}`);
+        res.json({ mensagem: 'Status da assinatura atualizado.', assinatura: result.rows[0] });
+    } catch (e) {
+        console.error('❌ Erro atualizar assinatura:', e);
+        res.status(500).json({ erro: 'Erro ao atualizar assinatura: ' + e.message });
+    }
+});
+
+app.post('/api/assinaturas/gerar-cobrancas', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const valorPadrao = req.body.valor_mensal !== undefined && req.body.valor_mensal !== '' ? parseMoeda(req.body.valor_mensal) : null;
+        const ref = req.body.mes_referencia || new Date().toISOString().slice(0,7);
+        const assinaturas = await db.query(
+            `SELECT a.*, p.nome_loja
+             FROM assinaturas_catalogo a
+             JOIN parceiros p ON p.id = a.parceiro_id
+             WHERE a.status IN ('TESTE_GRATIS','ATIVA','PENDENTE')
+               AND COALESCE(a.proxima_cobranca, a.fim_teste)::date <= CURRENT_DATE`
+        );
+        let geradas = 0;
+        for (const a of assinaturas.rows) {
+            const valor = valorPadrao !== null ? valorPadrao : parseMoeda(a.valor_mensal || 0);
+            const codigo = `COB-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${a.parceiro_id}`;
+            const ins = await db.query(
+                `INSERT INTO cobrancas_catalogo (codigo, assinatura_id, parceiro_id, mes_referencia, valor, status, vencimento, observacao)
+                 SELECT $1,$2,$3,$4,$5,'PENDENTE',CURRENT_DATE + INTERVAL '7 days',$6
+                 WHERE NOT EXISTS (
+                    SELECT 1 FROM cobrancas_catalogo WHERE parceiro_id = $3 AND mes_referencia = $4 AND status IN ('PENDENTE','PAGO')
+                 ) RETURNING id`,
+                [codigo, a.id, a.parceiro_id, ref, valor, `Cobrança de assinatura do catálogo - ${ref}`]
+            );
+            if (ins.rows.length) {
+                geradas += 1;
+                await db.query(`UPDATE assinaturas_catalogo SET status = 'PENDENTE', atualizado_em = CURRENT_TIMESTAMP WHERE id = $1`, [a.id]);
+                await db.query(`UPDATE parceiros SET catalogo_plano_status = 'PENDENTE' WHERE id = $1`, [a.parceiro_id]);
+            }
+        }
+        await registrarAuditoria(req.user.id, `Gerou ${geradas} cobrança(s) de assinatura do catálogo`);
+        res.json({ mensagem: `Geradas ${geradas} cobrança(s).`, geradas });
+    } catch (e) {
+        console.error('❌ Erro gerar cobranças catálogo:', e);
+        res.status(500).json({ erro: 'Erro ao gerar cobranças: ' + e.message });
+    }
+});
+
+app.get('/api/assinaturas/cobrancas', autenticar, async (req, res) => {
+    try {
+        const params = [];
+        let where = '';
+        if (normalizarPerfil(req.user.perfil) === 'PARCEIRO') {
+            params.push(req.user.parceiro_id);
+            where = 'WHERE cc.parceiro_id = $1';
+        }
+        const result = await db.query(
+            `SELECT cc.*, p.nome_loja
+             FROM cobrancas_catalogo cc
+             LEFT JOIN parceiros p ON p.id = cc.parceiro_id
+             ${where}
+             ORDER BY cc.criado_em DESC`,
+            params
+        );
+        res.json(result.rows);
+    } catch (e) {
+        console.error('❌ Erro cobranças catálogo:', e);
+        res.status(500).json({ erro: 'Erro ao listar cobranças: ' + e.message });
+    }
+});
+
+app.post('/api/assinaturas/cobrancas/:id/pagar', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const cobranca = await db.query(`UPDATE cobrancas_catalogo SET status = 'PAGO', data_pagamento = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`, [id]);
+        if (!cobranca.rows.length) return res.status(404).json({ erro: 'Cobrança não encontrada.' });
+        const c = cobranca.rows[0];
+        await db.query(
+            `UPDATE assinaturas_catalogo
+             SET status = 'ATIVA', proxima_cobranca = (CURRENT_DATE + INTERVAL '1 month')::date, atualizado_em = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [c.assinatura_id]
+        );
+        await db.query(`UPDATE parceiros SET catalogo_plano_status = 'ATIVA', catalogo_ativo = true, catalogo_proxima_cobranca = (CURRENT_DATE + INTERVAL '1 month')::date WHERE id = $1`, [c.parceiro_id]);
+        await registrarAuditoria(req.user.id, `Marcou cobrança de catálogo ${id} como paga`);
+        res.json({ mensagem: 'Cobrança marcada como paga.' });
+    } catch (e) {
+        console.error('❌ Erro pagar cobrança catálogo:', e);
+        res.status(500).json({ erro: 'Erro ao marcar cobrança como paga: ' + e.message });
+    }
+});
+
+app.post('/api/assinaturas/sincronizar-status', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const vencidas = await db.query(
+            `UPDATE assinaturas_catalogo a
+             SET status = 'PENDENTE', atualizado_em = CURRENT_TIMESTAMP
+             WHERE a.status = 'TESTE_GRATIS'
+               AND COALESCE(a.fim_teste, CURRENT_DATE)::date < CURRENT_DATE
+             RETURNING parceiro_id`
+        );
+        if (vencidas.rows.length) {
+            await db.query(`UPDATE parceiros SET catalogo_plano_status = 'PENDENTE' WHERE id = ANY($1::int[])`, [vencidas.rows.map(r => r.parceiro_id)]);
+        }
+        res.json({ mensagem: 'Status sincronizados.', vencidas: vencidas.rows.length });
+    } catch (e) {
+        res.status(500).json({ erro: 'Erro ao sincronizar status: ' + e.message });
+    }
+});
 
 app.get('/api/ping', async (req, res) => {
     try {

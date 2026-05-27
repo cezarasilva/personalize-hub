@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minha Assinatura - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-receipt"></i> Minha Assinatura</h1>
+                    <p>Acompanhe o período grátis, cobranças e status do seu catálogo.</p>
+                </div>
+                <a class="btn btn-primary" href="meu-catalogo.html"><i class="bx bx-store"></i> Configurar catálogo</a>
+            </header>
+            <section class="grid grid-3 mb-2">
+                <div class="stat-card"><span>Status</span><strong id="assinaturaStatus">-</strong></div>
+                <div class="stat-card"><span>Dias restantes</span><strong id="assinaturaDias">0</strong></div>
+                <div class="stat-card"><span>Valor mensal</span><strong id="assinaturaValor">R$ 0,00</strong></div>
+            </section>
+            <section class="card mb-2">
+                <div class="card-title"><span><i class="bx bx-info-circle"></i> Detalhes do plano</span></div>
+                <div id="detalhesAssinatura"></div>
+            </section>
+            <section class="card">
+                <div class="card-title"><span><i class="bx bx-list-ul"></i> Minhas cobranças</span></div>
+                <div id="minhasCobrancas"></div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/assinatura.js"></script>
+</body>
+</html>
