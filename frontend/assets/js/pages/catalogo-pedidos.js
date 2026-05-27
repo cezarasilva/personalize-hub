@@ -21,15 +21,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         lista.innerHTML = filtrados.map(p => {
             const whats = String(p.cliente_whatsapp || '').replace(/\D/g, '');
-            const msg = encodeURIComponent(`Olá ${p.cliente_nome || ''}! Recebemos seu pedido do produto ${p.produto_nome_snapshot || ''}.`);
+            const origem = p.lead_origem || (p.origem_produto === 'FOOTER' ? 'FOOTER' : 'CARRINHO');
+            const itens = Array.isArray(p.itens) ? p.itens : [];
+            const resumoItens = itens.length
+                ? itens.map(i => `<li>${App.escapeHtml(i.quantidade || 1)}x ${App.escapeHtml(i.produto_nome || '')}${i.variacao ? ' - ' + App.escapeHtml(i.variacao) : ''} • ${App.money(i.valor_total || 0)}</li>`).join('')
+                : `<li>${App.escapeHtml(p.produto_nome_snapshot || '')} ${p.variacao_snapshot ? '- ' + App.escapeHtml(p.variacao_snapshot) : ''}</li>`;
+            const msg = encodeURIComponent(`Olá ${p.cliente_nome || ''}! Recebemos seu contato pelo catálogo. Código: ${p.codigo || ''}.`);
             return `
                 <div class="lead-card">
                     <div>
                         <strong>${App.escapeHtml(p.codigo || 'Pedido')}</strong>
                         <div class="text-muted">${App.escapeHtml(p.nome_loja || 'Catálogo admin')} • ${new Date(p.criado_em).toLocaleString('pt-BR')}</div>
+                        <div class="mt-2"><span class="badge ${origem === 'FOOTER' ? 'badge-info' : 'badge-success'}">${origem === 'FOOTER' ? 'Lead do footer' : 'Pedido do catálogo'}</span></div>
                         <div class="mt-2"><strong>Cliente:</strong> ${App.escapeHtml(p.cliente_nome || '')} • ${App.escapeHtml(p.cliente_whatsapp || '')}</div>
-                        <div><strong>Produto:</strong> ${App.escapeHtml(p.produto_nome_snapshot || '')} (${App.escapeHtml(p.variacao_snapshot || '')})</div>
-                        <div><strong>Qtd:</strong> ${App.number(p.quantidade)} • <strong>Valor unit.:</strong> ${App.money(p.valor_unitario_snapshot)}</div>
+                        <div><strong>Itens/assunto:</strong><ul class="lead-items-list">${resumoItens}</ul></div>
+                        <div><strong>Subtotal:</strong> ${App.money(p.subtotal || 0)} • <strong>Total itens:</strong> ${App.number(p.total_itens || p.quantidade || 0)}</div>
                         <div class="text-muted">${App.escapeHtml(p.observacao || '')}</div>
                         <div class="mt-2">${App.badgeStatus(p.status)}</div>
                     </div>

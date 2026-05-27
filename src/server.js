@@ -3952,6 +3952,50 @@ app.post('/api/catalogo-publico/:slug/leads', async (req, res) => {
         res.status(500).json({ erro: 'Erro ao enviar pedido: ' + e.message });
     } finally { client.release(); }
 });
+
+app.post('/api/catalogo-publico/:slug/footer-leads', async (req, res) => {
+    try {
+        const slug = slugifyCatalogo(req.params.slug);
+        const isAdminCatalogo = slug === 'personalize' || slug === 'admin';
+        let parceiroId = null;
+        let loja = null;
+        if (!isAdminCatalogo) {
+            const lojaRes = await db.query('SELECT id, nome_loja, whatsapp_catalogo, telefone FROM parceiros WHERE slug_catalogo = $1', [slug]);
+            if (!lojaRes.rows.length) return res.status(404).json({ erro: 'Catálogo não encontrado.' });
+            loja = lojaRes.rows[0];
+            parceiroId = loja.id;
+        } else {
+            loja = await buscarConfigCatalogoAdmin(req);
+        }
+
+        const clienteNome = String(req.body.cliente_nome || '').trim();
+        const clienteWhats = telefoneWhatsappLimpo(req.body.cliente_whatsapp || '');
+        const clienteEmail = String(req.body.cliente_email || '').trim();
+        const observacao = String(req.body.observacao || '').trim();
+        if (!clienteNome || !clienteWhats) return res.status(400).json({ erro: 'Informe nome e WhatsApp.' });
+
+        const codigo = `FOOTER-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Date.now().toString().slice(-5)}`;
+        const result = await db.query(
+            `INSERT INTO catalogo_pedidos (
+                codigo, parceiro_id, origem_produto, cliente_nome, cliente_whatsapp, cliente_email,
+                quantidade, observacao, produto_nome_snapshot, variacao_snapshot,
+                valor_unitario_snapshot, status, subtotal, total_itens, lead_origem, assunto_lead
+             ) VALUES ($1,$2,'FOOTER',$3,$4,$5,1,$6,'Contato pelo footer','Lead de contato',0,'NOVO',0,0,'FOOTER',$7)
+             RETURNING *`,
+            [codigo, parceiroId, clienteNome, clienteWhats, clienteEmail, observacao, 'Contato pelo footer']
+        );
+
+        res.status(201).json({
+            mensagem: 'Lead de contato enviado com sucesso.',
+            lead: result.rows[0],
+            whatsapp_destino: loja ? telefoneWhatsappLimpo(loja.whatsapp_catalogo || loja.telefone || loja.footer_contato || '') : ''
+        });
+    } catch (e) {
+        console.error('❌ Erro salvar lead footer:', e);
+        res.status(500).json({ erro: 'Erro ao enviar contato do footer: ' + e.message });
+    }
+});
+
 app.post('/api/catalogo-publico/:slug/cotacoes', upload.single('arquivo'), async (req, res) => {
     try {
         const slug = slugifyCatalogo(req.params.slug);

@@ -813,3 +813,48 @@ body.admin-dark .preview-box { background: rgba(30, 41, 59, .72); border-color: 
     .footer-logo { width:70px; height:70px; }
     .social i { font-size:22px; }
 }
+
+/* V5.1.2 - Leads do footer e ajustes WhatsApp */
+.footer-lead-form {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    max-width: 920px;
+    margin: 0 auto;
+}
+.footer-lead-form input,
+.footer-lead-form textarea {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid #333;
+    background: #171717;
+    color: #fff;
+    outline: none;
+    transition: .25s;
+}
+.footer-lead-form textarea {
+    grid-column: 1 / -1;
+    min-height: 82px;
+    resize: vertical;
+}
+.footer-lead-form input:focus,
+.footer-lead-form textarea:focus {
+    border-color: var(--catalogo-button-color, var(--primary));
+    box-shadow: 0 0 0 3px rgba(37,99,235,.18);
+}
+.footer-lead-form .btn-send {
+    grid-column: 1 / -1;
+    width: 100%;
+    color: #fff;
+    gap: 8px;
+}
+.lead-items-list {
+    margin: 6px 0 0 18px;
+    padding: 0;
+    color: #334155;
+}
+.lead-items-list li { margin-bottom: 3px; }
+@media (max-width: 768px) {
+    .footer-lead-form { grid-template-columns: 1fr; }
+}

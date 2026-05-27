@@ -180,6 +180,15 @@
     function abrirBusca() { document.getElementById('floatingSearch').classList.add('active'); document.getElementById('floatingSearchInput').focus(); }
     function fecharBusca() { document.getElementById('floatingSearch').classList.remove('active'); }
 
+    function whatsappDestino() {
+        const candidatos = [loja.whatsapp_catalogo, loja.telefone, loja.footer_contato];
+        for (const valor of candidatos) {
+            const w = String(valor || '').replace(/\D/g, '');
+            if (w.length >= 10) return w;
+        }
+        return '';
+    }
+
     async function finalizarPedido() {
         if (!carrinho.length) return Swal.fire('Pedido vazio', 'Adicione pelo menos um produto.', 'warning');
         const cliente_nome = document.getElementById('cartNomeCliente').value.trim();
@@ -195,7 +204,7 @@
             itens: carrinho.map(i => ({ produto_id: i.produto_id, variacao_id: i.variacao_id, quantidade: i.quantidade }))
         };
         const salvo = await api(`/api/catalogo-publico/${slug}/leads`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const whats = String(salvo.whatsapp_destino || loja.whatsapp_catalogo || loja.telefone || '').replace(/\D/g, '');
+        const whats = String(salvo.whatsapp_destino || whatsappDestino()).replace(/\D/g, '');
         if (whats) {
             const linhas = carrinho.map(i => `- ${i.quantidade}x ${i.nome}`).join('\n');
             const total = carrinho.reduce((s, i) => s + (i.preco * i.quantidade), 0);
@@ -215,7 +224,7 @@
         const fd = new FormData(e.target);
         try {
             const salvo = await api(`/api/catalogo-publico/${slug}/cotacoes`, { method: 'POST', body: fd });
-            const whats = String(salvo.whatsapp_destino || loja.whatsapp_catalogo || loja.telefone || '').replace(/\D/g, '');
+            const whats = String(salvo.whatsapp_destino || whatsappDestino()).replace(/\D/g, '');
             if (whats) {
                 const msg = encodeURIComponent(`Olá! Enviei uma solicitação de produto personalizado pelo catálogo ${loja.nome_loja || ''}. Código: ${salvo.codigo || ''}`);
                 window.open(`https://wa.me/55${whats}?text=${msg}`, '_blank');
@@ -225,19 +234,53 @@
         } catch (err) { Swal.fire('Erro', err.message, 'error'); }
     }
 
+
+    async function enviarLeadFooter(e) {
+        e.preventDefault();
+        const form = e.target;
+        const nome = form.querySelector('[name="cliente_nome"]')?.value.trim();
+        const contato = form.querySelector('[name="cliente_whatsapp"]')?.value.trim();
+        const email = form.querySelector('[name="cliente_email"]')?.value.trim();
+        const mensagem = form.querySelector('[name="mensagem"]')?.value.trim();
+        if (!nome || !contato) return Swal.fire('Dados obrigatórios', 'Preencha seu nome e WhatsApp.', 'warning');
+        try {
+            const salvo = await api(`/api/catalogo-publico/${slug}/footer-leads`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cliente_nome: nome,
+                    cliente_whatsapp: contato,
+                    cliente_email: email,
+                    observacao: mensagem,
+                    origem_lead: 'FOOTER'
+                })
+            });
+            const whats = String(salvo.whatsapp_destino || whatsappDestino()).replace(/\D/g, '');
+            if (whats) {
+                const msg = encodeURIComponent(`Olá! Entrei em contato pelo catálogo ${loja.nome_loja || ''}.\nNome: ${nome}\nWhatsApp: ${contato}\nMensagem: ${mensagem || 'Gostaria de mais informações.'}`);
+                window.open(`https://wa.me/55${whats}?text=${msg}`, '_blank');
+            }
+            form.reset();
+            await Swal.fire('Contato enviado', 'A loja recebeu seu contato nos leads do sistema.', 'success');
+        } catch (err) { Swal.fire('Erro', err.message, 'error'); }
+    }
+
     function renderFooter() {
         const el = document.getElementById('catalogoFooter');
-        const whats = String(loja.whatsapp_catalogo || loja.telefone || '').replace(/\D/g, '');
+        const whats = whatsappDestino();
         const insta = loja.instagram_catalogo ? String(loja.instagram_catalogo).replace('@','') : '';
         const logo = loja.logo_url ? `<img src="${esc(loja.logo_url)}" class="footer-logo" alt="${esc(loja.nome_loja || 'Catálogo')}">` : `<div class="footer-logo footer-logo-fallback"><i class='bx bx-store'></i></div>`;
         el.innerHTML = `
             <div class="footer-top">
                 ${logo}
                 <p class="footer-text">${esc(loja.descricao_catalogo || 'Produtos personalizados, atendimento direto e soluções sob medida.')}</p>
-                <div class="newsletter">
-                    <input type="email" placeholder="E-mail para receber novidades">
-                    <button class="btn-send" type="button"><i class='bx bx-send'></i></button>
-                </div>
+                <form id="footerLeadForm" class="footer-lead-form">
+                    <input name="cliente_nome" placeholder="Seu nome" required>
+                    <input name="cliente_whatsapp" placeholder="WhatsApp" required>
+                    <input name="cliente_email" placeholder="E-mail opcional">
+                    <textarea name="mensagem" placeholder="Como podemos ajudar?"></textarea>
+                    <button class="btn-send" type="submit"><i class='bx bx-send'></i> Enviar contato</button>
+                </form>
             </div>
             <div class="footer-divider"></div>
             <div class="footer-content">
@@ -273,6 +316,7 @@
             <div class="footer-bottom"></div>
             <p class="footer-copy">${esc(loja.footer_copyright || `© ${new Date().getFullYear()} ${loja.nome_loja || 'PERSONALIZE'} - Todos os direitos reservados`)}</p>
         `;
+        document.getElementById('footerLeadForm')?.addEventListener('submit', enviarLeadFooter);
     }
 
     async function carregar() {
@@ -286,11 +330,11 @@
         document.body.style.setProperty('--catalogo-price-color', loja.cor_preco || '#16a34a');
         document.body.style.setProperty('--catalogo-button-color', loja.cor_botao || loja.cor_tema || '#2563eb');
         const links = [];
-        const whats = String(loja.whatsapp_catalogo || loja.telefone || '').replace(/\D/g, '');
+        const whats = whatsappDestino();
         if (whats) {
             links.push(`<a class="btn btn-success" target="_blank" href="https://wa.me/55${whats}"><i class="bx bxl-whatsapp"></i> WhatsApp</a>`);
             const wfloat = document.getElementById('whatsappFloat');
-            if (wfloat) wfloat.href = `https://wa.me/55${whats}`;
+            if (wfloat) { wfloat.href = `https://wa.me/55${whats}?text=${encodeURIComponent('Olá! Vim pelo catálogo ' + (loja.nome_loja || '') + ' e gostaria de atendimento.')}`; wfloat.style.display = 'flex'; }
         } else {
             const wfloat = document.getElementById('whatsappFloat');
             if (wfloat) wfloat.style.display = 'none';
