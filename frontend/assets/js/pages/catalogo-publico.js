@@ -17,6 +17,7 @@
     let carrinho = [];
     let bannerTimer = null;
     let bannerIndex = 0;
+    let categoriaAtiva = 'TODOS';
     const galeriasEstado = new Map();
 
     function pegarSlug() {
@@ -104,27 +105,105 @@
         document.body.appendChild(overlay);
     };
 
+    function categoriaProduto(p) {
+        return String(p.categoria || p.subcategoria || 'Outros').trim() || 'Outros';
+    }
+
+    function renderCategorias() {
+        const el = document.getElementById('categoryChips');
+        if (!el) return;
+        const categorias = ['TODOS', ...Array.from(new Set(produtos.map(categoriaProduto))).filter(Boolean).sort((a,b)=>a.localeCompare(b,'pt-BR'))];
+        el.innerHTML = categorias.map(cat => `
+            <button type="button" class="category-chip ${categoriaAtiva === cat ? 'active' : ''}" onclick="selecionarCategoria('${esc(cat).replace(/'/g, "\\'")}')">
+                ${cat === 'TODOS' ? '<i class="bx bx-grid-alt"></i> Todos' : esc(cat)}
+            </button>
+        `).join('');
+    }
+
+    window.selecionarCategoria = (cat) => {
+        categoriaAtiva = cat;
+        renderCategorias();
+        renderProdutos();
+    };
+
     function renderProdutos() {
         const termo = (document.getElementById('floatingSearchInput')?.value || '').toLowerCase();
-        const origem = '';
         const grid = document.getElementById('catalogoGrid');
         const filtrados = produtos.filter(p => {
-            const busca = `${p.nome} ${p.descricao} ${p.categoria}`.toLowerCase().includes(termo);
-            return busca;
+            const busca = `${p.nome} ${p.descricao} ${p.categoria} ${p.variacao || ''}`.toLowerCase().includes(termo);
+            const categoriaOk = categoriaAtiva === 'TODOS' || categoriaProduto(p) === categoriaAtiva;
+            return busca && categoriaOk;
         });
-        if (!filtrados.length) { grid.innerHTML = '<div class="card"><p class="text-muted">Nenhum produto encontrado.</p></div>'; return; }
-        grid.innerHTML = filtrados.map(p => `
-            <article class="catalogo-card">
+        if (!filtrados.length) {
+            grid.innerHTML = '<div class="card catalogo-empty"><i class="bx bx-search-alt"></i><p class="text-muted">Nenhum produto encontrado.</p></div>';
+            return;
+        }
+        grid.innerHTML = filtrados.map(p => {
+            const tipo = p.origem_publica === 'PERSONALIZE' ? 'PERSONALIZE' : 'Produto da loja';
+            return `
+            <article class="catalogo-card premium-product-card">
                 ${renderGallery(p)}
                 <div class="catalogo-card-body">
-                    <span class="catalogo-origin">${p.origem_publica === 'PERSONALIZE' ? 'PERSONALIZE' : 'Produto da loja'}</span>
-                    <div class="catalogo-card-title">${esc(p.nome)}</div>
-                    <div class="catalogo-card-desc">${esc(p.descricao || '')}</div>
+                    <div class="catalogo-card-topline">
+                        <span class="catalogo-origin">${tipo}</span>
+                        <span class="catalogo-status-badge"><i class='bx bx-time-five'></i> Sob consulta</span>
+                    </div>
+                    <button class="catalogo-card-title as-link" onclick="abrirDetalheProduto(${p.id}, ${p.variacao_id})">${esc(p.nome)}</button>
+                    <div class="catalogo-card-desc">${esc(p.descricao || p.categoria || '')}</div>
                     <div class="catalogo-price">${money(p.preco_publico)}</div>
-                    <button class="btn btn-success w-full" onclick="adicionarItem(${p.id}, ${p.variacao_id})"><i class="bx bx-cart-add"></i> Adicionar</button>
+                    <div class="catalogo-card-actions">
+                        <button class="btn btn-light" onclick="abrirDetalheProduto(${p.id}, ${p.variacao_id})"><i class="bx bx-show"></i> Ver detalhes</button>
+                        <button class="btn btn-success" onclick="adicionarItem(${p.id}, ${p.variacao_id})"><i class="bx bx-cart-add"></i> Adicionar</button>
+                    </div>
                 </div>
-            </article>`).join('');
+            </article>`;
+        }).join('');
     }
+
+    window.abrirDetalheProduto = (produtoId, variacaoId) => {
+        const p = produtos.find(item => Number(item.id) === Number(produtoId) && Number(item.variacao_id) === Number(variacaoId));
+        if (!p) return;
+        const imgs = imagensProduto(p);
+        const key = `${p.id}-${p.variacao_id}`;
+        const idx = galeriasEstado.get(key) || 0;
+        const overlay = document.getElementById('productDetailOverlay');
+        const content = document.getElementById('productDetailContent');
+        content.innerHTML = `
+            <div class="product-detail-grid">
+                <div class="product-detail-media">
+                    ${imgs.length ? `<img src="${esc(imgs[idx])}" alt="${esc(p.nome)}">` : '<div class="img-placeholder">Sem foto</div>'}
+                    ${imgs.length > 1 ? `<div class="detail-thumbs">${imgs.map((img, i) => `<button class="${i === idx ? 'active' : ''}" onclick="selecionarThumbDetalhe(${p.id}, ${p.variacao_id}, ${i})"><img src="${esc(img)}" alt="foto ${i+1}"></button>`).join('')}</div>` : ''}
+                </div>
+                <div class="product-detail-info">
+                    <span class="catalogo-origin">${p.origem_publica === 'PERSONALIZE' ? 'PERSONALIZE' : 'Produto da loja'}</span>
+                    <h2>${esc(p.nome)}</h2>
+                    <p>${esc(p.descricao || 'Produto disponível para pedido pelo catálogo.')}</p>
+                    <div class="detail-price">${money(p.preco_publico)}</div>
+                    <div class="detail-benefits">
+                        <span><i class='bx bx-message-rounded-dots'></i> Atendimento direto</span>
+                        <span><i class='bx bx-package'></i> Pedido sob consulta</span>
+                    </div>
+                    <div class="detail-actions">
+                        <button class="btn btn-success" onclick="adicionarItem(${p.id}, ${p.variacao_id}); fecharDetalheProduto();"><i class='bx bx-cart-add'></i> Adicionar à sacola</button>
+                        <button class="btn btn-light" onclick="abrirZoom('${key}')"><i class='bx bx-search-alt-2'></i> Ampliar fotos</button>
+                    </div>
+                </div>
+            </div>`;
+        overlay.classList.add('active');
+        overlay.setAttribute('aria-hidden', 'false');
+    };
+
+    window.selecionarThumbDetalhe = (produtoId, variacaoId, idx) => {
+        galeriasEstado.set(`${produtoId}-${variacaoId}`, idx);
+        window.abrirDetalheProduto(produtoId, variacaoId);
+        renderProdutos();
+    };
+
+    window.fecharDetalheProduto = () => {
+        const overlay = document.getElementById('productDetailOverlay');
+        overlay.classList.remove('active');
+        overlay.setAttribute('aria-hidden', 'true');
+    };
 
     window.adicionarItem = (produtoId, variacaoId) => {
         const prod = produtos.find(p => Number(p.id) === Number(produtoId) && Number(p.variacao_id) === Number(variacaoId));
@@ -341,7 +420,7 @@
         }
         if (loja.instagram_catalogo) links.push(`<a class="btn btn-light" target="_blank" href="https://instagram.com/${esc(String(loja.instagram_catalogo).replace('@',''))}"><i class="bx bxl-instagram"></i> Instagram</a>`);
         document.getElementById('linksContato').innerHTML = links.join('');
-        renderFooter(); iniciarBanners(); renderCarrinho(); renderProdutos();
+        renderFooter(); iniciarBanners(); renderCarrinho(); renderCategorias(); renderProdutos();
     }
 
     document.getElementById('floatingSearchIcon').addEventListener('click', (e) => {
@@ -365,5 +444,8 @@
     document.getElementById('floatingSearchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); renderProdutos(); } });
     document.getElementById('btnFinalizarPedido').addEventListener('click', () => finalizarPedido().catch(err => Swal.fire('Erro', err.message, 'error')));
     document.getElementById('formPedidoPersonalizado').addEventListener('submit', enviarPersonalizado);
+    document.getElementById('productDetailClose')?.addEventListener('click', window.fecharDetalheProduto);
+    document.getElementById('productDetailOverlay')?.addEventListener('click', (e) => { if (e.target.id === 'productDetailOverlay') window.fecharDetalheProduto(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.fecharDetalheProduto(); });
     carregar().catch(err => { document.getElementById('catalogoGrid').innerHTML = `<div class="card"><p class="text-danger">${esc(err.message)}</p></div>`; });
 })();
