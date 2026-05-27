@@ -3201,11 +3201,19 @@ app.get('/api/dashboard', autenticar, async (req, res) => {
              WHERE EXTRACT(MONTH FROM data_venda) = EXTRACT(MONTH FROM CURRENT_DATE)
                AND EXTRACT(YEAR FROM data_venda) = EXTRACT(YEAR FROM CURRENT_DATE)`
         );
+        // Estoque patrimonial do ADMIN/PERSONALIZE.
+        // Importante na V5 Multi Catálogo: produtos cadastrados por lojas parceiras
+        // não podem entrar no valor de estoque do admin.
         const estoquePatrimonio = await db.query(
-            `SELECT COALESCE(SUM(estoque_central), 0) AS qtd_total_central,
-                    COALESCE(SUM(estoque_central * custo_producao), 0) AS valor_total_custo,
-                    COALESCE(SUM(estoque_central * preco_venda), 0) AS valor_total_venda
-             FROM produto_variacoes`
+            `SELECT 
+                    COALESCE(SUM(COALESCE(v.estoque_central, 0)), 0) AS qtd_total_central,
+                    COALESCE(SUM(COALESCE(v.estoque_central, 0) * COALESCE(v.custo_producao, 0)), 0) AS valor_total_custo,
+                    COALESCE(SUM(COALESCE(v.estoque_central, 0) * COALESCE(v.preco_venda, 0)), 0) AS valor_total_venda
+             FROM produto_variacoes v
+             JOIN produtos p ON p.id = v.produto_id
+             WHERE COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN'
+               AND p.parceiro_id IS NULL
+               AND COALESCE(p.produto_global, true) = true`
         );
         const estoquePorParceiro = await db.query(
             `SELECT p.nome_loja, COALESCE(SUM(c.quantidade_atual), 0) AS total_produtos
@@ -3218,7 +3226,10 @@ app.get('/api/dashboard', autenticar, async (req, res) => {
             `SELECT p.nome, v.estoque_central, v.variacao
              FROM produto_variacoes v
              JOIN produtos p ON p.id = v.produto_id
-             WHERE v.estoque_central < 5
+             WHERE COALESCE(v.estoque_central, 0) < 5
+               AND COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN'
+               AND p.parceiro_id IS NULL
+               AND COALESCE(p.produto_global, true) = true
              ORDER BY v.estoque_central ASC
              LIMIT 6`
         );
