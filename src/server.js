@@ -3862,7 +3862,7 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
 
         const produtos = await db.query(
             `SELECT
-                p.id, p.nome, p.descricao, p.categoria, p.dono_tipo, p.parceiro_id, p.origem_produto,
+                p.id, p.nome, p.descricao, p.categoria, p.dono_tipo, p.parceiro_id, p.origem_produto, COALESCE(p.produto_destaque, false) AS produto_destaque,
                 COALESCE((imgs.imagens->>0), p.imagem_url) AS imagem_url,
                 COALESCE(imgs.imagens, '[]'::json) AS imagens,
                 v.id AS variacao_id, v.variacao,
@@ -3882,7 +3882,7 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
                AND COALESCE(p.status, 'ATIVO') = 'ATIVO'
                AND COALESCE(p.visivel_catalogo, true) = true
                AND COALESCE(p.aprovado_admin, true) = true
-             ORDER BY CASE WHEN COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' THEN 0 ELSE 1 END, p.nome ASC`,
+             ORDER BY COALESCE(p.produto_destaque, false) DESC, CASE WHEN COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' THEN 0 ELSE 1 END, COALESCE(p.catalogo_ordem, 999999), p.nome ASC`,
             params
         );
 

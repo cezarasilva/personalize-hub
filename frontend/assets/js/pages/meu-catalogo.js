@@ -9,6 +9,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         return url ? `<div><img src="${esc(url)}" alt="${esc(label)}"><small class="text-muted">${esc(label)}</small></div>` : `<div><div class="img-placeholder" style="width:100%;height:94px;">Sem<br>${esc(label)}</div><small class="text-muted">${esc(label)}</small></div>`;
     }
 
+    function renderLinkTools(cfg) {
+        const link = cfg.link_publico || '';
+        const qrUrl = link ? `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(link)}` : '';
+        const tools = document.getElementById('catalogoLinkTools');
+        const qr = document.getElementById('catalogoQrBox');
+        if (tools) tools.innerHTML = `
+            <div class="catalogo-link-card">
+                <small>Link público do catálogo</small>
+                <strong>${esc(link || 'Link indisponível')}</strong>
+                <div class="actions mt-2">
+                    <button class="btn btn-light" type="button" id="btnCopiarCatalogo"><i class='bx bx-copy'></i> Copiar link</button>
+                    <button class="btn btn-success" type="button" id="btnCompartilharCatalogo"><i class='bx bxl-whatsapp'></i> Compartilhar</button>
+                    <a class="btn btn-primary" href="${esc(link || '#')}" target="_blank"><i class='bx bx-link-external'></i> Abrir</a>
+                </div>
+            </div>`;
+        if (qr) qr.innerHTML = qrUrl ? `
+            <div class="catalogo-qr-card">
+                <img src="${qrUrl}" alt="QR Code do catálogo">
+                <a class="btn btn-light" href="${qrUrl}" download="qrcode-catalogo.png" target="_blank"><i class='bx bx-download'></i> Baixar QR Code</a>
+            </div>` : '';
+        document.getElementById('btnCopiarCatalogo')?.addEventListener('click', async () => { await App.copyText(link); App.toast('success', 'Link copiado.'); });
+        document.getElementById('btnCompartilharCatalogo')?.addEventListener('click', () => {
+            const msg = encodeURIComponent(`Confira nosso catálogo: ${link}`);
+            window.open(`https://wa.me/?text=${msg}`, '_blank');
+        });
+    }
+
     function renderPreview(cfg) {
         document.getElementById('previewCatalogo').innerHTML = `
             ${itemPreview(cfg.logo_url, 'Logo')}
@@ -33,6 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const btn = document.getElementById('btnVerCatalogo');
         btn.href = cfg.link_publico || '#';
         renderPreview(cfg);
+        renderLinkTools(cfg);
         const fimTeste = cfg.catalogo_teste_fim ? new Date(cfg.catalogo_teste_fim).toLocaleDateString('pt-BR') : 'não definido';
         const status = cfg.catalogo_plano_status || (App.isAdmin() ? 'ADMIN' : 'TESTE_GRATIS');
         document.getElementById('boxAssinatura').innerHTML = `

@@ -9,6 +9,21 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="catalogo-publico">
+    <nav class="catalogo-topbar" id="catalogoTopbar">
+        <a class="catalogo-brand" href="#catalogoHeader" aria-label="Ir para o topo">
+            <img id="topbarLogo" src="" alt="" style="display:none;">
+            <span id="topbarNome">Catálogo</span>
+        </a>
+        <button class="catalogo-menu-toggle" id="catalogoMenuToggle" type="button" aria-label="Abrir menu"><i class='bx bx-menu'></i></button>
+        <div class="catalogo-nav" id="catalogoNav">
+            <a href="#catalogoGrid"><i class='bx bx-store-alt'></i> Produtos</a>
+            <a href="#formPedidoPersonalizado"><i class='bx bx-palette'></i> Personalizado</a>
+            <a href="#catalogoFooter"><i class='bx bx-envelope'></i> Contato</a>
+            <a href="#" id="topbarWhatsapp" target="_blank" rel="noopener noreferrer"><i class='bx bxl-whatsapp'></i> WhatsApp</a>
+            <button type="button" id="topbarCart" class="catalogo-cart-mini"><i class='bx bx-shopping-bag'></i><span id="topbarCartCount">0</span></button>
+        </div>
+    </nav>
+
     <header class="catalogo-header" id="catalogoHeader">
         <div class="catalogo-banner-layer" id="bannerLayer"></div>
         <div class="catalogo-wrap">
@@ -25,6 +40,13 @@
 
     <main class="catalogo-main">
         <div class="catalogo-wrap">
+            <section class="catalogo-benefits" id="catalogoBenefits">
+                <div><i class='bx bx-message-rounded-dots'></i><strong>Atendimento direto</strong><span>Pedido enviado para a loja responsável.</span></div>
+                <div><i class='bx bx-package'></i><strong>Produtos selecionados</strong><span>Itens PERSONALIZE e produtos próprios da loja.</span></div>
+                <div><i class='bx bx-palette'></i><strong>Personalizados</strong><span>Envie sua ideia e peça orçamento.</span></div>
+            </section>
+
+            <div class="catalogo-category-chips" id="catalogoCategorias"></div>
             <div id="catalogoGrid" class="catalogo-grid"></div>
 
             <section class="catalogo-custom-panel custom-last-section">

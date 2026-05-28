@@ -17,6 +17,7 @@
     let carrinho = [];
     let bannerTimer = null;
     let bannerIndex = 0;
+    let categoriaAtiva = 'TODOS';
     const galeriasEstado = new Map();
 
     function pegarSlug() {
@@ -104,20 +105,58 @@
         document.body.appendChild(overlay);
     };
 
+
+    function categoriaProduto(p) {
+        return String(p.categoria || 'Produtos').trim() || 'Produtos';
+    }
+
+    function renderCategorias() {
+        const el = document.getElementById('catalogoCategorias');
+        if (!el) return;
+        const cats = Array.from(new Set(produtos.map(categoriaProduto))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+        const botoes = ['TODOS', ...cats];
+        el.innerHTML = botoes.map(cat => `<button type="button" class="catalogo-chip ${categoriaAtiva === cat ? 'active' : ''}" data-categoria="${esc(cat)}">${cat === 'TODOS' ? 'Todos' : esc(cat)}</button>`).join('');
+        el.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+            categoriaAtiva = btn.dataset.categoria || 'TODOS';
+            renderCategorias();
+            renderProdutos();
+        }));
+    }
+
+    function renderTopbar() {
+        const nome = loja.nome_loja || 'PERSONALIZE';
+        const topNome = document.getElementById('topbarNome');
+        const topLogo = document.getElementById('topbarLogo');
+        if (topNome) topNome.textContent = nome;
+        if (topLogo && loja.logo_url) { topLogo.src = loja.logo_url; topLogo.style.display = 'block'; }
+        const whats = whatsappDestino();
+        const topWhats = document.getElementById('topbarWhatsapp');
+        if (topWhats) {
+            if (whats) {
+                topWhats.href = `https://wa.me/55${whats}?text=${encodeURIComponent('Olá! Vim pelo catálogo ' + nome + ' e gostaria de atendimento.')}`;
+                topWhats.style.display = '';
+            } else topWhats.style.display = 'none';
+        }
+    }
+
     function renderProdutos() {
         const termo = (document.getElementById('floatingSearchInput')?.value || '').toLowerCase();
         const origem = '';
         const grid = document.getElementById('catalogoGrid');
         const filtrados = produtos.filter(p => {
             const busca = `${p.nome} ${p.descricao} ${p.categoria}`.toLowerCase().includes(termo);
-            return busca;
+            const catOk = categoriaAtiva === 'TODOS' || categoriaProduto(p) === categoriaAtiva;
+            return busca && catOk;
         });
         if (!filtrados.length) { grid.innerHTML = '<div class="card"><p class="text-muted">Nenhum produto encontrado.</p></div>'; return; }
         grid.innerHTML = filtrados.map(p => `
             <article class="catalogo-card">
                 ${renderGallery(p)}
                 <div class="catalogo-card-body">
-                    <span class="catalogo-origin">${p.origem_publica === 'PERSONALIZE' ? 'PERSONALIZE' : 'Produto da loja'}</span>
+                    <div class="catalogo-badges">
+                        <span class="catalogo-origin">${p.origem_publica === 'PERSONALIZE' ? 'PERSONALIZE' : 'Produto da loja'}</span>
+                        ${p.produto_destaque ? '<span class="catalogo-featured"><i class="bx bxs-star"></i> Destaque</span>' : ''}
+                    </div>
                     <div class="catalogo-card-title">${esc(p.nome)}</div>
                     <div class="catalogo-card-desc">${esc(p.descricao || '')}</div>
                     <div class="catalogo-price">${money(p.preco_publico)}</div>
@@ -144,6 +183,8 @@
         const totalQtd = carrinho.reduce((s, i) => s + i.quantidade, 0);
         if (count) count.textContent = totalQtd;
         if (inside) inside.textContent = totalQtd;
+        const topCount = document.getElementById('topbarCartCount');
+        if (topCount) topCount.textContent = totalQtd;
         if (!carrinho.length) {
             lista.innerHTML = '<p style="text-align:center; padding:20px; color:#666;">Sua sacola está vazia.</p>';
             document.getElementById('subtotalPedido').textContent = money(0);
@@ -341,7 +382,7 @@
         }
         if (loja.instagram_catalogo) links.push(`<a class="btn btn-light" target="_blank" href="https://instagram.com/${esc(String(loja.instagram_catalogo).replace('@',''))}"><i class="bx bxl-instagram"></i> Instagram</a>`);
         document.getElementById('linksContato').innerHTML = links.join('');
-        renderFooter(); iniciarBanners(); renderCarrinho(); renderProdutos();
+        renderTopbar(); renderFooter(); iniciarBanners(); renderCarrinho(); renderCategorias(); renderProdutos();
     }
 
     document.getElementById('floatingSearchIcon').addEventListener('click', (e) => {
@@ -354,6 +395,9 @@
     });
     document.getElementById('floatingSearchClose').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('floatingSearchInput').value = ''; renderProdutos(); fecharBusca(); });
     document.getElementById('floatingCartBtn').addEventListener('click', abrirCarrinho);
+    document.getElementById('topbarCart')?.addEventListener('click', abrirCarrinho);
+    document.getElementById('catalogoMenuToggle')?.addEventListener('click', () => document.getElementById('catalogoNav')?.classList.toggle('active'));
+    document.querySelectorAll('#catalogoNav a').forEach(a => a.addEventListener('click', () => document.getElementById('catalogoNav')?.classList.remove('active')));
     document.getElementById('btnCloseCart').addEventListener('click', fecharCarrinho);
     document.getElementById('cartOverlay').addEventListener('click', fecharCarrinho);
     document.addEventListener('click', (e) => {

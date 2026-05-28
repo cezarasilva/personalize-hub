@@ -1,7 +1,7 @@
 {
   "name": "personalize-hub",
-  "version": "5.4.0",
-  "description": "PERSONALIZE Hub V5.4 - Estabilização, design system, permissões e base de refatoração segura",
+  "version": "5.5.0",
+  "description": "PERSONALIZE Hub V5.5 - Catálogo SaaS avançado com header premium, QR Code, compartilhamento e categorias",
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
