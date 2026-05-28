@@ -1,0 +1,171 @@
+
+/* =========================================================
+   PERSONALIZE HUB V5.4 - DESIGN SYSTEM / ESTABILIZAÇÃO
+   Camada segura: padroniza componentes sem alterar regras de negócio.
+   ========================================================= */
+:root {
+  --ph-primary: var(--primary, #2563eb);
+  --ph-primary-dark: var(--primary-dark, #1d4ed8);
+  --ph-success: var(--success, #10b981);
+  --ph-danger: var(--danger, #ef4444);
+  --ph-warning: var(--warning, #f59e0b);
+  --ph-text: var(--text, #111827);
+  --ph-muted: var(--muted, #6b7280);
+  --ph-bg: var(--bg, #f3f4f6);
+  --ph-card: var(--card, #fff);
+  --ph-border: var(--border, #e5e7eb);
+  --ph-radius: var(--radius, 14px);
+  --ph-shadow: var(--shadow, 0 8px 24px rgba(15, 23, 42, .07));
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { overflow-x: hidden; }
+img, video, canvas, svg { max-width: 100%; }
+
+/* Botões consistentes */
+.btn, .btn-primary, .btn-success, .btn-danger, .btn-warning, .btn-secondary,
+button.btn, a.btn {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1.1;
+  white-space: nowrap;
+  border-radius: 12px;
+}
+.btn i, button i, a i { font-size: 1.15em; line-height: 1; }
+.btn-icon, .icon-btn, .action-btn {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+.actions, .table-actions, .catalogo-actions, .form-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Cards e grids */
+.card, .stat-card, .product-card, .catalog-card, .lead-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.grid, .grid-2, .grid-3, .grid-4, .chart-grid {
+  min-width: 0;
+}
+
+/* Tabelas: evita quebrar layout em mobile */
+.table-wrap, .responsive-table, .table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table { width: 100%; border-collapse: collapse; }
+td, th { vertical-align: middle; }
+
+/* Formulários */
+input, select, textarea, .input, .select {
+  max-width: 100%;
+}
+input[type="file"] { width: 100%; }
+.form-grid, .filters-grid, .catalogo-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+/* Toast fallback visual usado pelo core.js */
+.ph-toast-container {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.ph-toast {
+  min-width: 260px;
+  max-width: min(420px, calc(100vw - 32px));
+  background: #111827;
+  color: #fff;
+  border-radius: 14px;
+  padding: 13px 15px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.22);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  animation: phToastIn .25s ease both;
+}
+.ph-toast.success { background: #065f46; }
+.ph-toast.error { background: #991b1b; }
+.ph-toast.warning { background: #92400e; }
+.ph-toast.info { background: #1e3a8a; }
+@keyframes phToastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Admin dark: reforço de contraste */
+.admin-dark .card,
+.admin-dark .stat-card,
+.admin-dark .chart-card {
+  background: rgba(15, 23, 42, .92);
+  border-color: rgba(148, 163, 184, .16);
+}
+.admin-dark .btn:not(.btn-danger):not(.btn-success):not(.btn-warning) {
+  border-color: rgba(148, 163, 184, .20);
+}
+
+/* Floating buttons / catálogo */
+.whatsapp-float, .floating-search, .floating-cart-btn {
+  z-index: 990;
+}
+.cart-sidebar, .cart-overlay { z-index: 999; }
+
+/* Mobile/tablet refinado */
+@media (max-width: 1024px) {
+  .layout { grid-template-columns: 1fr !important; }
+  .main { width: 100%; min-width: 0; padding: 18px; }
+  .sidebar { width: 100%; max-width: none; position: relative; min-height: auto; }
+  .grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  .grid-3 { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  .chart-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 768px) {
+  .main { padding: 14px; }
+  .page-title, .dashboard-hero, .card-title {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 10px;
+  }
+  .page-title h1, .dashboard-hero h1 { font-size: clamp(22px, 7vw, 30px); }
+  .grid, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr !important; }
+  .actions, .table-actions, .catalogo-actions, .form-actions { width: 100%; }
+  .actions .btn, .table-actions .btn, .catalogo-actions .btn, .form-actions .btn { flex: 1 1 160px; }
+  .btn { white-space: normal; text-align: center; }
+  .stat-card strong { font-size: clamp(22px, 7vw, 34px); }
+  .card { padding: 16px; }
+  .table-wrap table, .responsive-table table, .table-container table { min-width: 760px; }
+  .cart-sidebar { width: 100% !important; max-width: none !important; top: 0 !important; height: 100vh !important; }
+  .cart-overlay { top: 0 !important; height: 100vh !important; }
+}
+
+@media (max-width: 480px) {
+  .main { padding: 12px; }
+  .btn, .btn-primary, .btn-success, .btn-danger, .btn-warning, .btn-secondary { width: 100%; }
+  .btn-icon, .icon-btn, .action-btn { width: 42px !important; min-width: 42px !important; }
+  .table-actions .btn-icon, .actions .btn-icon { flex: 0 0 42px; }
+  .ph-toast-container { left: 12px; right: 12px; top: 12px; }
+  .ph-toast { width: 100%; min-width: 0; }
+  .whatsapp-float { right: 16px !important; bottom: 168px !important; }
+  .floating-search { right: 16px !important; bottom: 96px !important; }
+  .floating-cart-btn { right: 16px !important; bottom: 24px !important; }
+}

@@ -1,7 +1,7 @@
 {
   "name": "personalize-hub",
-  "version": "5.0.0",
-  "description": "PERSONALIZE Hub V5.0 - Multi Catálogo SaaS com produtos por loja, leads e dashboard dark",
+  "version": "5.4.0",
+  "description": "PERSONALIZE Hub V5.4 - Estabilização, design system, permissões e base de refatoração segura",
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",

@@ -80,9 +80,21 @@ window.App = (() => {
     function toast(icon, title) {
         if (window.Swal) {
             Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2800, timerProgressBar: true }).fire({ icon, title });
-        } else {
-            console.log(`${icon}: ${title}`);
+            return;
         }
+        const tipo = icon === 'success' ? 'success' : icon === 'error' ? 'error' : icon === 'warning' ? 'warning' : 'info';
+        let container = document.querySelector('.ph-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'ph-toast-container';
+            document.body.appendChild(container);
+        }
+        const item = document.createElement('div');
+        item.className = `ph-toast ${tipo}`;
+        item.innerHTML = `<i class="bx ${tipo === 'success' ? 'bx-check-circle' : tipo === 'error' ? 'bx-x-circle' : tipo === 'warning' ? 'bx-error' : 'bx-info-circle'}"></i><span>${escapeHtml(title)}</span>`;
+        container.appendChild(item);
+        setTimeout(() => { item.style.opacity = '0'; item.style.transform = 'translateY(-6px)'; }, 2600);
+        setTimeout(() => item.remove(), 3100);
     }
 
     function confirmDialog({ title, text, confirmText = 'Confirmar', icon = 'warning' }) {
@@ -92,6 +104,26 @@ window.App = (() => {
 
     function icon(name) {
         return `<i class="bx ${name}"></i>`;
+    }
+
+    function copyText(texto, mensagem = 'Copiado com sucesso!') {
+        if (!texto) return;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(texto).then(() => toast('success', mensagem)).catch(() => toast('warning', 'Não foi possível copiar automaticamente.'));
+        } else {
+            const input = document.createElement('textarea');
+            input.value = texto;
+            document.body.appendChild(input);
+            input.select();
+            try { document.execCommand('copy'); toast('success', mensagem); } catch { toast('warning', 'Não foi possível copiar automaticamente.'); }
+            input.remove();
+        }
+    }
+
+    function dateBR(value) {
+        if (!value) return '-';
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('pt-BR');
     }
 
     function renderSidebar(active = '') {

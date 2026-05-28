@@ -1,3 +1,4 @@
+@import url('design-system.css');
 .layout { display: flex; min-height: 100vh; }
 .sidebar { width: 265px; background: var(--sidebar); color: #fff; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; z-index: 20; }
 .sidebar-top { padding: 24px 18px; background: var(--dark); display: flex; align-items: center; justify-content: space-between; }
