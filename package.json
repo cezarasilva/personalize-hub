@@ -1,7 +1,7 @@
 {
   "name": "personalize-hub",
-  "version": "5.6.0",
-  "description": "PERSONALIZE Hub V5.5 - Catálogo SaaS avançado com header premium, QR Code, compartilhamento e categorias",
+  "version": "5.7.0",
+  "description": "PERSONALIZE Hub V5.7 - Cobrança manual Pix/WhatsApp das assinaturas do catálogo",
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",

@@ -31,6 +31,21 @@
             </section>
 
             <section class="card mb-2">
+                <div class="card-title"><span><i class="bx bx-credit-card"></i> Configuração de pagamento</span></div>
+                <form id="formPagamentoConfig" class="form-grid">
+                    <div class="form-group"><label>Nome do recebedor</label><input name="nome_recebedor" placeholder="PERSONALIZE"></div>
+                    <div class="form-group"><label>CPF/CNPJ</label><input name="documento_recebedor" placeholder="Opcional"></div>
+                    <div class="form-group"><label>Tipo chave Pix</label><input name="tipo_chave_pix" placeholder="CPF, CNPJ, e-mail, telefone, aleatória"></div>
+                    <div class="form-group"><label>Chave Pix</label><input name="chave_pix" placeholder="Sua chave Pix"></div>
+                    <div class="form-group"><label>Banco</label><input name="banco" placeholder="Opcional"></div>
+                    <div class="form-group"><label>WhatsApp de cobrança</label><input name="whatsapp_cobranca" placeholder="5541999999999"></div>
+                    <div class="form-group span-2"><label>Link de pagamento padrão</label><input name="link_pagamento_padrao" placeholder="Mercado Pago, link Pix, etc."></div>
+                    <div class="form-group span-2"><label>Instruções</label><textarea name="instrucoes_pagamento" rows="3" placeholder="Instruções exibidas para a loja"></textarea></div>
+                    <button class="btn btn-primary" type="submit"><i class="bx bx-save"></i> Salvar dados de pagamento</button>
+                </form>
+            </section>
+
+            <section class="card mb-2">
                 <div class="card-title"><span><i class="bx bx-store"></i> Lojas e planos</span></div>
                 <div id="listaAssinaturas"></div>
             </section>

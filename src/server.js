@@ -4290,17 +4290,19 @@ app.post('/api/assinaturas/gerar-cobrancas', autenticar, somenteAdmin, async (re
              WHERE a.status IN ('TESTE_GRATIS','ATIVA','PENDENTE')
                AND COALESCE(a.proxima_cobranca, a.fim_teste)::date <= CURRENT_DATE`
         );
+        const cfgPagamento = await db.query('SELECT * FROM catalogo_pagamento_config WHERE id = 1').catch(() => ({ rows: [] }));
+        const cfgPg = cfgPagamento.rows[0] || {};
         let geradas = 0;
         for (const a of assinaturas.rows) {
             const valor = valorPadrao !== null ? valorPadrao : parseMoeda(a.valor_mensal || 0);
             const codigo = `COB-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${a.parceiro_id}`;
             const ins = await db.query(
-                `INSERT INTO cobrancas_catalogo (codigo, assinatura_id, parceiro_id, mes_referencia, valor, status, vencimento, observacao)
-                 SELECT $1,$2,$3,$4,$5,'PENDENTE',CURRENT_DATE + INTERVAL '7 days',$6
+                `INSERT INTO cobrancas_catalogo (codigo, assinatura_id, parceiro_id, mes_referencia, valor, status, vencimento, observacao, pix_copia_cola, link_pagamento)
+                 SELECT $1,$2,$3,$4,$5,'PENDENTE',CURRENT_DATE + INTERVAL '7 days',$6,$7,$8
                  WHERE NOT EXISTS (
                     SELECT 1 FROM cobrancas_catalogo WHERE parceiro_id = $3 AND mes_referencia = $4 AND status IN ('PENDENTE','PAGO')
                  ) RETURNING id`,
-                [codigo, a.id, a.parceiro_id, ref, valor, `Cobrança de assinatura do catálogo - ${ref}`]
+                [codigo, a.id, a.parceiro_id, ref, valor, `Cobrança de assinatura do catálogo - ${ref}`, cfgPg.chave_pix || null, cfgPg.link_pagamento_padrao || null]
             );
             if (ins.rows.length) {
                 geradas += 1;
@@ -4375,6 +4377,112 @@ app.post('/api/assinaturas/sincronizar-status', autenticar, somenteAdmin, async 
         res.json({ mensagem: 'Status sincronizados.', vencidas: vencidas.rows.length });
     } catch (e) {
         res.status(500).json({ erro: 'Erro ao sincronizar status: ' + e.message });
+    }
+});
+
+
+
+// =========================================================
+// COBRANÇA MANUAL PIX / WHATSAPP - V5.7
+// =========================================================
+
+app.get('/api/assinaturas/pagamento-config', autenticar, async (req, res) => {
+    try {
+        const result = await db.query(`SELECT * FROM catalogo_pagamento_config WHERE id = 1`).catch(() => ({ rows: [] }));
+        const cfg = result.rows[0] || {};
+        res.json(cfg);
+    } catch (e) {
+        console.error('❌ Erro config pagamento:', e);
+        res.status(500).json({ erro: 'Erro ao carregar configuração de pagamento: ' + e.message });
+    }
+});
+
+app.put('/api/assinaturas/pagamento-config', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        await db.query(`INSERT INTO catalogo_pagamento_config (id, atualizado_em) VALUES (1, CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING`);
+        const result = await db.query(`
+            UPDATE catalogo_pagamento_config SET
+                nome_recebedor = $1,
+                documento_recebedor = $2,
+                chave_pix = $3,
+                tipo_chave_pix = $4,
+                banco = $5,
+                instrucoes_pagamento = $6,
+                link_pagamento_padrao = $7,
+                whatsapp_cobranca = $8,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = 1
+            RETURNING *
+        `, [
+            req.body.nome_recebedor || null,
+            req.body.documento_recebedor || null,
+            req.body.chave_pix || null,
+            req.body.tipo_chave_pix || null,
+            req.body.banco || null,
+            req.body.instrucoes_pagamento || null,
+            req.body.link_pagamento_padrao || null,
+            req.body.whatsapp_cobranca || null
+        ]);
+        await registrarAuditoria(req.user.id, 'Atualizou configuração de pagamento das assinaturas do catálogo');
+        res.json({ mensagem: 'Configuração de pagamento salva.', config: result.rows[0] });
+    } catch (e) {
+        console.error('❌ Erro salvar config pagamento:', e);
+        res.status(500).json({ erro: 'Erro ao salvar configuração de pagamento: ' + e.message });
+    }
+});
+
+app.post('/api/assinaturas/cobrancas/:id/dados-pagamento', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const result = await db.query(`
+            UPDATE cobrancas_catalogo
+            SET pix_copia_cola = COALESCE($1, pix_copia_cola),
+                link_pagamento = COALESCE($2, link_pagamento),
+                observacao = COALESCE($3, observacao),
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = $4
+            RETURNING *
+        `, [req.body.pix_copia_cola || null, req.body.link_pagamento || null, req.body.observacao || null, id]);
+        if (!result.rows.length) return res.status(404).json({ erro: 'Cobrança não encontrada.' });
+        await registrarAuditoria(req.user.id, `Atualizou dados de pagamento da cobrança ${id}`);
+        res.json({ mensagem: 'Dados de pagamento atualizados.', cobranca: result.rows[0] });
+    } catch (e) {
+        console.error('❌ Erro dados pagamento cobrança:', e);
+        res.status(500).json({ erro: 'Erro ao atualizar dados de pagamento: ' + e.message });
+    }
+});
+
+app.post('/api/assinaturas/cobrancas/:id/comprovante', autenticar, upload.single('comprovante'), async (req, res) => {
+    try {
+        const id = req.params.id;
+        const params = [id];
+        let where = 'id = $1';
+        if (normalizarPerfil(req.user.perfil) === 'PARCEIRO') {
+            params.push(req.user.parceiro_id);
+            where += ' AND parceiro_id = $2';
+        } else if (normalizarPerfil(req.user.perfil) !== 'ADMIN') {
+            return res.status(403).json({ erro: 'Acesso negado.' });
+        }
+        const existe = await db.query(`SELECT * FROM cobrancas_catalogo WHERE ${where}`, params);
+        if (!existe.rows.length) return res.status(404).json({ erro: 'Cobrança não encontrada.' });
+        let comprovanteUrl = req.body.comprovante_url || null;
+        if (req.file) comprovanteUrl = await uploadCatalogoArquivo(req.file);
+        if (!comprovanteUrl) return res.status(400).json({ erro: 'Envie um comprovante ou uma URL.' });
+        const result = await db.query(`
+            UPDATE cobrancas_catalogo
+            SET comprovante_url = $1,
+                observacao_comprovante = $2,
+                data_envio_comprovante = CURRENT_TIMESTAMP,
+                status_comprovante = 'ENVIADO',
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = $3
+            RETURNING *
+        `, [comprovanteUrl, req.body.observacao_comprovante || null, id]);
+        await registrarAuditoria(req.user.id, `Enviou comprovante da cobrança de catálogo ${id}`);
+        res.json({ mensagem: 'Comprovante enviado com sucesso.', cobranca: result.rows[0] });
+    } catch (e) {
+        console.error('❌ Erro enviar comprovante:', e);
+        res.status(500).json({ erro: 'Erro ao enviar comprovante: ' + e.message });
     }
 });
 

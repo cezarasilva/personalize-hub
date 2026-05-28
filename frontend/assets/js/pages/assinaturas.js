@@ -4,9 +4,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let assinaturas = [];
     let cobrancas = [];
+    let pagamentoConfig = {};
 
     function statusBadge(status) { return App.badgeStatus(status || ''); }
     function fmtData(data) { return data ? new Date(data).toLocaleDateString('pt-BR') : '-'; }
+
+    async function carregarPagamentoConfig() {
+        try {
+            pagamentoConfig = await App.api('/assinaturas/pagamento-config');
+            const form = document.getElementById('formPagamentoConfig');
+            if (form) {
+                ['nome_recebedor','documento_recebedor','tipo_chave_pix','chave_pix','banco','whatsapp_cobranca','link_pagamento_padrao','instrucoes_pagamento'].forEach(k => {
+                    if (form.elements[k]) form.elements[k].value = pagamentoConfig[k] || '';
+                });
+            }
+        } catch (_) {}
+    }
+
+    function whatsappCobranca(c) {
+        const tel = String(pagamentoConfig.whatsapp_cobranca || '').replace(/\D/g, '');
+        if (!tel) return '';
+        const msg = `Olá! Segue cobrança da assinatura do catálogo ${c.codigo || ''}. Valor: ${App.money(c.valor || 0)}. Vencimento: ${fmtData(c.vencimento)}. Pix: ${pagamentoConfig.chave_pix || c.pix_copia_cola || ''}`;
+        return `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+    }
 
     function renderStats() {
         const teste = assinaturas.filter(a => a.status === 'TESTE_GRATIS').length;
@@ -41,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderCobrancas() {
         const el = document.getElementById('listaCobrancas');
         if (!cobrancas.length) { el.innerHTML = '<p class="empty-state">Nenhuma cobrança gerada.</p>'; return; }
-        el.innerHTML = `<div class="responsive-table"><table><thead><tr><th>Código</th><th>Loja</th><th>Referência</th><th>Valor</th><th>Status</th><th>Vencimento</th><th>Ações</th></tr></thead><tbody>${cobrancas.map(c => `
+        el.innerHTML = `<div class="responsive-table"><table><thead><tr><th>Código</th><th>Loja</th><th>Referência</th><th>Valor</th><th>Status</th><th>Vencimento</th><th>Pagamento</th><th>Ações</th></tr></thead><tbody>${cobrancas.map(c => `
             <tr>
                 <td>${App.escapeHtml(c.codigo || '')}</td>
                 <td>${App.escapeHtml(c.nome_loja || '')}</td>
@@ -49,6 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td>${App.money(c.valor || 0)}</td>
                 <td>${statusBadge(c.status)}</td>
                 <td>${fmtData(c.vencimento)}</td>
+                <td>${c.link_pagamento ? `<a class="btn btn-sm btn-secondary" href="${c.link_pagamento}" target="_blank"><i class="bx bx-link-external"></i> Link</a>` : ''}${whatsappCobranca(c) ? `<a class="btn btn-sm btn-success" href="${whatsappCobranca(c)}" target="_blank"><i class="bx bxl-whatsapp"></i> Cobrar</a>` : ''}</td>
                 <td>${c.status !== 'PAGO' ? `<button class="btn btn-sm btn-success" onclick="marcarPago(${c.id})"><i class="bx bx-check-circle"></i> Pago</button>` : '-'}</td>
             </tr>`).join('')}</tbody></table></div>`;
     }
@@ -82,6 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     async function carregar() {
+        await carregarPagamentoConfig();
         assinaturas = await App.api('/assinaturas/admin');
         cobrancas = await App.api('/assinaturas/cobrancas');
         renderStats(); renderAssinaturas(); renderCobrancas();
@@ -96,6 +118,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             await carregar();
         } catch (err) { App.toast('error', err.message); }
     });
+    document.getElementById('formPagamentoConfig')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const form = e.currentTarget;
+            const payload = Object.fromEntries(new FormData(form).entries());
+            const r = await App.api('/assinaturas/pagamento-config', { method: 'PUT', body: JSON.stringify(payload) });
+            App.toast('success', r.mensagem || 'Configuração salva.');
+            await carregarPagamentoConfig();
+        } catch (err) { App.toast('error', err.message); }
+    });
+
     document.getElementById('btnSincronizar')?.addEventListener('click', async () => {
         try { const r = await App.api('/assinaturas/sincronizar-status', { method: 'POST', body: JSON.stringify({}) }); App.toast('success', r.mensagem); await carregar(); } catch (err) { App.toast('error', err.message); }
     });
