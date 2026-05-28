@@ -370,6 +370,7 @@
         document.body.style.setProperty('--catalogo-title-color', loja.cor_titulo || loja.cor_tema || '#2563eb');
         document.body.style.setProperty('--catalogo-price-color', loja.cor_preco || '#16a34a');
         document.body.style.setProperty('--catalogo-button-color', loja.cor_botao || loja.cor_tema || '#2563eb');
+        document.body.classList.toggle('catalogo-dark-app', String(loja.tema_catalogo || '').toUpperCase() === 'DARK_PREMIUM');
         const links = [];
         const whats = whatsappDestino();
         if (whats) {

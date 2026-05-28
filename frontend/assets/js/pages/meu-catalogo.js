@@ -54,8 +54,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function carregar() {
         const cfg = await App.api('/catalogo-config');
         ultimaConfig = cfg;
-        const fields = ['slug_catalogo','whatsapp_catalogo','instagram_catalogo','descricao_catalogo','cor_titulo','cor_preco','cor_botao','footer_contato','footer_localizacao','footer_pagamentos','footer_copyright'];
-        fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = cfg[id] || (id === 'cor_titulo' ? (cfg.cor_tema || '#2563eb') : id === 'cor_preco' ? '#16a34a' : id === 'cor_botao' ? (cfg.cor_tema || '#2563eb') : ''); });
+        const fields = ['slug_catalogo','whatsapp_catalogo','instagram_catalogo','descricao_catalogo','cor_titulo','cor_preco','cor_botao','footer_contato','footer_localizacao','footer_pagamentos','footer_copyright','tema_catalogo'];
+        fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = cfg[id] || (id === 'cor_titulo' ? (cfg.cor_tema || '#2563eb') : id === 'cor_preco' ? '#16a34a' : id === 'cor_botao' ? (cfg.cor_tema || '#2563eb') : id === 'tema_catalogo' ? 'CLARO' : ''); });
         document.getElementById('catalogo_ativo').value = cfg.catalogo_ativo === false ? 'false' : 'true';
         const btn = document.getElementById('btnVerCatalogo');
         btn.href = cfg.link_publico || '#';

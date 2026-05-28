@@ -3,33 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leads e Pedidos - PERSONALIZE Hub</title>
+    <title>CRM de Leads - PERSONALIZE Hub</title>
     <link rel="stylesheet" href="assets/css/base.css">
     <link rel="stylesheet" href="assets/css/app.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
-<body>
+<body class="crm-dark">
     <div class="layout">
         <aside id="sidebar" class="sidebar"></aside>
         <main class="main">
-            <header class="page-header">
+            <header class="page-header crm-header-premium">
                 <div class="page-title">
-                    <h1><i class="bx bx-message-square-dots"></i> Leads / Pedidos do Catálogo</h1>
-                    <p>Pedidos gerados pelos catálogos públicos.</p>
+                    <h1><i class="bx bx-message-square-dots"></i> CRM de Leads e Pedidos</h1>
+                    <p>Gerencie contatos do catálogo, pedidos do carrinho, leads do footer e oportunidades em atendimento.</p>
                 </div>
-                <select id="filtroStatus" style="max-width:220px;">
-                    <option value="">Todos os status</option>
-                    <option value="NOVO">Novo</option>
-                    <option value="EM_ATENDIMENTO">Em atendimento</option>
-                    <option value="ORCADO">Orçado</option>
-                    <option value="FECHADO">Fechado</option>
-                    <option value="PERDIDO">Perdido</option>
-                    <option value="CANCELADO">Cancelado</option>
-                </select>
+                <div class="crm-actions-top">
+                    <select id="filtroStatus">
+                        <option value="">Todos os status</option>
+                        <option value="NOVO">Novo</option>
+                        <option value="EM_ATENDIMENTO">Em atendimento</option>
+                        <option value="ORCADO">Orçado</option>
+                        <option value="AGUARDANDO_CLIENTE">Aguardando cliente</option>
+                        <option value="FECHADO">Fechado</option>
+                        <option value="PERDIDO">Perdido</option>
+                        <option value="CANCELADO">Cancelado</option>
+                    </select>
+                    <select id="filtroOrigem">
+                        <option value="">Todas origens</option>
+                        <option value="CARRINHO">Pedidos do catálogo</option>
+                        <option value="FOOTER">Leads do footer</option>
+                        <option value="PERSONALIZADO">Produto personalizado</option>
+                    </select>
+                    <input id="buscaLead" placeholder="Buscar cliente, código, produto...">
+                </div>
             </header>
-            <section class="card">
-                <div class="card-title"><span><i class="bx bx-list-ul"></i> Pedidos recebidos</span></div>
-                <div id="listaPedidos"></div>
+
+            <section class="crm-metrics grid grid-4 mb-2">
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-bell"></i></div><span>Novos</span><strong id="crmNovos">0</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-conversation"></i></div><span>Em atendimento</span><strong id="crmAtendimento">0</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-check-circle"></i></div><span>Fechados</span><strong id="crmFechados">0</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-money"></i></div><span>Total estimado</span><strong id="crmValor">R$ 0,00</strong></div>
+            </section>
+
+            <section class="card crm-toolbar-card">
+                <div class="card-title"><span><i class="bx bx-layout"></i> Funil de atendimento</span><button class="btn btn-light" id="btnModoLista"><i class="bx bx-list-ul"></i> Alternar lista/Kanban</button></div>
+                <div id="crmKanban" class="crm-kanban"></div>
+                <div id="listaPedidos" class="crm-list-view" style="display:none;"></div>
             </section>
         </main>
     </div>

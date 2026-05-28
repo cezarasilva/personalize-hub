@@ -3441,6 +3441,7 @@ async function buscarConfigCatalogoAdmin(req) {
                 footer_localizacao: row.footer_localizacao || '',
                 footer_pagamentos: row.footer_pagamentos || 'Pix, dinheiro e cartão',
                 footer_copyright: row.footer_copyright || `© ${new Date().getFullYear()} PERSONALIZE`,
+                tema_catalogo: row.tema_catalogo || 'CLARO',
                 link_publico: `${req.protocol}://${req.get('host')}/catalogo/personalize`
             };
         }
@@ -3449,7 +3450,7 @@ async function buscarConfigCatalogoAdmin(req) {
         tipo: 'ADMIN', slug_catalogo: 'personalize', catalogo_ativo: true,
         nome_loja: 'PERSONALIZE', descricao_catalogo: 'Catálogo oficial PERSONALIZE',
         cor_tema: '#2563eb', cor_titulo: '#2563eb', cor_preco: '#16a34a', cor_botao: '#2563eb',
-        footer_pagamentos: 'Pix, dinheiro e cartão', footer_copyright: `© ${new Date().getFullYear()} PERSONALIZE`,
+        footer_pagamentos: 'Pix, dinheiro e cartão', footer_copyright: `© ${new Date().getFullYear()} PERSONALIZE`, tema_catalogo: 'CLARO',
         link_publico: `${req.protocol}://${req.get('host')}/catalogo/personalize`
     };
 }
@@ -3464,7 +3465,7 @@ async function buscarConfigCatalogoParceiro(parceiroId) {
             banner_tablet_1_url, banner_tablet_2_url, banner_tablet_3_url,
             banner_mobile_1_url, banner_mobile_2_url, banner_mobile_3_url,
             cor_tema, cor_titulo, cor_preco, cor_botao,
-            descricao_catalogo, footer_contato, footer_localizacao, footer_pagamentos, footer_copyright,
+            descricao_catalogo, footer_contato, footer_localizacao, footer_pagamentos, footer_copyright, tema_catalogo,
             catalogo_teste_inicio, catalogo_teste_fim, catalogo_plano_status
          FROM parceiros
          WHERE id = $1`,
@@ -3549,6 +3550,7 @@ app.put('/api/catalogo-config', autenticar, upload.fields([
                     footer_localizacao = COALESCE($9, footer_localizacao),
                     footer_pagamentos = COALESCE($10, footer_pagamentos),
                     footer_copyright = COALESCE($11, footer_copyright),
+                    tema_catalogo = COALESCE($33, tema_catalogo),
                     logo_url = CASE WHEN $12::boolean OR $13::boolean THEN NULL ELSE COALESCE($14, logo_url) END,
                     banner_desktop_1_url = CASE WHEN $12::boolean OR $15::boolean THEN NULL ELSE COALESCE($16, banner_desktop_1_url) END,
                     banner_desktop_2_url = CASE WHEN $12::boolean OR $17::boolean THEN NULL ELSE COALESCE($18, banner_desktop_2_url) END,
@@ -3570,7 +3572,8 @@ app.put('/api/catalogo-config', autenticar, upload.fields([
                     resetar, remove('logo'), logoUrl,
                     remove('banner_desktop_1'), up.banner_desktop_1_url, remove('banner_desktop_2'), up.banner_desktop_2_url, remove('banner_desktop_3'), up.banner_desktop_3_url,
                     remove('banner_tablet_1'), up.banner_tablet_1_url, remove('banner_tablet_2'), up.banner_tablet_2_url, remove('banner_tablet_3'), up.banner_tablet_3_url,
-                    remove('banner_mobile_1'), up.banner_mobile_1_url, remove('banner_mobile_2'), up.banner_mobile_2_url, remove('banner_mobile_3'), up.banner_mobile_3_url
+                    remove('banner_mobile_1'), up.banner_mobile_1_url, remove('banner_mobile_2'), up.banner_mobile_2_url, remove('banner_mobile_3'), up.banner_mobile_3_url,
+                    bodyVal('tema_catalogo')
                 ]);
             return res.json({ mensagem: resetar ? 'Catálogo oficial resetado.' : 'Catálogo oficial atualizado.', slug_catalogo: 'personalize' });
         }
@@ -3598,6 +3601,7 @@ app.put('/api/catalogo-config', autenticar, upload.fields([
                  footer_localizacao = COALESCE($10, footer_localizacao),
                  footer_pagamentos = COALESCE($11, footer_pagamentos),
                  footer_copyright = COALESCE($12, footer_copyright),
+                 tema_catalogo = COALESCE($36, tema_catalogo),
                  logo_url = CASE WHEN $13::boolean OR $14::boolean THEN NULL ELSE COALESCE($15, logo_url) END,
                  banner_url = CASE WHEN $13::boolean OR $16::boolean THEN NULL ELSE COALESCE($17, banner_url) END,
                  banner_desktop_url = CASE WHEN $13::boolean OR $16::boolean THEN NULL ELSE COALESCE($17, banner_desktop_url) END,
@@ -3621,7 +3625,7 @@ app.put('/api/catalogo-config', autenticar, upload.fields([
                 remove('banner_desktop_1'), up.banner_desktop_1_url, remove('banner_desktop_2'), up.banner_desktop_2_url, remove('banner_desktop_3'), up.banner_desktop_3_url,
                 remove('banner_tablet_1'), up.banner_tablet_1_url, remove('banner_tablet_2'), up.banner_tablet_2_url, remove('banner_tablet_3'), up.banner_tablet_3_url,
                 remove('banner_mobile_1'), up.banner_mobile_1_url, remove('banner_mobile_2'), up.banner_mobile_2_url, remove('banner_mobile_3'), up.banner_mobile_3_url,
-                req.body.catalogo_ativo === undefined ? null : String(req.body.catalogo_ativo) === 'true', parceiroId
+                req.body.catalogo_ativo === undefined ? null : String(req.body.catalogo_ativo) === 'true', parceiroId, bodyVal('tema_catalogo')
             ]
         );
         await registrarAuditoria(req.user.id, resetar ? `Resetou configuração do catálogo da loja ${parceiroId}` : `Atualizou configuração do catálogo da loja ${parceiroId}`);
@@ -4097,6 +4101,44 @@ app.patch('/api/catalogo-pedidos/:id/status', autenticar, async (req, res) => {
         res.json({ mensagem: 'Status atualizado.', pedido: result.rows[0] });
     } catch (e) {
         res.status(500).json({ erro: 'Erro ao atualizar pedido: ' + e.message });
+    }
+});
+
+app.patch('/api/catalogo-pedidos/:id/crm', autenticar, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const perfil = normalizarPerfil(req.user.perfil);
+        const status = req.body.status ? String(req.body.status).toUpperCase() : null;
+        const prioridade = req.body.prioridade ? String(req.body.prioridade).toUpperCase() : null;
+        const canal = req.body.canal_atendimento ? String(req.body.canal_atendimento).toUpperCase() : null;
+        const obs = req.body.observacoes_internas ?? null;
+        const proximo = req.body.proximo_contato || null;
+        const valor = req.body.valor_negociado === undefined || req.body.valor_negociado === '' ? null : parseMoeda(req.body.valor_negociado);
+        const motivo = req.body.motivo_perda ?? null;
+        const params = [status, prioridade, canal, obs, proximo, valor, motivo, id];
+        let where = 'id = $8';
+        if (perfil === 'PARCEIRO') {
+            params.push(req.user.parceiro_id);
+            where += ' AND parceiro_id = $9';
+        }
+        const result = await db.query(`
+            UPDATE catalogo_pedidos SET
+                status = COALESCE($1, status),
+                prioridade = COALESCE($2, prioridade),
+                canal_atendimento = COALESCE($3, canal_atendimento),
+                observacoes_internas = COALESCE($4, observacoes_internas),
+                proximo_contato = COALESCE($5::date, proximo_contato),
+                valor_negociado = COALESCE($6, valor_negociado),
+                motivo_perda = COALESCE($7, motivo_perda),
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE ${where}
+            RETURNING *`, params);
+        if (!result.rows.length) return res.status(404).json({ erro: 'Lead/pedido não encontrado.' });
+        await registrarAuditoria(req.user.id, `Atualizou CRM do lead ${id}`);
+        res.json({ mensagem: 'CRM atualizado.', pedido: result.rows[0] });
+    } catch (e) {
+        console.error('❌ Erro CRM lead:', e);
+        res.status(500).json({ erro: 'Erro ao atualizar CRM: ' + e.message });
     }
 });
 
