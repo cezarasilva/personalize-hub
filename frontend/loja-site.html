@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nome da Loja — Site Institucional</title>
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+    <style>
+        /* ─── VARIÁVEIS CONFIGURÁVEIS VIA PAINEL ─────────────────── */
+        :root {
+            --cor-primaria:   #7c3aed;   /* cor principal da marca */
+            --cor-secundaria: #5b21b6;   /* hover / destaque */
+            --cor-texto:      #1e1b4b;
+            --cor-fundo:      #ffffff;
+            --cor-fundo-alt:  #f5f3ff;
+            --cor-borda:      #e5e7eb;
+            --fonte:          'Segoe UI', system-ui, sans-serif;
+            --radius:         12px;
+            --sombra:         0 4px 24px rgba(124,58,237,.12);
+        }
+
+        /* ─── RESET ───────────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body { font-family: var(--fonte); color: var(--cor-texto); background: var(--cor-fundo); }
+        img { max-width: 100%; display: block; }
+        a { text-decoration: none; color: inherit; }
+
+        /* ─── UTILITÁRIOS ─────────────────────────────────────────── */
+        .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 13px 28px; border-radius: 50px; font-size: .95rem;
+            font-weight: 600; cursor: pointer; transition: all .2s; border: none;
+        }
+        .btn-primary { background: var(--cor-primaria); color: #fff; }
+        .btn-primary:hover { background: var(--cor-secundaria); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(124,58,237,.35); }
+        .btn-outline { background: transparent; color: var(--cor-primaria); border: 2px solid var(--cor-primaria); }
+        .btn-outline:hover { background: var(--cor-primaria); color: #fff; }
+        .btn-ghost { background: rgba(255,255,255,.15); color: #fff; border: 2px solid rgba(255,255,255,.5); backdrop-filter: blur(4px); }
+        .btn-ghost:hover { background: rgba(255,255,255,.3); }
+        .section-label {
+            display: inline-block; background: var(--cor-fundo-alt); color: var(--cor-primaria);
+            font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+            padding: 5px 14px; border-radius: 50px; margin-bottom: 14px;
+        }
+        .section-title { font-size: 2rem; font-weight: 800; line-height: 1.2; margin-bottom: 16px; }
+        .section-sub { font-size: 1.05rem; color: #6b7280; line-height: 1.7; }
+
+        /* ─── HEADER / NAV ────────────────────────────────────────── */
+        .site-header {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(255,255,255,.92); backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--cor-borda);
+            transition: box-shadow .2s;
+        }
+        .site-header.scrolled { box-shadow: 0 2px 20px rgba(0,0,0,.08); }
+        .nav-inner {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 32px; height: 68px;
+        }
+        .nav-brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .nav-logo {
+            width: 44px; height: 44px; border-radius: 10px;
+            background: var(--cor-primaria); display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+        .nav-logo img { width: 100%; height: 100%; object-fit: contain; }
+        .nav-logo-placeholder { color: #fff; font-size: 1.4rem; font-weight: 900; }
+        .nav-store-name { font-size: 1.1rem; font-weight: 800; color: var(--cor-texto); }
+        .nav-links {
+            display: flex; align-items: center; gap: 4px;
+            list-style: none; flex: 1; justify-content: center;
+        }
+        .nav-links a {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border-radius: 8px;
+            font-size: .9rem; font-weight: 500; color: #374151;
+            transition: all .2s;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            background: var(--cor-fundo-alt); color: var(--cor-primaria);
+        }
+        .nav-links a i { font-size: 1.1rem; }
+        /* DESTAQUE no item Produtos */
+        .nav-links .nav-produtos > a {
+            background: var(--cor-primaria); color: #fff !important;
+            border-radius: 50px; padding: 8px 20px;
+        }
+        .nav-links .nav-produtos > a:hover { background: var(--cor-secundaria); }
+        .nav-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .nav-whatsapp {
+            display: flex; align-items: center; gap: 7px;
+            background: #25d366; color: #fff;
+            padding: 9px 18px; border-radius: 50px;
+            font-size: .85rem; font-weight: 600;
+            transition: all .2s;
+        }
+        .nav-whatsapp:hover { background: #1ebc59; transform: translateY(-1px); }
+        .nav-hamburger {
+            display: none; background: none; border: none; cursor: pointer;
+            font-size: 1.6rem; color: var(--cor-texto);
+        }
+
+        /* ─── HERO ────────────────────────────────────────────────── */
+        .hero {
+            position: relative; min-height: 88vh;
+            display: flex; align-items: center;
+            background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 50%, #7c3aed 100%);
+            overflow: hidden;
+        }
+        .hero-bg {
+            position: absolute; inset: 0;
+            background-size: cover; background-position: center;
+            opacity: .22;
+        }
+        .hero-overlay { position: absolute; inset: 0; background: linear-gradient(120deg, rgba(17,5,50,.85) 0%, rgba(76,29,149,.6) 100%); }
+        .hero-shapes {
+            position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+        }
+        .hero-shape {
+            position: absolute; border-radius: 50%;
+            background: rgba(255,255,255,.04);
+        }
+        .hero-shape:nth-child(1) { width: 600px; height: 600px; top: -200px; right: -150px; }
+        .hero-shape:nth-child(2) { width: 300px; height: 300px; bottom: -80px; left: 10%; }
+        .hero-shape:nth-child(3) { width: 180px; height: 180px; top: 30%; right: 20%; background: rgba(255,255,255,.06); }
+        .hero-inner {
+            position: relative; z-index: 1;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 64px;
+            align-items: center; padding: 80px 0;
+        }
+        .hero-content { color: #fff; }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,.1); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,.2);
+            color: #e9d5ff; font-size: .82rem; font-weight: 600;
+            padding: 6px 16px; border-radius: 50px; margin-bottom: 28px;
+        }
+        .hero-title {
+            font-size: clamp(2.2rem, 4vw, 3.4rem); font-weight: 900;
+            line-height: 1.1; margin-bottom: 20px; letter-spacing: -.02em;
+        }
+        .hero-title span { color: #c4b5fd; }
+        .hero-desc {
+            font-size: 1.1rem; color: rgba(255,255,255,.8);
+            line-height: 1.7; margin-bottom: 36px; max-width: 480px;
+        }
+        .hero-btns { display: flex; gap: 14px; flex-wrap: wrap; }
+        .hero-stats {
+            display: flex; gap: 32px; margin-top: 48px; padding-top: 32px;
+            border-top: 1px solid rgba(255,255,255,.15);
+        }
+        .hero-stat strong {
+            display: block; font-size: 1.6rem; font-weight: 900; color: #fff;
+        }
+        .hero-stat span { font-size: .82rem; color: rgba(255,255,255,.6); }
+        .hero-visual {
+            display: flex; align-items: center; justify-content: center;
+        }
+        .hero-card-wrap {
+            position: relative; width: 100%; max-width: 420px;
+        }
+        .hero-card {
+            background: rgba(255,255,255,.08); backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,.15); border-radius: 20px;
+            padding: 28px; color: #fff;
+        }
+        .hero-card-img {
+            width: 100%; aspect-ratio: 4/3; border-radius: 12px;
+            background: linear-gradient(135deg, #a78bfa, #7c3aed);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 20px; overflow: hidden; font-size: 4rem;
+        }
+        .hero-card-img img { width: 100%; height: 100%; object-fit: cover; }
+        .hero-card-badge {
+            display: inline-block; background: #10b981;
+            color: #fff; font-size: .72rem; font-weight: 700;
+            padding: 3px 10px; border-radius: 50px; margin-bottom: 10px;
+        }
+        .hero-card-name { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+        .hero-card-price { font-size: 1.3rem; font-weight: 900; color: #c4b5fd; }
+        .hero-card-float {
+            position: absolute; background: #fff; border-radius: 14px;
+            padding: 12px 16px; box-shadow: 0 8px 32px rgba(0,0,0,.2);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .hero-card-float.f1 { top: -20px; right: -20px; }
+        .hero-card-float.f2 { bottom: 20px; left: -24px; }
+        .hcf-icon {
+            width: 36px; height: 36px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem;
+        }
+        .hcf-icon.green { background: #d1fae5; color: #059669; }
+        .hcf-icon.purple { background: #ede9fe; color: #7c3aed; }
+        .hcf-text strong { display: block; font-size: .82rem; font-weight: 700; color: #111; }
+        .hcf-text span { font-size: .72rem; color: #6b7280; }
+
+        /* ─── TRUST BAR ───────────────────────────────────────────── */
+        .trust-bar {
+            background: var(--cor-fundo-alt);
+            border-bottom: 1px solid var(--cor-borda);
+            padding: 20px 0;
+        }
+        .trust-items {
+            display: flex; align-items: center; justify-content: center;
+            gap: 48px; flex-wrap: wrap;
+        }
+        .trust-item {
+            display: flex; align-items: center; gap: 10px;
+            font-size: .88rem; font-weight: 500; color: #374151;
+        }
+        .trust-item i { color: var(--cor-primaria); font-size: 1.4rem; }
+
+        /* ─── PRODUTOS (preview) ──────────────────────────────────── */
+        .produtos-section { padding: 80px 0; }
+        .section-header {
+            display: flex; align-items: flex-end;
+            justify-content: space-between; margin-bottom: 40px; gap: 24px;
+        }
+        .produtos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 20px;
+        }
+        .produto-card {
+            background: #fff; border-radius: var(--radius);
+            border: 1px solid var(--cor-borda);
+            overflow: hidden; transition: all .25s;
+            cursor: pointer;
+        }
+        .produto-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--sombra);
+            border-color: var(--cor-primaria);
+        }
+        .produto-thumb {
+            aspect-ratio: 1; background: var(--cor-fundo-alt);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; overflow: hidden; position: relative;
+        }
+        .produto-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .produto-destaque-badge {
+            position: absolute; top: 10px; left: 10px;
+            background: var(--cor-primaria); color: #fff;
+            font-size: .7rem; font-weight: 700; padding: 3px 10px;
+            border-radius: 50px;
+        }
+        .produto-info { padding: 16px; }
+        .produto-categoria {
+            font-size: .72rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: .05em; color: var(--cor-primaria); margin-bottom: 5px;
+        }
+        .produto-nome { font-size: .95rem; font-weight: 700; margin-bottom: 8px; line-height: 1.3; }
+        .produto-preco { font-size: 1.2rem; font-weight: 900; color: var(--cor-primaria); }
+        .produto-preco-de { font-size: .8rem; color: #9ca3af; text-decoration: line-through; margin-right: 6px; }
+        .produto-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--cor-borda);
+        }
+        .produto-btn {
+            background: var(--cor-primaria); color: #fff;
+            border: none; border-radius: 8px;
+            padding: 7px 16px; font-size: .82rem; font-weight: 600; cursor: pointer;
+            transition: background .2s;
+        }
+        .produto-btn:hover { background: var(--cor-secundaria); }
+
+        /* ─── QUEM SOMOS ──────────────────────────────────────────── */
+        .quem-somos { padding: 80px 0; background: var(--cor-fundo-alt); }
+        .quem-somos-inner {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 64px; align-items: center;
+        }
+        .qs-visual { position: relative; }
+        .qs-img {
+            width: 100%; aspect-ratio: 4/3; border-radius: 20px;
+            overflow: hidden; background: #ddd6fe;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 5rem;
+        }
+        .qs-img img { width: 100%; height: 100%; object-fit: cover; }
+        .qs-card-float {
+            position: absolute; bottom: -20px; right: -20px;
+            background: var(--cor-primaria); color: #fff;
+            border-radius: 16px; padding: 20px 24px;
+            box-shadow: 0 8px 32px rgba(124,58,237,.4);
+            text-align: center; min-width: 130px;
+        }
+        .qs-card-float strong { display: block; font-size: 2rem; font-weight: 900; }
+        .qs-card-float span { font-size: .78rem; opacity: .85; }
+        .qs-content {}
+        .qs-items { list-style: none; display: flex; flex-direction: column; gap: 14px; margin: 28px 0 32px; }
+        .qs-items li {
+            display: flex; align-items: flex-start; gap: 12px;
+            font-size: .95rem; line-height: 1.5;
+        }
+        .qs-items li i {
+            color: var(--cor-primaria); font-size: 1.3rem; margin-top: 1px; flex-shrink: 0;
+        }
+
+        /* ─── CONTATO ─────────────────────────────────────────────── */
+        .contato { padding: 80px 0; }
+        .contato-inner {
+            display: grid; grid-template-columns: 1fr 1.2fr;
+            gap: 64px; align-items: start;
+        }
+        .contato-info { }
+        .contato-cards { display: flex; flex-direction: column; gap: 16px; margin: 28px 0; }
+        .contato-card {
+            display: flex; align-items: flex-start; gap: 16px;
+            background: var(--cor-fundo-alt); border: 1px solid var(--cor-borda);
+            border-radius: var(--radius); padding: 18px;
+            transition: border-color .2s;
+        }
+        .contato-card:hover { border-color: var(--cor-primaria); }
+        .contato-card-icon {
+            width: 44px; height: 44px; flex-shrink: 0; border-radius: 10px;
+            background: var(--cor-primaria); color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem;
+        }
+        .contato-card-icon.green { background: #10b981; }
+        .contato-card-icon.blue { background: #3b82f6; }
+        .contato-card-text strong { display: block; font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #9ca3af; margin-bottom: 2px; }
+        .contato-card-text span { font-size: .95rem; font-weight: 500; }
+        .contato-socials { display: flex; gap: 10px; margin-top: 20px; }
+        .contato-social {
+            width: 44px; height: 44px; border-radius: 10px;
+            background: var(--cor-fundo-alt); border: 1px solid var(--cor-borda);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; color: var(--cor-primaria); transition: all .2s;
+        }
+        .contato-social:hover { background: var(--cor-primaria); color: #fff; border-color: var(--cor-primaria); }
+        /* Formulário */
+        .contato-form {
+            background: #fff; border: 1px solid var(--cor-borda);
+            border-radius: 20px; padding: 36px;
+            box-shadow: 0 4px 32px rgba(0,0,0,.06);
+        }
+        .contato-form h3 { font-size: 1.2rem; font-weight: 800; margin-bottom: 6px; }
+        .contato-form p { font-size: .88rem; color: #6b7280; margin-bottom: 24px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+        .form-group label { font-size: .82rem; font-weight: 600; color: #374151; }
+        .form-group input, .form-group textarea, .form-group select {
+            border: 1.5px solid var(--cor-borda); border-radius: 10px;
+            padding: 11px 14px; font-size: .92rem; font-family: inherit;
+            background: #f9fafb; transition: border-color .2s, box-shadow .2s;
+            outline: none; resize: vertical;
+        }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            border-color: var(--cor-primaria);
+            box-shadow: 0 0 0 3px rgba(124,58,237,.12);
+            background: #fff;
+        }
+        .form-group textarea { min-height: 100px; }
+        .form-submit { width: 100%; padding: 14px; font-size: 1rem; }
+
+        /* ─── FOOTER ──────────────────────────────────────────────── */
+        .site-footer {
+            background: #0f0a1e;
+            color: rgba(255,255,255,.75);
+            padding: 56px 0 0;
+        }
+        .footer-inner {
+            display: grid;
+            grid-template-columns: 1.6fr 1fr 1fr 1fr;
+            gap: 48px; padding-bottom: 48px;
+        }
+        .footer-brand { }
+        .footer-logo {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+        }
+        .footer-logo-icon {
+            width: 40px; height: 40px; border-radius: 10px;
+            background: var(--cor-primaria);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; color: #fff; font-weight: 900; overflow: hidden;
+        }
+        .footer-logo-icon img { width: 100%; height: 100%; object-fit: contain; }
+        .footer-logo-name { font-size: 1.05rem; font-weight: 800; color: #fff; }
+        .footer-desc { font-size: .87rem; line-height: 1.7; margin-bottom: 24px; }
+        .footer-socials { display: flex; gap: 10px; }
+        .footer-social {
+            width: 38px; height: 38px; border-radius: 9px;
+            background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem; color: rgba(255,255,255,.7); transition: all .2s;
+        }
+        .footer-social:hover { background: var(--cor-primaria); color: #fff; border-color: var(--cor-primaria); }
+        .footer-col h4 { font-size: .85rem; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 18px; }
+        .footer-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+        .footer-links a { font-size: .87rem; transition: color .2s; }
+        .footer-links a:hover { color: #c4b5fd; }
+        .footer-bottom {
+            border-top: 1px solid rgba(255,255,255,.08);
+            padding: 20px 0; margin-top: 0;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 12px;
+        }
+        .footer-bottom p { font-size: .82rem; }
+        .footer-powered {
+            font-size: .78rem;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .footer-powered a { color: #c4b5fd; font-weight: 600; }
+
+        /* ─── MOBILE MENU ─────────────────────────────────────────── */
+        .mobile-menu {
+            display: none; position: fixed; inset: 0; z-index: 99;
+            background: rgba(0,0,0,.5); backdrop-filter: blur(4px);
+        }
+        .mobile-menu.open { display: flex; }
+        .mobile-panel {
+            background: #fff; width: min(340px, 90vw); height: 100%;
+            padding: 28px 24px; display: flex; flex-direction: column;
+            gap: 8px; overflow-y: auto;
+        }
+        .mobile-panel .mobile-close {
+            align-self: flex-end; background: none; border: none;
+            font-size: 1.6rem; cursor: pointer; color: #374151; margin-bottom: 16px;
+        }
+        .mobile-panel a {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 14px; border-radius: 10px; font-weight: 500;
+            transition: background .2s;
+        }
+        .mobile-panel a:hover { background: var(--cor-fundo-alt); color: var(--cor-primaria); }
+        .mobile-panel .m-produtos {
+            background: var(--cor-primaria); color: #fff !important;
+            border-radius: 10px; margin-top: 8px;
+        }
+        .mobile-panel .m-whatsapp { background: #25d366; color: #fff !important; }
+
+        /* ─── BACK TO TOP ─────────────────────────────────────────── */
+        .back-top {
+            position: fixed; bottom: 28px; right: 24px; z-index: 50;
+            width: 48px; height: 48px; border-radius: 50%;
+            background: var(--cor-primaria); color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; box-shadow: 0 4px 16px rgba(124,58,237,.4);
+            opacity: 0; pointer-events: none; transition: all .25s; cursor: pointer; border: none;
+        }
+        .back-top.visible { opacity: 1; pointer-events: all; }
+        .back-top:hover { background: var(--cor-secundaria); transform: translateY(-3px); }
+
+        /* ─── RESPONSIVE ──────────────────────────────────────────── */
+        @media (max-width: 960px) {
+            .hero-inner { grid-template-columns: 1fr; gap: 40px; }
+            .hero-visual { display: none; }
+            .quem-somos-inner { grid-template-columns: 1fr; }
+            .qs-visual { display: none; }
+            .contato-inner { grid-template-columns: 1fr; }
+            .footer-inner { grid-template-columns: 1fr 1fr; }
+            .nav-links { display: none; }
+            .nav-hamburger { display: flex; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 540px) {
+            .section-header { flex-direction: column; align-items: flex-start; }
+            .footer-inner { grid-template-columns: 1fr; }
+            .hero-stats { flex-wrap: wrap; gap: 20px; }
+            .trust-items { gap: 20px; }
+            .footer-bottom { flex-direction: column; align-items: flex-start; }
+        }
+
+        /* ─── DEMO: label de configurabilidade (só para mockup) ───── */
+        [data-config] {
+            position: relative;
+        }
+        [data-config]::after {
+            content: attr(data-config);
+            position: absolute; z-index: 200;
+            top: 4px; left: 50%; transform: translateX(-50%);
+            background: #f59e0b; color: #fff;
+            font-size: .65rem; font-weight: 700; white-space: nowrap;
+            padding: 2px 8px; border-radius: 4px;
+            pointer-events: none; opacity: 0; transition: opacity .15s;
+        }
+        [data-config]:hover::after { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════
+     HEADER — configurável: logo, cores, links menu
+     ═══════════════════════════════════════════════ -->
+<header class="site-header" id="siteHeader">
+    <div class="container">
+        <nav class="nav-inner">
+
+            <!-- Marca -->
+            <div class="nav-brand" data-config="✏️ Logo + Nome da loja">
+                <div class="nav-logo">
+                    <!-- <img src="logo-da-loja.png" alt=""> -->
+                    <span class="nav-logo-placeholder">P</span>
+                </div>
+                <span class="nav-store-name">Personalize Store</span>
+            </div>
+
+            <!-- Links de navegação -->
+            <ul class="nav-links" data-config="✏️ Links do menu (ativar/desativar seções)">
+                <li><a href="#inicio"><i class="bx bx-home-alt"></i> Início</a></li>
+                <li class="nav-produtos">
+                    <a href="#produtos"><i class="bx bx-store-alt"></i> Produtos</a>
+                </li>
+                <li><a href="#quem-somos"><i class="bx bx-buildings"></i> Quem Somos</a></li>
+                <li><a href="#contato"><i class="bx bx-envelope"></i> Contato</a></li>
+            </ul>
+
+            <!-- Ações -->
+            <div class="nav-actions">
+                <a class="nav-whatsapp" href="https://wa.me/5511999999999" target="_blank" rel="noopener" data-config="✏️ Número WhatsApp">
+                    <i class="bx bxl-whatsapp"></i> WhatsApp
+                </a>
+                <button class="nav-hamburger" id="menuToggle" aria-label="Menu">
+                    <i class="bx bx-menu"></i>
+                </button>
+            </div>
+
+        </nav>
+    </div>
+</header>
+
+<!-- Menu mobile -->
+<div class="mobile-menu" id="mobileMenu">
+    <div class="mobile-panel">
+        <button class="mobile-close" id="menuClose"><i class="bx bx-x"></i></button>
+        <a href="#inicio"><i class="bx bx-home-alt"></i> Início</a>
+        <a href="#produtos" class="m-produtos"><i class="bx bx-store-alt"></i> Produtos</a>
+        <a href="#quem-somos"><i class="bx bx-buildings"></i> Quem Somos</a>
+        <a href="#contato"><i class="bx bx-envelope"></i> Contato</a>
+        <a href="https://wa.me/5511999999999" class="m-whatsapp" target="_blank"><i class="bx bxl-whatsapp"></i> WhatsApp</a>
+    </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════
+     HERO — configurável: título, subtítulo, bg, CTA
+     ═══════════════════════════════════════════════ -->
+<section class="hero" id="inicio">
+    <!-- Imagem de fundo (configurável) -->
+    <div class="hero-bg" style="background-image: url('https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600&q=80')" data-config="✏️ Imagem de fundo do hero"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-shapes">
+        <div class="hero-shape"></div>
+        <div class="hero-shape"></div>
+        <div class="hero-shape"></div>
+    </div>
+
+    <div class="container">
+        <div class="hero-inner">
+            <div class="hero-content">
+                <!-- Badge configurável -->
+                <div class="hero-badge" data-config="✏️ Badge/tag do hero">
+                    <i class="bx bx-star"></i>
+                    Produtos Personalizados de Qualidade
+                </div>
+
+                <!-- Título configurável -->
+                <h1 class="hero-title" data-config="✏️ Título principal">
+                    Presentes que <span>marcam</span><br>para sempre
+                </h1>
+
+                <!-- Descrição configurável -->
+                <p class="hero-desc" data-config="✏️ Subtítulo / descrição">
+                    Criamos produtos únicos com o seu nome, sua foto ou a mensagem que você quiser.
+                    Qualidade, carinho e entrega em todo o Brasil.
+                </p>
+
+                <!-- Botões configuráveis -->
+                <div class="hero-btns" data-config="✏️ Botões de ação">
+                    <a href="#produtos" class="btn btn-primary">
+                        <i class="bx bx-store-alt"></i> Ver Produtos
+                    </a>
+                    <a href="#contato" class="btn btn-ghost">
+                        <i class="bx bx-message-rounded-dots"></i> Fale Conosco
+                    </a>
+                </div>
+
+                <!-- Estatísticas configuráveis -->
+                <div class="hero-stats" data-config="✏️ Estatísticas (ativar/desativar)">
+                    <div class="hero-stat">
+                        <strong>+1.200</strong>
+                        <span>Clientes satisfeitos</span>
+                    </div>
+                    <div class="hero-stat">
+                        <strong>5 anos</strong>
+                        <span>No mercado</span>
+                    </div>
+                    <div class="hero-stat">
+                        <strong>★ 4.9</strong>
+                        <span>Avaliação média</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card visual do lado direito -->
+            <div class="hero-visual">
+                <div class="hero-card-wrap">
+                    <div class="hero-card">
+                        <div class="hero-card-img">🎁</div>
+                        <div class="hero-card-badge">Mais vendido</div>
+                        <div class="hero-card-name">Caneca Personalizada Premium</div>
+                        <div class="hero-card-price">R$ 59,90</div>
+                    </div>
+                    <div class="hero-card-float f1">
+                        <div class="hcf-icon green"><i class="bx bx-check-circle"></i></div>
+                        <div class="hcf-text">
+                            <strong>Pedido entregue!</strong>
+                            <span>há 2 minutos</span>
+                        </div>
+                    </div>
+                    <div class="hero-card-float f2">
+                        <div class="hcf-icon purple"><i class="bx bx-palette"></i></div>
+                        <div class="hcf-text">
+                            <strong>100% personalizado</strong>
+                            <span>Do seu jeito</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════
+     TRUST BAR — configurável: ativar/desativar
+     ═══════════════════════════════════════════════ -->
+<div class="trust-bar">
+    <div class="container">
+        <div class="trust-items" data-config="✏️ Barra de benefícios (ativar/desativar)">
+            <div class="trust-item"><i class="bx bx-shield-quarter"></i> Compra 100% segura</div>
+            <div class="trust-item"><i class="bx bx-package"></i> Entrega em todo o Brasil</div>
+            <div class="trust-item"><i class="bx bx-palette"></i> Personalização exclusiva</div>
+            <div class="trust-item"><i class="bx bx-headphone"></i> Suporte pelo WhatsApp</div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════
+     PRODUTOS — lista do catálogo (seção no menu)
+     ═══════════════════════════════════════════════ -->
+<section class="produtos-section" id="produtos">
+    <div class="container">
+        <div class="section-header">
+            <div>
+                <span class="section-label">Catálogo</span>
+                <h2 class="section-title">Nossos Produtos</h2>
+                <p class="section-sub">Escolha, personalize e receba em casa.</p>
+            </div>
+            <a href="#produtos" class="btn btn-outline">
+                Ver todos <i class="bx bx-arrow-back" style="transform:rotate(180deg)"></i>
+            </a>
+        </div>
+
+        <!-- Grade de produtos (carregada via API) -->
+        <div class="produtos-grid" data-config="✏️ Produtos carregados da API">
+
+            <!-- Card exemplo 1 -->
+            <div class="produto-card">
+                <div class="produto-thumb">
+                    🎁
+                    <span class="produto-destaque-badge">Destaque</span>
+                </div>
+                <div class="produto-info">
+                    <div class="produto-categoria">Canecas</div>
+                    <div class="produto-nome">Caneca Mágica Personalizada</div>
+                    <div class="produto-footer">
+                        <div>
+                            <span class="produto-preco-de">R$ 79,00</span>
+                            <span class="produto-preco">R$ 59,90</span>
+                        </div>
+                        <button class="produto-btn">Pedir</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card exemplo 2 -->
+            <div class="produto-card">
+                <div class="produto-thumb">👕</div>
+                <div class="produto-info">
+                    <div class="produto-categoria">Camisetas</div>
+                    <div class="produto-nome">Camiseta Personalizada 100% Algodão</div>
+                    <div class="produto-footer">
+                        <span class="produto-preco">R$ 49,90</span>
+                        <button class="produto-btn">Pedir</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card exemplo 3 -->
+            <div class="produto-card">
+                <div class="produto-thumb">🖼️</div>
+                <div class="produto-info">
+                    <div class="produto-categoria">Quadros</div>
+                    <div class="produto-nome">Quadro Decorativo em MDF</div>
+                    <div class="produto-footer">
+                        <span class="produto-preco">R$ 89,90</span>
+                        <button class="produto-btn">Pedir</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card exemplo 4 -->
+            <div class="produto-card">
+                <div class="produto-thumb">🎂</div>
+                <div class="produto-info">
+                    <div class="produto-categoria">Festas</div>
+                    <div class="produto-nome">Kit Personalizado para Festa</div>
+                    <div class="produto-footer">
+                        <span class="produto-preco">R$ 129,90</span>
+                        <button class="produto-btn">Pedir</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════
+     QUEM SOMOS — configurável: texto, imagem
+     ═══════════════════════════════════════════════ -->
+<section class="quem-somos" id="quem-somos">
+    <div class="container">
+        <div class="quem-somos-inner">
+
+            <!-- Imagem (configurável) -->
+            <div class="qs-visual" data-config="✏️ Foto da loja/equipe">
+                <div class="qs-img">🏪</div>
+                <div class="qs-card-float" data-config="✏️ Número destaque">
+                    <strong>5+</strong>
+                    <span>anos de<br>experiência</span>
+                </div>
+            </div>
+
+            <!-- Texto configurável -->
+            <div class="qs-content">
+                <span class="section-label">Quem Somos</span>
+                <h2 class="section-title" data-config="✏️ Título da seção">
+                    Uma loja feita com <br>paixão e cuidado
+                </h2>
+                <p class="section-sub" data-config="✏️ Texto sobre a loja">
+                    Somos apaixonados por transformar momentos em memórias eternas.
+                    Desde 2019, criamos produtos personalizados com qualidade premium
+                    para presentear e emocionar.
+                </p>
+
+                <ul class="qs-items" data-config="✏️ Lista de diferenciais">
+                    <li>
+                        <i class="bx bx-check-shield"></i>
+                        <span><strong>Qualidade garantida</strong> — Usamos os melhores materiais e processos de produção para garantir durabilidade.</span>
+                    </li>
+                    <li>
+                        <i class="bx bx-time-five"></i>
+                        <span><strong>Prazo cumprido</strong> — Comprometidos com a entrega no prazo combinado em todos os pedidos.</span>
+                    </li>
+                    <li>
+                        <i class="bx bx-heart"></i>
+                        <span><strong>Atendimento humanizado</strong> — Cada cliente recebe atenção personalizada do início ao fim.</span>
+                    </li>
+                </ul>
+
+                <a href="#contato" class="btn btn-primary">
+                    <i class="bx bx-message-rounded-dots"></i> Entre em contato
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════
+     CONTATO — configurável: dados, formulário
+     ═══════════════════════════════════════════════ -->
+<section class="contato" id="contato">
+    <div class="container">
+        <div style="text-align:center; margin-bottom: 48px;">
+            <span class="section-label">Contato</span>
+            <h2 class="section-title" data-config="✏️ Título da seção">Fale com a gente</h2>
+            <p class="section-sub">Tire suas dúvidas ou faça seu pedido agora mesmo.</p>
+        </div>
+
+        <div class="contato-inner">
+
+            <!-- Info de contato -->
+            <div class="contato-info">
+                <div class="contato-cards" data-config="✏️ Dados de contato (WhatsApp, email, endereço)">
+                    <div class="contato-card">
+                        <div class="contato-card-icon green"><i class="bx bxl-whatsapp"></i></div>
+                        <div class="contato-card-text">
+                            <strong>WhatsApp</strong>
+                            <span>(11) 99999-9999</span>
+                        </div>
+                    </div>
+                    <div class="contato-card">
+                        <div class="contato-card-icon blue"><i class="bx bx-envelope"></i></div>
+                        <div class="contato-card-text">
+                            <strong>E-mail</strong>
+                            <span>contato@minhaloja.com.br</span>
+                        </div>
+                    </div>
+                    <div class="contato-card">
+                        <div class="contato-card-icon"><i class="bx bx-map"></i></div>
+                        <div class="contato-card-text">
+                            <strong>Endereço</strong>
+                            <span>Rua Exemplo, 123 — São Paulo, SP</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="contato-socials" data-config="✏️ Redes sociais">
+                    <a href="#" class="contato-social"><i class="bx bxl-instagram"></i></a>
+                    <a href="#" class="contato-social"><i class="bx bxl-facebook"></i></a>
+                    <a href="#" class="contato-social"><i class="bx bxl-tiktok"></i></a>
+                    <a href="#" class="contato-social"><i class="bx bxl-whatsapp"></i></a>
+                </div>
+            </div>
+
+            <!-- Formulário de contato -->
+            <div class="contato-form" data-config="✏️ Formulário (ativar/desativar)">
+                <h3>Envie sua mensagem</h3>
+                <p>Responderemos em até 1 hora no horário comercial.</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome *</label>
+                        <input type="text" placeholder="Seu nome">
+                    </div>
+                    <div class="form-group">
+                        <label>Telefone</label>
+                        <input type="tel" placeholder="(11) 99999-9999">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>E-mail *</label>
+                    <input type="email" placeholder="seu@email.com">
+                </div>
+                <div class="form-group">
+                    <label>O que você precisa?</label>
+                    <select>
+                        <option value="">Selecione um assunto</option>
+                        <option>Orçamento de produto</option>
+                        <option>Pedido personalizado</option>
+                        <option>Dúvidas sobre entrega</option>
+                        <option>Outros</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Mensagem *</label>
+                    <textarea placeholder="Descreva o que você precisa..."></textarea>
+                </div>
+                <button class="btn btn-primary form-submit">
+                    <i class="bx bx-send"></i> Enviar Mensagem
+                </button>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════
+     FOOTER — configurável: texto, links, redes
+     ═══════════════════════════════════════════════ -->
+<footer class="site-footer">
+    <div class="container">
+        <div class="footer-inner" data-config="✏️ Colunas do footer (links, redes, copyright)">
+
+            <!-- Coluna marca -->
+            <div class="footer-brand">
+                <div class="footer-logo">
+                    <div class="footer-logo-icon">P</div>
+                    <span class="footer-logo-name">Personalize Store</span>
+                </div>
+                <p class="footer-desc">
+                    Produtos personalizados feitos com carinho para tornar cada momento especial.
+                    Qualidade, criatividade e entrega garantida.
+                </p>
+                <div class="footer-socials">
+                    <a href="#" class="footer-social"><i class="bx bxl-instagram"></i></a>
+                    <a href="#" class="footer-social"><i class="bx bxl-facebook"></i></a>
+                    <a href="#" class="footer-social"><i class="bx bxl-tiktok"></i></a>
+                    <a href="#" class="footer-social"><i class="bx bxl-whatsapp"></i></a>
+                </div>
+            </div>
+
+            <!-- Coluna navegação -->
+            <div class="footer-col">
+                <h4>Navegação</h4>
+                <ul class="footer-links">
+                    <li><a href="#inicio">Início</a></li>
+                    <li><a href="#produtos">Produtos</a></li>
+                    <li><a href="#quem-somos">Quem Somos</a></li>
+                    <li><a href="#contato">Contato</a></li>
+                </ul>
+            </div>
+
+            <!-- Coluna categorias -->
+            <div class="footer-col">
+                <h4>Categorias</h4>
+                <ul class="footer-links">
+                    <li><a href="#produtos">Canecas</a></li>
+                    <li><a href="#produtos">Camisetas</a></li>
+                    <li><a href="#produtos">Quadros</a></li>
+                    <li><a href="#produtos">Festas</a></li>
+                </ul>
+            </div>
+
+            <!-- Coluna contato -->
+            <div class="footer-col">
+                <h4>Fale Conosco</h4>
+                <ul class="footer-links">
+                    <li><a href="tel:+5511999999999"><i class="bx bx-phone" style="margin-right:6px"></i>(11) 99999-9999</a></li>
+                    <li><a href="mailto:contato@loja.com"><i class="bx bx-envelope" style="margin-right:6px"></i>contato@loja.com</a></li>
+                    <li style="color:rgba(255,255,255,.5); font-size:.83rem; margin-top:4px;">Seg–Sex: 9h–18h</li>
+                </ul>
+            </div>
+
+        </div>
+
+        <!-- Bottom bar -->
+        <div class="footer-bottom">
+            <p data-config="✏️ Texto do copyright">© 2025 Personalize Store — Todos os direitos reservados.</p>
+            <div class="footer-powered">
+                <span>Desenvolvido com</span>
+                <a href="#">PERSONALIZE Hub</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- Botão voltar ao topo -->
+<button class="back-top" id="backTop" aria-label="Voltar ao topo">
+    <i class="bx bx-chevron-up"></i>
+</button>
+
+
+<script>
+    // Header scroll shadow
+    const header = document.getElementById('siteHeader');
+    window.addEventListener('scroll', () => {
+        header.classList.toggle('scrolled', window.scrollY > 20);
+        document.getElementById('backTop').classList.toggle('visible', window.scrollY > 300);
+    });
+
+    // Menu mobile
+    document.getElementById('menuToggle').addEventListener('click', () => {
+        document.getElementById('mobileMenu').classList.add('open');
+    });
+    document.getElementById('menuClose').addEventListener('click', () => {
+        document.getElementById('mobileMenu').classList.remove('open');
+    });
+    document.getElementById('mobileMenu').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('mobileMenu'))
+            document.getElementById('mobileMenu').classList.remove('open');
+    });
+    document.querySelectorAll('.mobile-panel a').forEach(a => {
+        a.addEventListener('click', () => document.getElementById('mobileMenu').classList.remove('open'));
+    });
+
+    // Voltar ao topo
+    document.getElementById('backTop').addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Nav active por scroll
+    const sections = document.querySelectorAll('section[id], div[id]');
+    const navLinks = document.querySelectorAll('.nav-links a');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                navLinks.forEach(a => {
+                    a.classList.toggle('active', a.getAttribute('href') === '#' + entry.target.id);
+                });
+            }
+        });
+    }, { threshold: 0.4 });
+    sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
