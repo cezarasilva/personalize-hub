@@ -124,7 +124,7 @@
                         </div>
                         <div class="form-group">
                             <label>WhatsApp</label>
-                            <input name="cliente_whatsapp" required placeholder="(00) 00000-0000">
+                            <input name="cliente_whatsapp" required placeholder="(00) 00000-0000" data-mask="phone">
                         </div>
                     </div>
                     <div class="cat-form-row">
@@ -187,7 +187,7 @@
             <p class="cart-disclaimer">O pedido será enviado para a loja responsável. Valores e disponibilidade confirmados no atendimento.</p>
             <div class="cart-customer-info">
                 <input id="cartNomeCliente"      placeholder="Seu nome"       autocomplete="name">
-                <input id="cartTelefoneCliente"  placeholder="WhatsApp"       autocomplete="tel">
+                <input id="cartTelefoneCliente"  placeholder="(00) 00000-0000" autocomplete="tel" data-mask="phone">
                 <input id="cartEmailCliente"     placeholder="E-mail opcional" autocomplete="email">
                 <textarea id="cartObservacaoCliente" placeholder="Observação, personalização ou dúvida"></textarea>
             </div>
@@ -199,6 +199,7 @@
 
     <footer class="catalogo-footer" id="catalogoFooter"></footer>
 
+    <script src="/assets/js/masks.js"></script>
     <script src="/assets/js/pages/catalogo-publico.js"></script>
 </body>
 </html>

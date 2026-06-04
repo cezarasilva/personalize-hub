@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ['nome_recebedor','documento_recebedor','tipo_chave_pix','chave_pix','banco','whatsapp_cobranca','link_pagamento_padrao','instrucoes_pagamento'].forEach(k => {
                     if (form.elements[k]) form.elements[k].value = pagamentoConfig[k] || '';
                 });
+                if (window.Masks) Masks.applyAll();
             }
         } catch (_) {}
     }

@@ -389,6 +389,10 @@
             <p class="footer-copy">${esc(loja.footer_copyright || `© ${new Date().getFullYear()} ${loja.nome_loja || 'PERSONALIZE'} - Todos os direitos reservados`)}</p>
         `;
         document.getElementById('footerLeadForm')?.addEventListener('submit', enviarLeadFooter);
+        if (window.Masks) {
+            const wField = el.querySelector('[name="cliente_whatsapp"]');
+            if (wField) Masks.phone(wField);
+        }
     }
 
     async function carregar() {

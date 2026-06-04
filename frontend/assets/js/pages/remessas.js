@@ -451,7 +451,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 showCancelButton: true,
                 confirmButtonText: 'Confirmar assinatura',
                 cancelButtonText: 'Cancelar',
-                didOpen: () => prepararCanvasAssinatura(),
+                didOpen: () => {
+                    prepararCanvasAssinatura();
+                    if (window.Masks) Masks.cpfCnpj(document.getElementById('assDoc'));
+                },
                 preConfirm: () => {
                     const nome = document.getElementById('assNome')?.value?.trim();
                     const documento = document.getElementById('assDoc')?.value?.trim();

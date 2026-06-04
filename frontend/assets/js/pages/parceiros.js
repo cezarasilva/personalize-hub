@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
             editando = p;
             document.getElementById('parceiroId').value = p.id;
             ['nome_loja','responsavel','telefone','cnpj_cpf','status','cep','rua','numero','complemento'].forEach(id => document.getElementById(id).value = p[id] || '');
+            if (window.Masks) Masks.applyAll();
             document.getElementById('email').value = p.email_login || '';
             document.getElementById('email').disabled = true;
             document.getElementById('usuario').value = p.usuario || '';

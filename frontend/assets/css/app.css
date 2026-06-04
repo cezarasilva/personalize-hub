@@ -3220,3 +3220,19 @@ tr:hover td { background: var(--surface-2); }
   .crm-conv-metrics { grid-template-columns: 1fr 1fr; }
   .crm-actions-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   FEEDBACK DE CAMPOS COM MÁSCARA / VALIDAÇÃO
+   ============================================================ */
+.field-valid {
+  border-color: var(--success, #16a34a) !important;
+  background: rgba(22, 163, 74, .04);
+}
+.field-invalid {
+  border-color: var(--danger, #dc2626) !important;
+  background: rgba(220, 38, 38, .04);
+}
+.field-valid:focus, .field-invalid:focus {
+  border-color: var(--primary) !important;
+  background: transparent;
+}
