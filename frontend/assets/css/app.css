@@ -3236,3 +3236,37 @@ tr:hover td { background: var(--surface-2); }
   border-color: var(--primary) !important;
   background: transparent;
 }
+.field-msg { display: block; font-size: 11px; margin-top: 3px; min-height: 14px; }
+.field-msg--error { color: var(--danger, #dc2626); }
+
+/* ============================================================
+   SKELETON LOADER
+   ============================================================ */
+@keyframes ph-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+.skeleton {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--border, #e8edf4) 25%, var(--bg-secondary, #f1f5f9) 50%, var(--border, #e8edf4) 75%);
+  background-size: 600px 100%;
+  animation: ph-shimmer 1.4s infinite linear;
+  border-radius: 4px;
+}
+.skeleton-row {
+  display: flex; gap: 10px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--border, #e8edf4);
+}
+.skeleton-row .skeleton { height: 14px; border-radius: 3px; }
+.skeleton-table tbody tr td { padding: 10px 12px; }
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+.empty-state-box {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 48px 24px; gap: 12px; color: var(--muted, #94a3b8); text-align: center;
+}
+.empty-state-box i { font-size: 48px; opacity: .45; }
+.empty-state-box p { font-size: 14px; margin: 0; }
+.empty-state-box .btn { margin-top: 4px; }

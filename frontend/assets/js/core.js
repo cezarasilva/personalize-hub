@@ -101,7 +101,7 @@ window.App = (() => {
     }
 
     function imageTag(src, extraClass = '') {
-        return src ? `<img class="product-img ${extraClass}" src="${escapeHtml(src)}" alt="Produto">` : `<div class="img-placeholder ${extraClass}">Sem<br>foto</div>`;
+        return src ? `<img class="product-img ${extraClass}" src="${escapeHtml(src)}" alt="Produto" loading="lazy">` : `<div class="img-placeholder ${extraClass}">Sem<br>foto</div>`;
     }
 
     function escapeHtml(value) {
@@ -130,7 +130,9 @@ window.App = (() => {
         }
         const item = document.createElement('div');
         item.className = `ph-toast ${tipo}`;
-        item.innerHTML = `<i class="bx ${tipo === 'success' ? 'bx-check-circle' : tipo === 'error' ? 'bx-x-circle' : tipo === 'warning' ? 'bx-error' : 'bx-info-circle'}"></i><span>${escapeHtml(title)}</span>`;
+        item.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
+        item.setAttribute('aria-live', tipo === 'error' ? 'assertive' : 'polite');
+        item.innerHTML = `<i class="bx ${tipo === 'success' ? 'bx-check-circle' : tipo === 'error' ? 'bx-x-circle' : tipo === 'warning' ? 'bx-error' : 'bx-info-circle'}" aria-hidden="true"></i><span>${escapeHtml(title)}</span>`;
         container.appendChild(item);
         setTimeout(() => { item.style.opacity = '0'; item.style.transform = 'translateY(-6px)'; }, 2600);
         setTimeout(() => item.remove(), 3100);
@@ -459,10 +461,24 @@ window.App = (() => {
             </div>`;
         document.body.appendChild(overlay);
 
-        const fechar = () => overlay.remove();
+        const fechar = () => { overlay.remove(); _anteriorFoco?.focus(); };
+        const _anteriorFoco = document.activeElement;
+        // Focus trap: mantém foco dentro do modal enquanto aberto
+        const _focaveis = () => [...overlay.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(e => !e.disabled);
+        overlay.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { fechar(); return; }
+            if (e.key !== 'Tab') return;
+            const els = _focaveis();
+            if (!els.length) return;
+            const primeiro = els[0], ultimo = els[els.length - 1];
+            if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+            else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+        });
         document.getElementById('phModalClose')?.addEventListener('click', fechar);
         document.getElementById('phModalCancelar')?.addEventListener('click', fechar);
         overlay.addEventListener('click', (e) => { if (e.target === overlay) fechar(); });
+        // Foca o primeiro campo ao abrir
+        setTimeout(() => _focaveis()[0]?.focus(), 50);
 
         document.getElementById('phModalSalvar')?.addEventListener('click', async () => {
             const msg       = document.getElementById('phModalMsg');
@@ -526,5 +542,25 @@ window.App = (() => {
         el.className = `msg text-${type}`;
     }
 
-    return { API_BASE, token, user, isAdmin, isParceiro, setUser, logout, requireAuth, requireAdmin, protectPage, api, money, number, formDataToObject, imageTag, escapeHtml, badgeStatus, toast, confirmDialog, icon, renderSidebar, bindPasswordToggle, imageToDataURL, setMsg };
+    // Gera linhas de skeleton para tbody de tabelas enquanto carrega dados
+    function skeletonTable(tbodyId, colunas = 5, linhas = 5) {
+        const tbody = typeof tbodyId === 'string' ? document.getElementById(tbodyId) : tbodyId;
+        if (!tbody) return;
+        const cell = `<td><span class="skeleton" style="width:${60 + Math.random() * 30 | 0}%;height:13px;display:block;"></span></td>`;
+        tbody.innerHTML = Array.from({ length: linhas }, () =>
+            `<tr>${cell.repeat(colunas)}</tr>`
+        ).join('');
+    }
+
+    // Renderiza estado vazio com ícone, texto e botão opcional
+    function emptyState(containerIdOrEl, { icone = 'bx-inbox', texto = 'Nenhum registro encontrado.', btnTexto, btnHref, btnOnclick } = {}) {
+        const el = typeof containerIdOrEl === 'string' ? document.getElementById(containerIdOrEl) : containerIdOrEl;
+        if (!el) return;
+        const btn = btnTexto
+            ? `<a class="btn btn-primary" ${btnHref ? `href="${escapeHtml(btnHref)}"` : ''} ${btnOnclick ? `onclick="${escapeHtml(btnOnclick)}"` : ''}>${escapeHtml(btnTexto)}</a>`
+            : '';
+        el.innerHTML = `<div class="empty-state-box"><i class="bx ${escapeHtml(icone)}"></i><p>${escapeHtml(texto)}</p>${btn}</div>`;
+    }
+
+    return { API_BASE, token, user, isAdmin, isParceiro, setUser, logout, requireAuth, requireAdmin, protectPage, api, money, number, formDataToObject, imageTag, escapeHtml, badgeStatus, toast, confirmDialog, icon, renderSidebar, bindPasswordToggle, imageToDataURL, setMsg, skeletonTable, emptyState };
 })();

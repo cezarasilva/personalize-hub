@@ -5,10 +5,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabela = document.getElementById('tabelaUsuarios');
 
     function render() {
-        if (!usuarios.length) return tabela.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum usuário encontrado.</td></tr>';
+        if (!usuarios.length) return App.emptyState(tabela.parentElement, { icone: 'bx-group', texto: 'Nenhum usuário encontrado.' });
         tabela.innerHTML = usuarios.map(u => `<tr><td><strong>${App.escapeHtml(u.nome)}</strong></td><td>${App.escapeHtml(u.email)}</td><td>${App.escapeHtml(u.usuario || '-')}</td><td><span class="badge badge-blue">${App.escapeHtml(u.perfil)}</span></td><td>${App.escapeHtml(u.nome_loja || '-')}</td><td>${u.ativo ? '<span class="badge badge-green">ATIVO</span>' : '<span class="badge badge-red">BLOQUEADO</span>'}</td><td><div class="actions"><button class="icon-btn" title="Bloquear/desbloquear" data-status="${u.id}"><i class="bx ${u.ativo ? 'bx-lock' : 'bx-lock-open'}"></i></button><button class="icon-btn" title="Alterar senha" data-senha="${u.id}"><i class="bx bx-key"></i></button><button class="icon-btn" title="Excluir usuário" data-del="${u.id}"><i class="bx bx-trash"></i></button></div></td></tr>`).join('');
     }
-    async function carregar() { usuarios = await App.api('/usuarios'); render(); }
+    async function carregar() {
+        App.skeletonTable(tabela, 7);
+        usuarios = await App.api('/usuarios');
+        render();
+    }
     tabela.addEventListener('click', async (e) => {
         const statusId = e.target.closest('[data-status]')?.dataset.status;
         const senhaId = e.target.closest('[data-senha]')?.dataset.senha;

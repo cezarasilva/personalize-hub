@@ -51,10 +51,23 @@ window.Masks = (() => {
         return v.length > 5 ? `${v.slice(0,5)}-${v.slice(5)}` : v;
     }
 
-    function _feedback(el, valid, empty) {
+    function _msgEl(el) {
+        let msg = el.parentElement?.querySelector('.field-msg');
+        if (!msg) {
+            msg = document.createElement('span');
+            msg.className = 'field-msg';
+            el.parentElement?.appendChild(msg);
+        }
+        return msg;
+    }
+
+    function _feedback(el, valid, empty, errText) {
         el.classList.toggle('field-valid',   !empty && !!valid);
         el.classList.toggle('field-invalid', !empty && !valid);
         if (empty) el.classList.remove('field-valid', 'field-invalid');
+        const msg = _msgEl(el);
+        msg.textContent = (!empty && !valid && errText) ? errText : '';
+        msg.className = 'field-msg' + (!empty && !valid ? ' field-msg--error' : '');
     }
 
     // ---- Public: CPF / CNPJ ----
@@ -68,7 +81,8 @@ window.Masks = (() => {
             const ok = d.length === 11 ? _validarCPF(d)
                      : d.length === 14 ? _validarCNPJ(d)
                      : false;
-            _feedback(el, ok, false);
+            const err = !ok ? (d.length <= 11 ? 'CPF inválido' : 'CNPJ inválido') : '';
+            _feedback(el, ok, false, err);
         });
         el.addEventListener('focus', () => _feedback(el, false, true));
     }
@@ -81,7 +95,8 @@ window.Masks = (() => {
         el.addEventListener('blur', () => {
             const d = el.value.replace(/\D/g, '');
             if (!d) { _feedback(el, false, true); return; }
-            _feedback(el, d.length === 10 || d.length === 11, false);
+            const ok = d.length === 10 || d.length === 11;
+            _feedback(el, ok, false, ok ? '' : 'Número incompleto — informe DDD + número');
         });
         el.addEventListener('focus', () => _feedback(el, false, true));
     }
@@ -101,7 +116,7 @@ window.Masks = (() => {
             try {
                 const resp = await fetch(`https://viacep.com.br/ws/${d}/json/`);
                 const data = await resp.json();
-                if (data.erro) { el.classList.add('field-invalid'); return; }
+                if (data.erro) { _feedback(el, false, false, 'CEP não encontrado'); return; }
                 el.classList.add('field-valid');
                 const fill = (id, val) => {
                     if (!id || !val) return;
