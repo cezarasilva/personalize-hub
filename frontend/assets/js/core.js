@@ -22,18 +22,57 @@ window.App = (() => {
     }
 
     function requireAuth() {
-        if (!token()) window.location.href = 'index.html';
+        if (!token()) window.location.replace('index.html');
     }
 
     function requireAdmin() {
         requireAuth();
-        if (!isAdmin()) window.location.href = 'parceiro-dashboard.html';
+        if (!isAdmin()) window.location.replace('parceiro-dashboard.html');
     }
 
-    function protectPage({ adminOnly = false, parceiroOnly = false } = {}) {
-        requireAuth();
-        if (adminOnly && !isAdmin()) window.location.href = 'parceiro-dashboard.html';
-        if (parceiroOnly && !isParceiro()) window.location.href = 'dashboard.html';
+    // ---- Loading overlay ----
+    function _mostrarLoader() {
+        if (document.getElementById('ph-page-loader')) return;
+        const el = document.createElement('div');
+        el.id = 'ph-page-loader';
+        el.innerHTML = `
+            <style>
+                #ph-page-loader{position:fixed;inset:0;z-index:99999;background:var(--bg,#f7f8fc);
+                    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;
+                    transition:opacity .25s;}
+                #ph-page-loader .ph-spin{width:38px;height:38px;border:3px solid var(--border,#e8edf4);
+                    border-top-color:var(--primary,#6366f1);border-radius:50%;
+                    animation:ph-spin-anim .7s linear infinite;}
+                @keyframes ph-spin-anim{to{transform:rotate(360deg);}}
+            </style>
+            <div class="ph-spin"></div>
+            <span style="font-size:13px;font-weight:600;color:var(--muted,#94a3b8);">Verificando acesso...</span>`;
+        document.body.insertBefore(el, document.body.firstChild);
+    }
+
+    function _esconderLoader() {
+        const el = document.getElementById('ph-page-loader');
+        if (!el) return;
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 280);
+    }
+
+    async function protectPage({ adminOnly = false, parceiroOnly = false } = {}) {
+        if (!token()) { window.location.replace('index.html'); return; }
+        _mostrarLoader();
+        try {
+            const me = await api('/me');
+            // Atualiza perfil no localStorage com dados frescos
+            const dadosAtual = user();
+            localStorage.setItem('usuario_personalize', JSON.stringify({ ...dadosAtual, ...me }));
+            const perfil = (me.perfil || dadosAtual.perfil || '').toUpperCase();
+            if (adminOnly   && perfil !== 'ADMIN')    { window.location.replace('parceiro-dashboard.html'); return; }
+            if (parceiroOnly && perfil !== 'PARCEIRO'){ window.location.replace('dashboard.html'); return; }
+            _esconderLoader();
+        } catch {
+            localStorage.clear();
+            window.location.replace('index.html');
+        }
     }
 
     async function api(path, options = {}) {

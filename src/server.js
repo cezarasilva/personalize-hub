@@ -169,6 +169,47 @@ function normalizarPerfil(perfil) {
     return String(perfil || '').trim().toUpperCase();
 }
 
+// =========================================================
+// V6.8 — Migração: histórico e responsável no CRM
+// =========================================================
+async function migrarColunasV68() {
+    const ops = [
+        `ALTER TABLE catalogo_pedidos ADD COLUMN IF NOT EXISTS responsavel_id INTEGER REFERENCES usuarios(id)`,
+        `CREATE TABLE IF NOT EXISTS lead_historico (
+            id           SERIAL PRIMARY KEY,
+            lead_id      INTEGER NOT NULL REFERENCES catalogo_pedidos(id) ON DELETE CASCADE,
+            usuario_id   INTEGER REFERENCES usuarios(id),
+            tipo         VARCHAR(30) DEFAULT 'nota',
+            descricao    TEXT,
+            criado_em    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_lead_historico_lead ON lead_historico(lead_id)`
+    ];
+    for (const sql of ops) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V6.8:', e.message); }
+    }
+}
+migrarColunasV68();
+
+// =========================================================
+// V6.7 — Migração: adiciona colunas de fluxo de produto
+// =========================================================
+async function migrarColunasV67() {
+    const alteracoes = [
+        `ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tipo_oferta   VARCHAR(50) DEFAULT 'PRODUTO_PROPRIO'`,
+        `ALTER TABLE produtos ADD COLUMN IF NOT EXISTS status_fluxo  VARCHAR(50) DEFAULT 'ATIVO'`,
+        `ALTER TABLE produtos ADD COLUMN IF NOT EXISTS destino_final VARCHAR(50) DEFAULT 'ESTOQUE'`,
+        `ALTER TABLE produtos ADD COLUMN IF NOT EXISTS aprovado_em   TIMESTAMP`,
+        `ALTER TABLE produtos ADD COLUMN IF NOT EXISTS aprovado_por  INTEGER`,
+        `ALTER TABLE produto_variacoes ADD COLUMN IF NOT EXISTS lead_time_dias INTEGER`,
+        `ALTER TABLE produto_variacoes ADD COLUMN IF NOT EXISTS qtd_minima     INTEGER DEFAULT 1`,
+    ];
+    for (const sql of alteracoes) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V6.7:', e.message); }
+    }
+}
+migrarColunasV67();
+
 function gerarCodigo(prefixo) {
     const agora = new Date();
     const yyyy = agora.getFullYear();
@@ -994,8 +1035,14 @@ app.get('/api/produtos', autenticar, async (req, res) => {
                     END
                 ) AS galeria,
                 EXISTS (SELECT 1 FROM precificacoes pr WHERE pr.produto_id = p.id) AS precificado,
+                COALESCE(p.tipo_oferta,  'PRODUTO_PROPRIO') AS tipo_oferta,
+                COALESCE(p.status_fluxo, 'ATIVO')           AS status_fluxo,
+                COALESCE(p.destino_final,'ESTOQUE')          AS destino_final,
+                p.aprovado_em, p.aprovado_por,
                 v.id AS variacao_id, v.sku, v.variacao,
-                v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central
+                v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central,
+                COALESCE(v.lead_time_dias, 0) AS lead_time_dias,
+                COALESCE(v.qtd_minima,    1) AS qtd_minima
              FROM produtos p
              JOIN produto_variacoes v ON p.id = v.produto_id
              ORDER BY p.id DESC`;
@@ -1008,8 +1055,13 @@ app.get('/api/produtos', autenticar, async (req, res) => {
                     ELSE '[]'::jsonb
                 END AS galeria,
                 false AS precificado,
+                COALESCE(p.tipo_oferta,  'PRODUTO_PROPRIO') AS tipo_oferta,
+                COALESCE(p.status_fluxo, 'ATIVO')           AS status_fluxo,
+                COALESCE(p.destino_final,'ESTOQUE')          AS destino_final,
+                p.aprovado_em, p.aprovado_por,
                 v.id AS variacao_id, v.sku, v.variacao,
-                v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central
+                v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central,
+                0 AS lead_time_dias, 1 AS qtd_minima
              FROM produtos p
              JOIN produto_variacoes v ON p.id = v.produto_id
              ORDER BY p.id DESC`;
@@ -1042,24 +1094,29 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imag
         const precoRepasse = parseMoeda(preco_repasse);
         const custo = parseMoeda(custo_producao);
         const qtdEstoque = toInt(estoque, 0);
+        const tipoOferta   = String(req.body.tipo_oferta   || 'PRODUTO_PROPRIO').toUpperCase();
+        const statusFluxo  = String(req.body.status_fluxo  || 'ATIVO').toUpperCase();
+        const destinoFinal = String(req.body.destino_final || 'ESTOQUE').toUpperCase();
 
         let produtoId;
         await transacao(async (client) => {
             const nP = await client.query(
-                `INSERT INTO produtos (nome, categoria, imagem_url, descricao, status)
-                 VALUES ($1, $2, $3, $4, $5)
+                `INSERT INTO produtos (nome, categoria, imagem_url, descricao, status, tipo_oferta, status_fluxo, destino_final)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                  RETURNING id`,
-                [nome, categoria || 'Impressão 3D', imagem_url, descricao || 'Peça 3D', status || 'ATIVO']
+                [nome, categoria || 'Impressão 3D', imagem_url, descricao || '', status || 'ATIVO', tipoOferta, statusFluxo, destinoFinal]
             );
             produtoId = nP.rows[0].id;
 
             const skuFinal = normalizarSku(sku) || gerarSkuAutomatico(nome, categoria || 'Impressão 3D', produtoId);
             const vNova = await client.query(
                 `INSERT INTO produto_variacoes
-                    (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central, lead_time_dias, qtd_minima)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING id`,
-                [produtoId, skuFinal, variacao, precoVenda, precoRepasse, custo, qtdEstoque]
+                [produtoId, skuFinal, variacao, precoVenda, precoRepasse, custo, qtdEstoque,
+                 toInt(req.body.lead_time_dias, 0) || null,
+                 toInt(req.body.qtd_minima, 1)]
             );
 
             await salvarPrecificacaoProduto(client, produtoId, vNova.rows[0].id, req.body, req.user.id);
@@ -1193,6 +1250,30 @@ app.patch('/api/produtos/estoque/:id', autenticar, somenteAdmin, async (req, res
         res.json({ mensagem: '✅ Estoque atualizado!' });
     } catch (e) {
         res.status(500).json({ erro: 'Erro no ajuste de estoque: ' + e.message });
+    }
+});
+
+// V6.7 — Aprovar produto (admin)
+app.put('/api/produtos/:id/aprovar', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const novoStatus = String(req.body.status_fluxo || 'APROVADO').toUpperCase();
+        const permitidos = ['APROVADO','EM_EXECUCAO','CONCLUIDO','CANCELADO','RASCUNHO','AGUARDANDO_APROVACAO','ATIVO'];
+        if (!permitidos.includes(novoStatus)) return res.status(400).json({ erro: 'Status inválido.' });
+        const aprovado = ['APROVADO','EM_EXECUCAO'].includes(novoStatus);
+        await db.query(
+            `UPDATE produtos SET
+                status_fluxo  = $1,
+                aprovado_em   = CASE WHEN $2 THEN CURRENT_TIMESTAMP ELSE aprovado_em END,
+                aprovado_por  = CASE WHEN $2 THEN $3 ELSE aprovado_por END
+             WHERE id = $4`,
+            [novoStatus, aprovado, req.user.id, id]
+        );
+        await registrarAuditoria(req.user.id, `Atualizou status_fluxo do produto ${id} para ${novoStatus}`);
+        res.json({ mensagem: `Status atualizado para ${novoStatus}.` });
+    } catch (e) {
+        console.error('❌ Erro aprovar produto:', e);
+        res.status(500).json({ erro: 'Erro ao atualizar status.' });
     }
 });
 
@@ -4075,6 +4156,15 @@ app.patch('/api/catalogo-pedidos/:id/crm', autenticar, async (req, res) => {
             WHERE ${where}
             RETURNING *`, params);
         if (!result.rows.length) return res.status(404).json({ erro: 'Lead/pedido não encontrado.' });
+        // Registra no histórico automaticamente se o status mudou
+        if (status) {
+            try {
+                await db.query(
+                    `INSERT INTO lead_historico (lead_id, usuario_id, tipo, descricao) VALUES ($1,$2,'status',$3)`,
+                    [id, req.user.id, `Status alterado para ${status}`]
+                );
+            } catch (_) {}
+        }
         await registrarAuditoria(req.user.id, `Atualizou CRM do lead ${id}`);
         res.json({ mensagem: 'CRM atualizado.', pedido: result.rows[0] });
     } catch (e) {
@@ -4082,6 +4172,82 @@ app.patch('/api/catalogo-pedidos/:id/crm', autenticar, async (req, res) => {
         res.status(500).json({ erro: 'Erro ao atualizar CRM: ' + e.message });
     }
 });
+
+// V6.8 — Histórico de atendimento do lead
+app.get('/api/catalogo-pedidos/:id/historico', autenticar, async (req, res) => {
+    try {
+        const r = await db.query(
+            `SELECT lh.*, u.nome AS usuario_nome
+             FROM lead_historico lh
+             LEFT JOIN usuarios u ON u.id = lh.usuario_id
+             WHERE lh.lead_id = $1
+             ORDER BY lh.criado_em DESC
+             LIMIT 100`,
+            [req.params.id]
+        );
+        res.json(r.rows);
+    } catch (e) {
+        res.status(500).json({ erro: 'Erro ao buscar histórico.' });
+    }
+});
+
+app.post('/api/catalogo-pedidos/:id/historico', autenticar, async (req, res) => {
+    try {
+        const { tipo = 'nota', descricao = '' } = req.body || {};
+        const r = await db.query(
+            `INSERT INTO lead_historico (lead_id, usuario_id, tipo, descricao) VALUES ($1,$2,$3,$4) RETURNING *`,
+            [req.params.id, req.user.id, tipo, descricao]
+        );
+        res.status(201).json(r.rows[0]);
+    } catch (e) {
+        res.status(500).json({ erro: 'Erro ao registrar histórico.' });
+    }
+});
+
+// V6.8 — Converter lead em venda
+app.post('/api/catalogo-pedidos/:id/converter-venda', autenticar, async (req, res) => {
+    try {
+        const id  = req.params.id;
+        const lead = await db.query('SELECT * FROM catalogo_pedidos WHERE id = $1', [id]);
+        if (!lead.rows.length) return res.status(404).json({ erro: 'Lead não encontrado.' });
+        const p   = lead.rows[0];
+        const valor = parseMoeda(req.body.valor || p.valor_negociado || p.subtotal || 0);
+        const obs   = req.body.observacao || p.observacoes_internas || '';
+
+        await transacao(async (client) => {
+            // Busca primeira variação do lead para associar à venda
+            const itens = await client.query(
+                'SELECT * FROM catalogo_pedido_itens WHERE pedido_id = $1 LIMIT 1', [id]
+            );
+            const item = itens.rows[0];
+
+            const vendaRes = await client.query(
+                `INSERT INTO vendas (parceiro_id, produto_id, variacao_id, quantidade, valor_total, status, data_venda, observacao, usuario_id)
+                 VALUES ($1,$2,$3,$4,$5,'PENDENTE',CURRENT_DATE,$6,$7) RETURNING id`,
+                [p.parceiro_id, item?.produto_id||null, item?.variacao_id||null,
+                 item?.quantidade||1, valor, `Convertido do lead ${p.codigo}. ${obs}`, req.user.id]
+            );
+            const vendaId = vendaRes.rows[0].id;
+
+            await client.query(
+                `UPDATE catalogo_pedidos SET status='FECHADO', atualizado_em=CURRENT_TIMESTAMP WHERE id=$1`, [id]
+            );
+            await client.query(
+                `INSERT INTO lead_historico (lead_id,usuario_id,tipo,descricao) VALUES ($1,$2,'venda',$3)`,
+                [id, req.user.id, `Convertido em venda #${vendaId}. Valor: ${valor}`]
+            );
+        });
+
+        await registrarAuditoria(req.user.id, `Converteu lead ${p.codigo} em venda`);
+        res.json({ mensagem: 'Lead convertido em venda com sucesso.' });
+    } catch (e) {
+        console.error('❌ Erro converter venda:', e);
+        res.status(500).json({ erro: 'Erro ao converter em venda: ' + e.message });
+    }
+});
+
+// V6.8 — GET catalogo-pedidos com responsável
+// (patch no SELECT existente — adiciona join)
 
 app.get('/api/dashboard/crescimento', autenticar, somenteAdmin, async (req, res) => {
     try {

@@ -1,11 +1,20 @@
 /**
- * PERSONALIZE HUB — Theme v6.1
- * Aplica data-theme imediatamente (sem flash).
- * Injeta botão flutuante SOMENTE em páginas sem sidebar
- * (catálogo público, login, etc.) — nas demais o painel de
- * configurações da sidebar controla o tema.
+ * PERSONALIZE HUB — Theme + Auth Guard v6.2
+ * 1. Aplica data-theme imediatamente (sem flash).
+ * 2. Redireciona para login se não houver token em páginas protegidas.
  */
 (function () {
+  // ---- Auth guard síncrono: evita qualquer flash de conteúdo ----
+  const PUBLIC_PAGES = [
+    'index.html', '', 'recuperar.html', 'registrar.html',
+    'redefinir-senha.html', 'catalogo-publico.html', 'catalogo.html'
+  ];
+  const currentPage = location.pathname.split('/').pop() || 'index.html';
+  if (!PUBLIC_PAGES.includes(currentPage) && !localStorage.getItem('token_personalize')) {
+    location.replace('index.html');
+  }
+
+  // ---- Tema ----
   const KEY = 'ph-theme';
   const saved = localStorage.getItem(KEY) || 'light';
   document.documentElement.setAttribute('data-theme', saved);
