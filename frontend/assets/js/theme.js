@@ -1,49 +1,36 @@
 /**
- * PERSONALIZE HUB — Theme Toggle v6.0
- * Aplica Light Pro / Dark Premium via data-theme no <html>
- * Persiste no localStorage. Injeta botão de alternância automaticamente.
+ * PERSONALIZE HUB — Theme v6.1
+ * Aplica data-theme imediatamente (sem flash).
+ * Injeta botão flutuante SOMENTE em páginas sem sidebar
+ * (catálogo público, login, etc.) — nas demais o painel de
+ * configurações da sidebar controla o tema.
  */
 (function () {
   const KEY = 'ph-theme';
   const saved = localStorage.getItem(KEY) || 'light';
-
-  // Aplica o tema imediatamente para evitar flash
   document.documentElement.setAttribute('data-theme', saved);
 
-  function getIcon(theme) {
-    return theme === 'dark'
+  document.addEventListener('DOMContentLoaded', function () {
+    // Páginas com sidebar têm o tema gerenciado pelo painel de configurações
+    if (document.querySelector('#sidebar')) return;
+
+    const current = document.documentElement.getAttribute('data-theme');
+    const btn = document.createElement('button');
+    btn.className = 'theme-toggle-btn theme-toggle-fixed';
+    btn.setAttribute('aria-label', 'Alternar tema');
+    btn.innerHTML = current === 'dark'
       ? '<i class="bx bx-sun"></i> Light'
       : '<i class="bx bx-moon"></i> Dark';
-  }
-
-  document.addEventListener('DOMContentLoaded', function () {
-    const current = document.documentElement.getAttribute('data-theme');
-
-    const btn = document.createElement('button');
-    btn.className = 'theme-toggle-btn';
-    btn.setAttribute('aria-label', 'Alternar tema');
-    btn.innerHTML = getIcon(current);
 
     btn.addEventListener('click', function () {
-      const now = document.documentElement.getAttribute('data-theme');
-      const next = now === 'dark' ? 'light' : 'dark';
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem(KEY, next);
-      btn.innerHTML = getIcon(next);
+      btn.innerHTML = next === 'dark'
+        ? '<i class="bx bx-sun"></i> Light'
+        : '<i class="bx bx-moon"></i> Dark';
     });
 
-    // Se tiver sidebar, injeta no final dela
-    const sidebarLinks = document.querySelector('.sidebar-links');
-    if (sidebarLinks) {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'theme-toggle-sidebar';
-      wrapper.appendChild(btn);
-      sidebarLinks.appendChild(wrapper);
-      return;
-    }
-
-    // Fallback: botão flutuante fixo (catálogo público, auth, etc.)
-    btn.classList.add('theme-toggle-fixed');
     document.body.appendChild(btn);
   });
 })();

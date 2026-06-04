@@ -6,6 +6,7 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
 const db = require('./config/db');
@@ -52,6 +53,41 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+// Fix 17 — Security headers básicos
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    // CSP permissiva para SPA existente — pode ser endurecida gradualmente
+    res.setHeader('Content-Security-Policy',
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net unpkg.com; " +
+        "style-src 'self' 'unsafe-inline' fonts.googleapis.com unpkg.com; " +
+        "font-src 'self' fonts.gstatic.com unpkg.com data:; " +
+        "img-src 'self' data: blob: https:; " +
+        "connect-src 'self' https:;"
+    );
+    next();
+});
+
+// Fix 12 — Rate limits
+const limiterLogin = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 min
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { erro: 'Muitas tentativas de login. Aguarde 15 minutos.' }
+});
+const limiterCatalogoPublico = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 min
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { erro: 'Muitas requisições. Aguarde alguns minutos.' }
+});
+
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 app.get('/', (req, res) => {
@@ -151,13 +187,20 @@ function getBearerToken(req) {
     return auth.split(' ')[1];
 }
 
-function autenticar(req, res, next) {
+// Fix 15 — verifica token E se usuário ainda está ativo no banco
+async function autenticar(req, res, next) {
     const token = getBearerToken(req);
     if (!token) return res.status(401).json({ erro: 'Não autorizado.' });
-
     try {
         req.user = jwt.verify(token, JWT_SECRET);
         req.user.perfil = normalizarPerfil(req.user.perfil);
+        // Rota /me já valida — evita dupla query em cada requisição de heartbeat
+        if (req.path !== '/api/me') {
+            const r = await db.query('SELECT ativo FROM usuarios WHERE id = $1 LIMIT 1', [req.user.id]);
+            if (!r.rows.length || !r.rows[0].ativo) {
+                return res.status(401).json({ erro: 'Usuário inativo ou removido. Faça login novamente.' });
+            }
+        }
         next();
     } catch (err) {
         return res.status(401).json({ erro: 'Token inválido ou expirado.' });
@@ -434,7 +477,7 @@ function inicioFimMes(mesReferencia) {
 // AUTH / SENHA
 // =========================================================
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', limiterLogin, async (req, res) => {
     try {
         const { usuario, senha } = req.body;
         if (!usuario || !senha) return res.status(400).json({ erro: 'Usuário e senha são obrigatórios.' });
@@ -573,6 +616,26 @@ app.post('/api/usuarios/reset-password', async (req, res) => {
 // =========================================================
 // USUÁRIOS
 // =========================================================
+
+// Alteração de senha pelo próprio usuário autenticado
+app.put('/api/usuarios/me/senha', autenticar, async (req, res) => {
+    try {
+        const { senhaAtual, novaSenha } = req.body || {};
+        if (!senhaAtual || !novaSenha) return res.status(400).json({ erro: 'Informe a senha atual e a nova senha.' });
+        if (String(novaSenha).length < 6) return res.status(400).json({ erro: 'A nova senha deve ter no mínimo 6 caracteres.' });
+        const row = await db.query('SELECT senha_hash FROM usuarios WHERE id = $1 AND ativo = true', [req.user.id]);
+        if (!row.rows.length) return res.status(404).json({ erro: 'Usuário não encontrado.' });
+        const ok = await bcrypt.compare(senhaAtual, row.rows[0].senha_hash);
+        if (!ok) return res.status(401).json({ erro: 'Senha atual incorreta.' });
+        const hash = await bcrypt.hash(novaSenha, 10);
+        await db.query('UPDATE usuarios SET senha_hash = $1, atualizado_em = CURRENT_TIMESTAMP WHERE id = $2', [hash, req.user.id]);
+        await registrarAuditoria(req.user.id, 'Alterou a própria senha');
+        res.json({ mensagem: 'Senha alterada com sucesso.' });
+    } catch (e) {
+        console.error('❌ Erro alterar senha:', e);
+        res.status(500).json({ erro: 'Erro ao alterar senha.' });
+    }
+});
 
 app.get('/api/usuarios', autenticar, somenteAdmin, async (req, res) => {
     try {
@@ -3206,6 +3269,16 @@ app.get('/catalogo/:slug', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/catalogo-publico.html'));
 });
 
+// Fix 13 — Remove tags HTML e atributos perigosos de campos de texto livre do catálogo
+function sanitizarTexto(value) {
+    if (!value || typeof value !== 'string') return value;
+    return value
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/javascript\s*:/gi, '')
+        .replace(/on\w+\s*=/gi, '')
+        .replace(/<[^>]+>/g, '');
+}
+
 function slugifyCatalogo(value) {
     return String(value || '')
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -3394,7 +3467,12 @@ app.put('/api/catalogo-config', autenticar, upload.fields([
         };
         const remove = (name) => String(req.body[`remover_${name}`] || '').toLowerCase() === 'true';
         const resetar = String(req.body.resetar || '').toLowerCase() === 'true';
-        const bodyVal = (name) => req.body[name] === undefined ? null : req.body[name];
+        // Fix 13 — sanitiza campos de texto livre antes de persistir
+        const bodyVal = (name) => {
+            if (req.body[name] === undefined) return null;
+            const freeTextFields = ['descricao_catalogo','footer_contato','footer_localizacao','footer_pagamentos','footer_copyright','sobre_nos'];
+            return freeTextFields.includes(name) ? sanitizarTexto(req.body[name]) : req.body[name];
+        };
 
         if (perfil === 'ADMIN') {
             await db.query(`INSERT INTO catalogo_admin_config (id, nome_loja, atualizado_em) VALUES (1, 'PERSONALIZE', CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING`);
@@ -3760,7 +3838,7 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
     }
 });
 
-app.post('/api/catalogo-publico/:slug/leads', async (req, res) => {
+app.post('/api/catalogo-publico/:slug/leads', limiterCatalogoPublico, async (req, res) => {
     const client = await db.connect();
     try {
         const slug = slugifyCatalogo(req.params.slug);
@@ -3833,7 +3911,7 @@ app.post('/api/catalogo-publico/:slug/leads', async (req, res) => {
     } finally { client.release(); }
 });
 
-app.post('/api/catalogo-publico/:slug/footer-leads', async (req, res) => {
+app.post('/api/catalogo-publico/:slug/footer-leads', limiterCatalogoPublico, async (req, res) => {
     try {
         const slug = slugifyCatalogo(req.params.slug);
         const isAdminCatalogo = slug === 'personalize' || slug === 'admin';
@@ -3876,7 +3954,7 @@ app.post('/api/catalogo-publico/:slug/footer-leads', async (req, res) => {
     }
 });
 
-app.post('/api/catalogo-publico/:slug/cotacoes', upload.single('arquivo'), async (req, res) => {
+app.post('/api/catalogo-publico/:slug/cotacoes', limiterCatalogoPublico, upload.single('arquivo'), async (req, res) => {
     try {
         const slug = slugifyCatalogo(req.params.slug);
         const isAdminCatalogo = slug === 'personalize' || slug === 'admin';
@@ -4055,9 +4133,10 @@ async function garantirAssinaturaParceiro(client, parceiroId) {
     const p = parceiro.rows[0] || {};
     const criada = await client.query(
         `INSERT INTO assinaturas_catalogo (parceiro_id, status, inicio_teste, fim_teste, valor_mensal, proxima_cobranca)
-         VALUES ($1, COALESCE($2,'TESTE_GRATIS'), COALESCE($3,CURRENT_DATE), COALESCE($4,(CURRENT_DATE + INTERVAL '3 months')::date), COALESCE($5,0), COALESCE($4,(CURRENT_DATE + INTERVAL '3 months')::date))
+         VALUES ($1, COALESCE($2,'TESTE_GRATIS'), COALESCE($3,CURRENT_DATE), COALESCE($4,(CURRENT_DATE + INTERVAL '3 months')::date), COALESCE($5::numeric,0), COALESCE($4,(CURRENT_DATE + INTERVAL '3 months')::date))
          RETURNING *`,
-        [parceiroId, p.catalogo_plano_status, p.catalogo_teste_inicio, p.catalogo_teste_fim, p.catalogo_valor_mensal]
+        [parceiroId, p.catalogo_plano_status, p.catalogo_teste_inicio, p.catalogo_teste_fim,
+         p.catalogo_valor_mensal != null ? parseMoeda(p.catalogo_valor_mensal) : null]
     );
     return criada.rows[0];
 }
@@ -4360,6 +4439,15 @@ app.get('/api/ping', async (req, res) => {
 
 app.use('/api', (req, res) => {
     res.status(404).json({ erro: 'Rota não encontrada.' });
+});
+
+// Fix 14 — Handler global: em produção não vaza detalhes técnicos ao cliente
+app.use((err, req, res, next) => {
+    console.error('❌ Erro não tratado:', err);
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(err.status || 500).json({
+        erro: isProd ? 'Erro interno no servidor.' : (err.message || 'Erro interno no servidor.')
+    });
 });
 
 app.listen(PORT, () => console.log(`🔥 PERSONALIZE Hub Online: http://localhost:${PORT}`));

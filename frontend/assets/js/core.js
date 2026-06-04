@@ -206,6 +206,9 @@ window.App = (() => {
             return html;
         })();
 
+        const initials = nome.split(' ').filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+        const temaAtual = localStorage.getItem('ph-theme') || 'light';
+
         side.innerHTML = `
             <div class="sidebar-top">
                 <div class="sidebar-brand">
@@ -224,8 +227,39 @@ window.App = (() => {
             </div>
             <nav class="sidebar-links" id="menuLinks">
                 ${linksHtml}
-                <a href="#" class="btn-sair" id="btnSair" data-label="Sair">${icon('bx-log-out')}<span>Sair</span></a>
-            </nav>`;
+            </nav>
+            <div class="sidebar-footer" id="sidebarFooter">
+                <div class="sidebar-config-panel" id="sidebarConfigPanel">
+                    <div class="sc-user-info">
+                        <div class="sc-avatar">${escapeHtml(initials || '?')}</div>
+                        <div>
+                            <strong>${escapeHtml(nome)}</strong>
+                            <small>${escapeHtml(perfil || '')}</small>
+                        </div>
+                    </div>
+                    <div class="sc-divider"></div>
+                    <button class="sc-item" id="scToggleTema" type="button">
+                        <i class="bx ${temaAtual === 'dark' ? 'bx-sun' : 'bx-moon'}"></i>
+                        <span>${temaAtual === 'dark' ? 'Modo Light' : 'Modo Dark'}</span>
+                        <div class="sc-switch ${temaAtual === 'dark' ? 'on' : ''}" id="scSwitch"></div>
+                    </button>
+                    <div class="sc-divider"></div>
+                    <button class="sc-item" id="scAlterarSenha" type="button">
+                        <i class="bx bx-lock-alt"></i>
+                        <span>Alterar senha</span>
+                    </button>
+                    <div class="sc-divider"></div>
+                    <button class="sc-item sc-item--danger" id="scSair" type="button">
+                        <i class="bx bx-log-out"></i>
+                        <span>Sair</span>
+                    </button>
+                </div>
+                <button class="sidebar-config-btn" id="btnSidebarConfig" type="button" data-label="Configurações">
+                    <i class="bx bx-cog"></i>
+                    <span>Configurações</span>
+                    <i class="bx bx-chevron-up sidebar-config-arrow"></i>
+                </button>
+            </div>`;
 
         // Toggle recolher/expandir (desktop)
         document.getElementById('btnSidebarToggle')?.addEventListener('click', () => {
@@ -268,11 +302,155 @@ window.App = (() => {
             submenu.addEventListener('mouseleave', hideFlyout);
         });
 
-        // Toggle dropdown mobile
+        // ---- Helpers de overlay ----
+        function _abrirOverlay(onClose) {
+            _fecharOverlay();
+            const ov = document.createElement('div');
+            ov.id = 'ph-overlay';
+            ov.addEventListener('click', () => { onClose(); _fecharOverlay(); });
+            document.body.appendChild(ov);
+        }
+        function _fecharOverlay() {
+            document.getElementById('ph-overlay')?.remove();
+        }
+
+        // ---- Dropdown mobile (nav links) — comportamento original ----
         document.getElementById('btnMenu')?.addEventListener('click', () =>
             document.getElementById('menuLinks')?.classList.toggle('ativo-mobile'));
 
-        document.getElementById('btnSair')?.addEventListener('click', (e) => { e.preventDefault(); logout(); });
+        // Fecha ao clicar em link de navegação
+        document.querySelectorAll('#menuLinks a[href]').forEach(a => {
+            a.addEventListener('click', () => {
+                document.getElementById('menuLinks')?.classList.remove('ativo-mobile');
+            });
+        });
+
+        // ---- Painel de Configurações ----
+        const footer   = document.getElementById('sidebarFooter');
+        const panel    = document.getElementById('sidebarConfigPanel');
+        const cfgBtn   = document.getElementById('btnSidebarConfig');
+
+        cfgBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const abrindo = !footer?.classList.contains('open');
+            // Em collapsed desktop, posiciona o flyout
+            if (side.classList.contains('collapsed') && panel) {
+                const rect = cfgBtn.getBoundingClientRect();
+                panel.style.bottom = (window.innerHeight - rect.bottom) + 'px';
+                panel.style.top = 'auto';
+            }
+            footer?.classList.toggle('open');
+            // Overlay apenas no mobile (bottom sheet):
+            // no desktop o z-index do overlay ficaria acima do sidebar
+            // bloqueando os itens do painel — usa document.click em vez disso
+            if (window.innerWidth <= 768) {
+                if (abrindo) {
+                    _abrirOverlay(() => footer?.classList.remove('open'));
+                } else {
+                    _fecharOverlay();
+                }
+            }
+        });
+
+        // Desktop: fecha ao clicar fora do sidebar
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth > 768
+                && footer?.classList.contains('open')
+                && !side.contains(e.target)) {
+                footer.classList.remove('open');
+            }
+        });
+
+        // Tema toggle
+        document.getElementById('scToggleTema')?.addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('ph-theme', next);
+            const btn  = document.getElementById('scToggleTema');
+            const sw   = document.getElementById('scSwitch');
+            if (btn) {
+                btn.querySelector('i').className = `bx ${next === 'dark' ? 'bx-sun' : 'bx-moon'}`;
+                btn.querySelector('span').textContent = next === 'dark' ? 'Modo Light' : 'Modo Dark';
+            }
+            if (sw) sw.classList.toggle('on', next === 'dark');
+        });
+
+        // Alterar senha — abre modal
+        document.getElementById('scAlterarSenha')?.addEventListener('click', () => {
+            footer?.classList.remove('open');
+            _abrirModalSenha();
+        });
+
+        // Sair
+        document.getElementById('scSair')?.addEventListener('click', () => logout());
+    }
+
+    function _abrirModalSenha() {
+        if (document.getElementById('phModalSenha')) return;
+        const overlay = document.createElement('div');
+        overlay.id = 'phModalSenha';
+        overlay.className = 'ph-modal-overlay';
+        overlay.innerHTML = `
+            <div class="ph-modal-box">
+                <div class="ph-modal-header">
+                    <h3><i class="bx bx-lock-alt"></i> Alterar Senha</h3>
+                    <button class="ph-modal-close" id="phModalClose" type="button"><i class="bx bx-x"></i></button>
+                </div>
+                <div class="ph-modal-body">
+                    <div class="form-group">
+                        <label>Senha atual</label>
+                        <input type="password" id="phSenhaAtual" placeholder="••••••••" autocomplete="current-password">
+                    </div>
+                    <div class="form-group mt-2">
+                        <label>Nova senha</label>
+                        <input type="password" id="phNovaSenha" placeholder="mínimo 6 caracteres" autocomplete="new-password">
+                    </div>
+                    <div class="form-group mt-2">
+                        <label>Confirmar nova senha</label>
+                        <input type="password" id="phConfirmarSenha" placeholder="repita a nova senha" autocomplete="new-password">
+                    </div>
+                    <p class="ph-modal-msg" id="phModalMsg"></p>
+                </div>
+                <div class="ph-modal-footer">
+                    <button class="btn btn-light" id="phModalCancelar" type="button">Cancelar</button>
+                    <button class="btn btn-primary" id="phModalSalvar" type="button">
+                        <i class="bx bx-check"></i> Salvar
+                    </button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        const fechar = () => overlay.remove();
+        document.getElementById('phModalClose')?.addEventListener('click', fechar);
+        document.getElementById('phModalCancelar')?.addEventListener('click', fechar);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) fechar(); });
+
+        document.getElementById('phModalSalvar')?.addEventListener('click', async () => {
+            const msg       = document.getElementById('phModalMsg');
+            const atual     = document.getElementById('phSenhaAtual')?.value.trim();
+            const nova      = document.getElementById('phNovaSenha')?.value;
+            const confirmar = document.getElementById('phConfirmarSenha')?.value;
+            msg.textContent = '';
+            msg.className   = 'ph-modal-msg';
+            if (!atual || !nova) { msg.textContent = 'Preencha todos os campos.'; msg.classList.add('error'); return; }
+            if (nova.length < 6)  { msg.textContent = 'A nova senha deve ter ao menos 6 caracteres.'; msg.classList.add('error'); return; }
+            if (nova !== confirmar){ msg.textContent = 'As senhas não coincidem.'; msg.classList.add('error'); return; }
+            const salvarBtn = document.getElementById('phModalSalvar');
+            salvarBtn.disabled = true;
+            try {
+                await api('/usuarios/me/senha', {
+                    method: 'PUT',
+                    body: JSON.stringify({ senhaAtual: atual, novaSenha: nova })
+                });
+                msg.textContent = '✓ Senha alterada com sucesso!';
+                msg.classList.add('success');
+                setTimeout(fechar, 1400);
+            } catch (err) {
+                msg.textContent = err.message || 'Erro ao alterar senha.';
+                msg.classList.add('error');
+                salvarBtn.disabled = false;
+            }
+        });
     }
 
     function bindPasswordToggle(inputId, buttonId) {
