@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('tituloFormParceiro').textContent = 'Nova loja parceira';
         document.getElementById('btnCancelarParceiro').classList.add('hidden');
         document.getElementById('senha').placeholder = 'Obrigatória no cadastro';
+        document.getElementById('senha').required = true;
+        document.getElementById('usuario').required = true;
         document.getElementById('email').disabled = false;
     }
 
@@ -70,7 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('email').value = p.email_login || '';
             document.getElementById('email').disabled = true;
             document.getElementById('usuario').value = p.usuario || '';
+            document.getElementById('usuario').required = false;
             document.getElementById('senha').value = '';
+            document.getElementById('senha').required = false;
             document.getElementById('senha').placeholder = 'Não altera por aqui';
             document.getElementById('tituloFormParceiro').textContent = `Editando: ${p.nome_loja}`;
             document.getElementById('btnCancelarParceiro').classList.remove('hidden');
