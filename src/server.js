@@ -87,6 +87,13 @@ const limiterCatalogoPublico = rateLimit({
     legacyHeaders: false,
     message: { erro: 'Muitas requisições. Aguarde alguns minutos.' }
 });
+const limiterSenha = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hora
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { erro: 'Muitas tentativas de recuperação de senha. Aguarde 1 hora.' }
+});
 
 app.use(express.static(path.join(__dirname, '../frontend')));
 
@@ -578,7 +585,7 @@ app.get('/api/me', autenticar, async (req, res) => {
     }
 });
 
-app.post('/api/usuarios/recuperar', async (req, res) => {
+app.post('/api/usuarios/recuperar', limiterSenha, async (req, res) => {
     try {
         const { email } = req.body;
         if (!email) return res.status(400).json({ erro: 'Email é obrigatório.' });
@@ -624,7 +631,7 @@ app.post('/api/usuarios/recuperar', async (req, res) => {
     }
 });
 
-app.post('/api/usuarios/reset-password', async (req, res) => {
+app.post('/api/usuarios/reset-password', limiterSenha, async (req, res) => {
     try {
         const { token, novaSenha } = req.body;
         if (!token || !novaSenha) return res.status(400).json({ erro: 'Dados inválidos.' });
@@ -3350,14 +3357,18 @@ app.get('/catalogo/:slug', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/catalogo-publico.html'));
 });
 
-// Fix 13 — Remove tags HTML e atributos perigosos de campos de texto livre do catálogo
+// Remove tags HTML e atributos perigosos de campos de texto livre
 function sanitizarTexto(value) {
     if (!value || typeof value !== 'string') return value;
     return value
-        .replace(/<script[\s\S]*?<\/script>/gi, '')
-        .replace(/javascript\s*:/gi, '')
-        .replace(/on\w+\s*=/gi, '')
-        .replace(/<[^>]+>/g, '');
+        .replace(/<script[\s\S]*?<\/script>/gi, '')           // remove blocos <script>
+        .replace(/<style[\s\S]*?<\/style>/gi, '')             // remove blocos <style>
+        .replace(/<!--[\s\S]*?-->/g, '')                      // remove comentários HTML
+        .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')  // remove atributos on*
+        .replace(/javascript\s*:/gi, '')                      // remove URLs javascript:
+        .replace(/data\s*:/gi, '')                            // remove URLs data:
+        .replace(/<[^>]+>/g, '')                              // remove qualquer tag restante
+        .trim();
 }
 
 function slugifyCatalogo(value) {

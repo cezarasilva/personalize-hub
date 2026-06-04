@@ -5,9 +5,11 @@ if (!process.env.DATABASE_URL) {
     console.warn('⚠️ DATABASE_URL não configurada no .env');
 }
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: isProd ? { rejectUnauthorized: true } : { rejectUnauthorized: false }
 });
 
 pool.connect((err, client, release) => {

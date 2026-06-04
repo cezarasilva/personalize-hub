@@ -73,25 +73,35 @@
         const idx = galeriasEstado.get(key) || 0;
         if (!imgs.length) return '<div class="catalogo-gallery"><div class="img-placeholder" style="width:100%;height:100%;">Sem foto</div></div>';
         const nav = imgs.length > 1 ? `
-            <button class="gallery-nav prev" onclick="moverFoto('${key}', -1)"><i class="bx bx-chevron-left"></i></button>
-            <button class="gallery-nav next" onclick="moverFoto('${key}', 1)"><i class="bx bx-chevron-right"></i></button>` : '';
+            <button class="gallery-nav prev" data-gallery-prev="${key}" aria-label="Foto anterior"><i class="bx bx-chevron-left"></i></button>
+            <button class="gallery-nav next" data-gallery-next="${key}" aria-label="Próxima foto"><i class="bx bx-chevron-right"></i></button>` : '';
         return `<div class="catalogo-gallery" data-gallery="${key}">
             <img src="${esc(imgs[idx])}" alt="${esc(p.nome)}">
             ${nav}
-            <button class="gallery-zoom" onclick="abrirZoom('${key}')"><i class="bx bx-search-alt-2"></i></button>
+            <button class="gallery-zoom" data-gallery-zoom="${key}" aria-label="Ampliar foto"><i class="bx bx-search-alt-2"></i></button>
         </div>`;
     }
 
-    window.moverFoto = (key, delta) => {
+    function moverFoto(key, delta) {
         const prod = produtos.find(p => `${p.id}-${p.variacao_id}` === key);
         if (!prod) return;
         const imgs = imagensProduto(prod);
         const atual = galeriasEstado.get(key) || 0;
         galeriasEstado.set(key, (atual + delta + imgs.length) % imgs.length);
         renderProdutos();
-    };
+    }
 
-    window.abrirZoom = (key) => {
+    // Event delegation — evita onclick inline com variáveis interpoladas
+    document.addEventListener('click', (e) => {
+        const prev = e.target.closest('[data-gallery-prev]');
+        const next = e.target.closest('[data-gallery-next]');
+        const zoom = e.target.closest('[data-gallery-zoom]');
+        if (prev) { e.stopPropagation(); moverFoto(prev.dataset.galleryPrev, -1); }
+        else if (next) { e.stopPropagation(); moverFoto(next.dataset.galleryNext, 1); }
+        else if (zoom) { e.stopPropagation(); abrirZoom(zoom.dataset.galleryZoom); }
+    });
+
+    function abrirZoom(key) {
         const prod = produtos.find(p => `${p.id}-${p.variacao_id}` === key);
         if (!prod) return;
         const imgs = imagensProduto(prod);
