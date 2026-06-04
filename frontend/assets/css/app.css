@@ -672,7 +672,7 @@ button.sidebar-group span { flex: 1; line-height: 1.2; }
 .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
 .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
 .grid-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
-.chart-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
 .form-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; align-items: end; }
 .form-grid-4 { display: grid; grid-template-columns: 1.6fr .7fr .9fr .7fr; gap: 14px; align-items: end; }

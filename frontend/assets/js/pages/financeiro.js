@@ -200,10 +200,28 @@ document.addEventListener('DOMContentLoaded', () => {
         doc.save(`${nome}.pdf`.replace(/[\s/\\]+/g, '_'));
     }
 
+    async function exportarCSV() {
+        try {
+            const periodo = periodoEl.value;
+            const parceiro = filtroParceiro.value;
+            const qs = new URLSearchParams();
+            if (periodo) qs.set('periodo', periodo);
+            if (parceiro) qs.set('parceiro_id', parceiro);
+            const res = await fetch(`${App.API_BASE}/financeiro/exportar?${qs.toString()}`, { headers: { Authorization: 'Bearer ' + App.token() } });
+            if (!res.ok) throw new Error('Erro ao exportar.');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `financeiro${periodo ? '_' + periodo : ''}.csv`; a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) { App.toast('error', err.message); }
+    }
+
     document.getElementById('btnFiltrarFinanceiro').addEventListener('click', carregar);
     document.getElementById('btnAtualizar').addEventListener('click', carregar);
     document.getElementById('btnGerarTodos').addEventListener('click', () => gerarFechamento(''));
     document.getElementById('btnPdfGeral').addEventListener('click', gerarPDFGeral);
+    document.getElementById('btnExportarCSV')?.addEventListener('click', exportarCSV);
 
     document.addEventListener('click', async (e) => {
         const gerarLoja = e.target.closest('[data-gerar-loja]')?.dataset.gerarLoja;

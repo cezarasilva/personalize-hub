@@ -94,5 +94,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btnCancelarParceiro').addEventListener('click', limpar);
+
+    document.getElementById('btnExportarCSV')?.addEventListener('click', async () => {
+        try {
+            const res = await fetch(App.API_BASE + '/parceiros/exportar', { headers: { Authorization: 'Bearer ' + App.token() } });
+            if (!res.ok) throw new Error('Erro ao exportar.');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'parceiros.csv'; a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) { App.toast('error', err.message); }
+    });
+
     carregar().catch(err => App.toast('error', err.message));
 });

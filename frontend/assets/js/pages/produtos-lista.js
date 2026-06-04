@@ -80,5 +80,53 @@ document.addEventListener('DOMContentLoaded', () => {
         render(produtos.filter(p => [p.nome, p.categoria, p.variacao, p.sku].join(' ').toLowerCase().includes(q)));
     });
 
+    async function downloadCSV(path, filename) {
+        try {
+            const res = await fetch(App.API_BASE + path, { headers: { Authorization: 'Bearer ' + App.token() } });
+            if (!res.ok) throw new Error('Erro ao exportar.');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename; a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) { App.toast('error', err.message); }
+    }
+
+    // CSV export
+    const btnExportar = document.getElementById('btnExportarCSV');
+    if (btnExportar) {
+        btnExportar.addEventListener('click', () => downloadCSV('/produtos/exportar', 'produtos.csv'));
+    }
+
+    // CSV import
+    const btnImportar = document.getElementById('btnImportarCSV');
+    if (btnImportar) {
+        btnImportar.addEventListener('click', async () => {
+            const { value: file } = await Swal.fire({
+                title: 'Importar produtos via CSV',
+                html: '<p style="font-size:13px;margin-bottom:8px;">Baixe o <a id="linkTemplate" href="#" style="color:#2563eb;">template CSV</a> para ver o formato correto.</p><input type="file" id="swal-csv" accept=".csv" class="swal2-input" style="margin-top:8px;">',
+                confirmButtonText: 'Importar',
+                showCancelButton: true,
+                didOpen: () => {
+                    document.getElementById('linkTemplate')?.addEventListener('click', e => { e.preventDefault(); downloadCSV('/produtos/template-csv', 'template-importacao-produtos.csv'); });
+                },
+                preConfirm: () => {
+                    const f = document.getElementById('swal-csv').files[0];
+                    if (!f) { Swal.showValidationMessage('Selecione um arquivo CSV.'); return false; }
+                    return f;
+                }
+            });
+            if (!file) return;
+            try {
+                const form = new FormData();
+                form.append('arquivo', file);
+                const result = await App.api('/produtos/importar', { method: 'POST', body: form });
+                const msg = `${result.importados} produto(s) importado(s).${result.erros?.length ? '\n\nErros:\n' + result.erros.join('\n') : ''}`;
+                await Swal.fire({ title: 'Importação concluída', text: msg, icon: result.erros?.length ? 'warning' : 'success' });
+                await carregar();
+            } catch (err) { App.toast('error', err.message); }
+        });
+    }
+
     carregar();
 });

@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
 const db = require('./config/db');
+const emailSvc = require('./services/email');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -832,6 +833,7 @@ app.post('/api/parceiros', autenticar, somenteAdmin, async (req, res) => {
         });
 
         await registrarAuditoria(req.user.id, `Cadastrou parceiro ${nome_loja}`);
+        emailSvc.emailBoasVindas({ email, nome: responsavel, usuario, nomeLoja: nome_loja }).catch(e => console.warn('⚠️ Email boas-vindas:', e.message));
         res.status(201).json({ mensagem: '✅ Parceiro cadastrado com sucesso!' });
     } catch (erro) {
         console.error('❌ Erro cadastrar parceiro:', erro);
@@ -876,7 +878,11 @@ app.put('/api/parceiros/:id', autenticar, somenteAdmin, async (req, res) => {
         const { id } = req.params;
         const { nome_loja, responsavel, telefone, status, usuario, cnpj_cpf, cep, rua, numero, complemento } = req.body;
 
+        let emailAprovacao = null;
         await transacao(async (client) => {
+            const anterior = await client.query('SELECT status FROM parceiros WHERE id = $1', [id]);
+            const statusAnterior = anterior.rows[0]?.status;
+
             const resultado = await client.query(
                 `UPDATE parceiros
                  SET nome_loja = COALESCE($1, nome_loja),
@@ -894,6 +900,7 @@ app.put('/api/parceiros/:id', autenticar, somenteAdmin, async (req, res) => {
             );
 
             if (resultado.rowCount === 0) throw new Error('Loja não encontrada.');
+            const parceiro = resultado.rows[0];
 
             if (usuario) {
                 await client.query('UPDATE usuarios SET usuario = $1 WHERE parceiro_id = $2', [usuario, id]);
@@ -901,12 +908,21 @@ app.put('/api/parceiros/:id', autenticar, somenteAdmin, async (req, res) => {
 
             if (status === 'ATIVO') {
                 await client.query('UPDATE usuarios SET ativo = true WHERE parceiro_id = $1', [id]);
+                if (statusAnterior && statusAnterior !== 'ATIVO') {
+                    const u = await client.query('SELECT email, nome FROM usuarios WHERE parceiro_id = $1 LIMIT 1', [id]);
+                    if (u.rows.length) {
+                        emailAprovacao = { email: u.rows[0].email, nome: u.rows[0].nome, nomeLoja: parceiro.nome_loja };
+                    }
+                }
             } else if (status === 'INATIVO' || status === 'PENDENTE') {
                 await client.query('UPDATE usuarios SET ativo = false WHERE parceiro_id = $1', [id]);
             }
         });
 
         await registrarAuditoria(req.user.id, `Atualizou parceiro ID ${id}`);
+        if (emailAprovacao) {
+            emailSvc.emailParceiroAprovado(emailAprovacao).catch(e => console.warn('⚠️ Email aprovação:', e.message));
+        }
         res.json({ mensagem: '✅ Loja atualizada com sucesso!' });
     } catch (erro) {
         console.error('❌ Erro atualizar parceiro:', erro);
@@ -2279,6 +2295,14 @@ async function processarConsignacoesLote(req, res) {
         });
 
         await registrarAuditoria(req.user.id, `Criou remessa ${resultado.codigo} para parceiro ID ${parceiroId}`);
+        // Fire-and-forget: busca email do parceiro e notifica
+        db.query('SELECT u.email, u.nome, p.nome_loja FROM usuarios u JOIN parceiros p ON p.id = u.parceiro_id WHERE u.parceiro_id = $1 LIMIT 1', [parceiroId])
+            .then(r => {
+                if (!r.rows.length) return;
+                const { email, nome, nome_loja } = r.rows[0];
+                const valorTotal = (resultado.itens || []).reduce((s, i) => s + Number(i.total || 0), 0);
+                emailSvc.emailRemessaEnviada({ email, nome, nomeLoja: nome_loja, codigo: resultado.codigo, itens: resultado.itens, valorTotal }).catch(() => {});
+            }).catch(() => {});
         res.status(201).json({ mensagem: '📦 Remessa em lote enviada!', remessa: resultado });
     } catch (e) {
         console.error('❌ Erro remessa lote:', e);
@@ -3995,7 +4019,21 @@ app.post('/api/catalogo-publico/:slug/leads', limiterCatalogoPublico, async (req
             );
         }
         await client.query('COMMIT');
-        res.status(201).json({ mensagem: 'Pedido enviado com sucesso.', lead: pedido.rows[0], itens: snapshots, whatsapp_destino: loja ? telefoneWhatsappLimpo(loja.whatsapp_catalogo || loja.telefone) : '' });
+        const leadRow = pedido.rows[0];
+        // Notifica o parceiro sobre o novo lead (fire-and-forget)
+        if (parceiroId) {
+            db.query('SELECT u.email, u.nome FROM usuarios WHERE parceiro_id = $1 LIMIT 1', [parceiroId])
+                .then(r => {
+                    if (!r.rows.length) return;
+                    emailSvc.emailNovoLead({
+                        email: r.rows[0].email, nome: r.rows[0].nome,
+                        nomeLoja: loja ? loja.nome_loja : 'PERSONALIZE',
+                        codigo: leadRow.codigo, clienteNome: leadRow.cliente_nome,
+                        resumoProdutos: resumo, subtotal: leadRow.subtotal
+                    }).catch(() => {});
+                }).catch(() => {});
+        }
+        res.status(201).json({ mensagem: 'Pedido enviado com sucesso.', lead: leadRow, itens: snapshots, whatsapp_destino: loja ? telefoneWhatsappLimpo(loja.whatsapp_catalogo || loja.telefone) : '' });
     } catch (e) {
         await client.query('ROLLBACK').catch(() => {});
         console.error('❌ Erro salvar lead catálogo:', e);
@@ -4602,6 +4640,244 @@ app.post('/api/assinaturas/cobrancas/:id/comprovante', autenticar, upload.single
     } catch (e) {
         console.error('❌ Erro enviar comprovante:', e);
         res.status(500).json({ erro: 'Erro ao enviar comprovante: ' + e.message });
+    }
+});
+
+// =========================================================
+// EXPORTAÇÃO CSV
+// =========================================================
+
+function csvEscape(v) {
+    const s = v === null || v === undefined ? '' : String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function toCSV(rows, cols) {
+    const header = cols.map(c => csvEscape(c.label)).join(',');
+    const lines = rows.map(r => cols.map(c => csvEscape(r[c.key])).join(','));
+    return [header, ...lines].join('\n');
+}
+
+app.get('/api/produtos/exportar', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const r = await db.query(`
+            SELECT p.id, p.nome, p.categoria, p.status,
+                   v.sku, v.variacao, v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central
+            FROM produtos p
+            JOIN produto_variacoes v ON v.produto_id = p.id
+            ORDER BY p.id DESC`);
+        const csv = toCSV(r.rows, [
+            { key: 'id', label: 'ID' },
+            { key: 'nome', label: 'Nome' },
+            { key: 'categoria', label: 'Categoria' },
+            { key: 'status', label: 'Status' },
+            { key: 'sku', label: 'SKU' },
+            { key: 'variacao', label: 'Variação' },
+            { key: 'preco_venda', label: 'Preço Venda' },
+            { key: 'preco_repasse', label: 'Preço Repasse' },
+            { key: 'custo_producao', label: 'Custo Produção' },
+            { key: 'estoque_central', label: 'Estoque Central' },
+        ]);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="produtos.csv"');
+        res.send('﻿' + csv);
+    } catch (e) {
+        console.error('❌ Erro exportar produtos CSV:', e);
+        res.status(500).json({ erro: 'Erro ao exportar produtos.' });
+    }
+});
+
+app.get('/api/parceiros/exportar', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const r = await db.query(`
+            SELECT p.id, p.nome_loja, p.responsavel, p.telefone, p.cnpj_cpf, p.status,
+                   p.cep, p.rua, p.numero, p.complemento,
+                   u.email, u.usuario, u.ativo AS usuario_ativo
+            FROM parceiros p
+            LEFT JOIN usuarios u ON u.parceiro_id = p.id
+            ORDER BY p.id DESC`);
+        const csv = toCSV(r.rows, [
+            { key: 'id', label: 'ID' },
+            { key: 'nome_loja', label: 'Loja' },
+            { key: 'responsavel', label: 'Responsável' },
+            { key: 'telefone', label: 'Telefone' },
+            { key: 'cnpj_cpf', label: 'CNPJ/CPF' },
+            { key: 'status', label: 'Status Loja' },
+            { key: 'email', label: 'E-mail' },
+            { key: 'usuario', label: 'Usuário' },
+            { key: 'usuario_ativo', label: 'Acesso Ativo' },
+            { key: 'cep', label: 'CEP' },
+            { key: 'rua', label: 'Rua' },
+            { key: 'numero', label: 'Número' },
+            { key: 'complemento', label: 'Complemento' },
+        ]);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="parceiros.csv"');
+        res.send('﻿' + csv);
+    } catch (e) {
+        console.error('❌ Erro exportar parceiros CSV:', e);
+        res.status(500).json({ erro: 'Erro ao exportar parceiros.' });
+    }
+});
+
+app.get('/api/financeiro/exportar', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const params = [];
+        const filtros = [];
+        if (req.query.periodo) { params.push(req.query.periodo); filtros.push(`f.mes_referencia = $${params.length}`); }
+        if (req.query.parceiro_id) { params.push(req.query.parceiro_id); filtros.push(`f.parceiro_id = $${params.length}`); }
+        const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
+        const r = await db.query(`
+            SELECT f.id, COALESCE(p.nome_loja, 'VENDA DIRETA') AS loja, f.mes_referencia,
+                   f.valor_total_vendido, f.valor_comissao_parceiro, f.valor_liquido_receber,
+                   f.quantidade_vendida, f.status_pagamento,
+                   TO_CHAR(f.data_fechamento, 'DD/MM/YYYY') AS data_fechamento,
+                   TO_CHAR(f.data_pagamento, 'DD/MM/YYYY') AS data_pagamento
+            FROM financeiro_repasses f
+            LEFT JOIN parceiros p ON p.id = f.parceiro_id
+            ${where}
+            ORDER BY f.mes_referencia DESC, f.id DESC`, params);
+        const csv = toCSV(r.rows, [
+            { key: 'id', label: 'ID' },
+            { key: 'loja', label: 'Loja' },
+            { key: 'mes_referencia', label: 'Mês Referência' },
+            { key: 'valor_total_vendido', label: 'Total Vendido' },
+            { key: 'valor_comissao_parceiro', label: 'Margem Loja' },
+            { key: 'valor_liquido_receber', label: 'A Receber' },
+            { key: 'quantidade_vendida', label: 'Qtd Vendida' },
+            { key: 'status_pagamento', label: 'Status' },
+            { key: 'data_fechamento', label: 'Data Fechamento' },
+            { key: 'data_pagamento', label: 'Data Pagamento' },
+        ]);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="financeiro.csv"');
+        res.send('﻿' + csv);
+    } catch (e) {
+        console.error('❌ Erro exportar financeiro CSV:', e);
+        res.status(500).json({ erro: 'Erro ao exportar financeiro.' });
+    }
+});
+
+// =========================================================
+// ESTOQUE BAIXO
+// =========================================================
+
+app.get('/api/produtos/estoque-baixo', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const limite = Math.max(1, parseInt(req.query.limite || '5', 10));
+        const r = await db.query(`
+            SELECT p.id, p.nome, p.categoria, v.id AS variacao_id, v.sku, v.variacao, v.estoque_central
+            FROM produto_variacoes v
+            JOIN produtos p ON p.id = v.produto_id
+            WHERE COALESCE(v.estoque_central, 0) < $1
+              AND COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN'
+              AND p.parceiro_id IS NULL
+              AND COALESCE(p.produto_global, true) = true
+            ORDER BY v.estoque_central ASC, p.nome ASC`, [limite]);
+        res.json({ limite, total: r.rows.length, produtos: r.rows });
+    } catch (e) {
+        console.error('❌ Erro estoque baixo:', e);
+        res.status(500).json({ erro: 'Erro ao buscar estoque baixo.' });
+    }
+});
+
+// =========================================================
+// IMPORTAÇÃO CSV DE PRODUTOS
+// =========================================================
+
+app.get('/api/produtos/template-csv', autenticar, somenteAdmin, (req, res) => {
+    const template = 'nome,categoria,descricao,sku,variacao,preco_venda,preco_repasse,custo_producao,estoque_central\n' +
+        '"Camiseta Personalizada","Vestuário","Camiseta 100% algodão","CAM-001","P / Branco","59.90","35.00","18.00","20"\n' +
+        '"Camiseta Personalizada","Vestuário","Camiseta 100% algodão","CAM-002","M / Branco","59.90","35.00","18.00","15"';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="template-importacao-produtos.csv"');
+    res.send('﻿' + template);
+});
+
+app.post('/api/produtos/importar', autenticar, somenteAdmin, upload.single('arquivo'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ erro: 'Arquivo CSV não enviado.' });
+        const conteudo = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
+        const linhas = conteudo.split(/\r?\n/).filter(l => l.trim());
+        if (linhas.length < 2) return res.status(400).json({ erro: 'CSV vazio ou sem linhas de dados.' });
+
+        function parseCsvLine(line) {
+            const result = [];
+            let cur = '', inQ = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"') {
+                    if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+                    else inQ = !inQ;
+                } else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+                else cur += ch;
+            }
+            result.push(cur.trim());
+            return result;
+        }
+
+        const headerLine = linhas[0].toLowerCase();
+        const headers = parseCsvLine(headerLine);
+        const idx = f => headers.indexOf(f);
+        const required = ['nome', 'preco_venda'];
+        const missing = required.filter(f => idx(f) === -1);
+        if (missing.length) return res.status(400).json({ erro: `Colunas obrigatórias ausentes: ${missing.join(', ')}` });
+
+        const erros = [];
+        const importados = [];
+
+        for (let i = 1; i < linhas.length; i++) {
+            const cols = parseCsvLine(linhas[i]);
+            const get = f => (cols[idx(f)] || '').trim();
+            const nome = get('nome');
+            if (!nome) { erros.push(`Linha ${i + 1}: nome obrigatório.`); continue; }
+            const precoVenda = parseFloat(get('preco_venda').replace(',', '.')) || 0;
+            if (precoVenda <= 0) { erros.push(`Linha ${i + 1}: preco_venda inválido.`); continue; }
+            try {
+                await transacao(async (client) => {
+                    let produtoId;
+                    const existe = await client.query('SELECT id FROM produtos WHERE nome = $1 LIMIT 1', [nome]);
+                    if (existe.rows.length) {
+                        produtoId = existe.rows[0].id;
+                    } else {
+                        const np = await client.query(
+                            `INSERT INTO produtos (nome, categoria, descricao, status, produto_global, dono_tipo)
+                             VALUES ($1, $2, $3, 'ATIVO', true, 'ADMIN') RETURNING id`,
+                            [nome, get('categoria') || null, get('descricao') || null]
+                        );
+                        produtoId = np.rows[0].id;
+                    }
+                    const sku = get('sku') || null;
+                    const variacao = get('variacao') || null;
+                    const precoRepasse = parseFloat(get('preco_repasse').replace(',', '.')) || 0;
+                    const custoProducao = parseFloat(get('custo_producao').replace(',', '.')) || 0;
+                    const estoque = parseInt(get('estoque_central'), 10) || 0;
+                    const vExiste = sku
+                        ? await client.query('SELECT id FROM produto_variacoes WHERE produto_id = $1 AND sku = $2', [produtoId, sku])
+                        : await client.query('SELECT id FROM produto_variacoes WHERE produto_id = $1 AND (variacao = $2 OR variacao IS NULL) LIMIT 1', [produtoId, variacao || null]);
+                    if (vExiste.rows.length) {
+                        await client.query(
+                            `UPDATE produto_variacoes SET preco_venda=$1, preco_repasse=$2, custo_producao=$3, estoque_central=$4 WHERE id=$5`,
+                            [precoVenda, precoRepasse || null, custoProducao || null, estoque, vExiste.rows[0].id]
+                        );
+                    } else {
+                        await client.query(
+                            `INSERT INTO produto_variacoes (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                            [produtoId, sku, variacao, precoVenda, precoRepasse || null, custoProducao || null, estoque]
+                        );
+                    }
+                });
+                importados.push(nome);
+            } catch (err) {
+                erros.push(`Linha ${i + 1} (${nome}): ${err.message}`);
+            }
+        }
+
+        await registrarAuditoria(req.user.id, `Importou ${importados.length} produto(s) via CSV`);
+        res.json({ importados: importados.length, erros });
+    } catch (e) {
+        console.error('❌ Erro importar CSV produtos:', e);
+        res.status(500).json({ erro: 'Erro ao importar CSV: ' + e.message });
     }
 });
 
