@@ -126,6 +126,8 @@ window.App = (() => {
         return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('pt-BR');
     }
 
+    const SIDEBAR_KEY = 'ph-sidebar-collapsed';
+
     function renderSidebar(active = '') {
         const side = document.getElementById('sidebar');
         if (!side) return;
@@ -141,7 +143,6 @@ window.App = (() => {
             ['catalogo-pedidos', 'catalogo-pedidos.html', 'bx-message-square-dots', 'Leads / Pedidos'],
             ['assinaturas', 'assinaturas.html', 'bx-receipt', 'Assinaturas'],
             ['maquinas', 'maquinas.html', 'bx-printer', 'Máquinas'],
-            ['producoes', 'producoes.html', 'bx-cog', 'Produção'],
             ['parceiros', 'parceiros.html', 'bx-buildings', 'Lojas Parceiras'],
             ['usuarios', 'usuarios.html', 'bx-group', 'Usuários'],
             ['solicitacoes', 'solicitacoes.html', 'bx-task', 'Solicitações'],
@@ -165,23 +166,112 @@ window.App = (() => {
             ['movimentacoes', 'movimentacoes.html', 'bx-transfer', 'Meu Histórico']
         ];
         const links = perfil === 'ADMIN' ? adminLinks : parceiroLinks;
+
+        // Aplica estado salvo antes de renderizar (evita flash)
+        const isCollapsed = localStorage.getItem(SIDEBAR_KEY) === '1';
+        if (isCollapsed) side.classList.add('collapsed');
+        else side.classList.remove('collapsed');
+
+        // Gera HTML dos links agrupando os submenus em sidebar-group-wrap
+        const linksHtml = (() => {
+            let html = '';
+            let i = 0;
+            while (i < links.length) {
+                const [key, href, iconName, label] = links[i];
+                if (key === 'produtos-grupo') {
+                    // Coleta itens do submenu (chaves que começam com 'produtos-' exceto o grupo)
+                    const subItems = [];
+                    let j = i + 1;
+                    while (j < links.length && links[j][0].startsWith('produtos-')) {
+                        const [sk, shref, si, sl] = links[j];
+                        const sCls = `submenu-link${sk === active ? ' ativo' : ''}`;
+                        subItems.push(`<a href="${shref}" class="${sCls}" data-label="${escapeHtml(sl)}">${icon(si)}<span>${escapeHtml(sl)}</span></a>`);
+                        j++;
+                    }
+                    const isSubActive = links.slice(i + 1, j).some(([sk]) => sk === active);
+                    html += `<div class="sidebar-group-wrap${isSubActive ? ' open' : ''}">
+                        <button class="sidebar-group" type="button" data-label="${escapeHtml(label)}">
+                            ${icon(iconName)}<span>${escapeHtml(label)}</span>
+                            <i class="bx bx-chevron-down sidebar-group-arrow"></i>
+                        </button>
+                        <div class="submenu-items">${subItems.join('')}</div>
+                    </div>`;
+                    i = j;
+                } else {
+                    const cls = key === active ? 'ativo' : '';
+                    html += `<a href="${href}" class="${cls}" data-label="${escapeHtml(label)}">${icon(iconName)}<span>${escapeHtml(label)}</span></a>`;
+                    i++;
+                }
+            }
+            return html;
+        })();
+
         side.innerHTML = `
             <div class="sidebar-top">
-                <div class="sidebar-brand"><strong>PERSONALIZE</strong><small>${escapeHtml(perfil || '')} • ${escapeHtml(nome)}</small></div>
-                <button class="btn-menu" id="btnMenu" type="button"><i class="bx bx-menu"></i></button>
+                <div class="sidebar-brand">
+                    <strong>PERSONALIZE</strong>
+                    <small>${escapeHtml(perfil || '')} • ${escapeHtml(nome)}</small>
+                </div>
+                <div class="sidebar-top-btns">
+                    <button class="btn-sidebar-toggle" id="btnSidebarToggle" type="button"
+                            title="${isCollapsed ? 'Expandir menu' : 'Recolher menu'}">
+                        <i class="bx ${isCollapsed ? 'bx-chevrons-right' : 'bx-chevrons-left'}"></i>
+                    </button>
+                    <button class="btn-menu" id="btnMenu" type="button">
+                        <i class="bx bx-menu"></i>
+                    </button>
+                </div>
             </div>
             <nav class="sidebar-links" id="menuLinks">
-                ${links.map(([key, href, iconName, label]) => {
-                    const isGroup = key === 'produtos-grupo';
-                    const cls = `${key === active ? 'ativo' : ''} ${key.startsWith('produtos-') ? 'submenu-link' : ''}`;
-                    const content = `${icon(iconName)}<span>${escapeHtml(label)}</span>`;
-                    return isGroup
-                        ? `<a href="#" class="sidebar-group" onclick="return false;">${content}</a>`
-                        : `<a href="${href}" class="${cls}">${content}</a>`;
-                }).join('')}
-                <a href="#" class="btn-sair" id="btnSair">${icon('bx-log-out')}<span>Sair</span></a>
+                ${linksHtml}
+                <a href="#" class="btn-sair" id="btnSair" data-label="Sair">${icon('bx-log-out')}<span>Sair</span></a>
             </nav>`;
-        document.getElementById('btnMenu')?.addEventListener('click', () => document.getElementById('menuLinks')?.classList.toggle('ativo-mobile'));
+
+        // Toggle recolher/expandir (desktop)
+        document.getElementById('btnSidebarToggle')?.addEventListener('click', () => {
+            const collapsed = side.classList.toggle('collapsed');
+            localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0');
+            const btn = document.getElementById('btnSidebarToggle');
+            if (btn) {
+                btn.title = collapsed ? 'Expandir menu' : 'Recolher menu';
+                btn.querySelector('i').className = `bx ${collapsed ? 'bx-chevrons-right' : 'bx-chevrons-left'}`;
+            }
+        });
+
+        // Submenu Produtos — toggle no modo expandido, flyout no modo recolhido
+        side.querySelectorAll('.sidebar-group-wrap').forEach(wrap => {
+            const btn = wrap.querySelector('button.sidebar-group');
+            const submenu = wrap.querySelector('.submenu-items');
+            if (!btn || !submenu) return;
+
+            // Clique: expande/recolhe (só no modo expandido)
+            btn.addEventListener('click', () => {
+                if (side.classList.contains('collapsed')) return;
+                wrap.classList.toggle('open');
+            });
+
+            // Hover: flyout no modo recolhido
+            let leaveTimer;
+            const showFlyout = () => {
+                if (!side.classList.contains('collapsed')) return;
+                clearTimeout(leaveTimer);
+                const rect = wrap.getBoundingClientRect();
+                submenu.style.top = rect.top + 'px';
+                submenu.classList.add('flyout-visible');
+            };
+            const hideFlyout = () => {
+                leaveTimer = setTimeout(() => submenu.classList.remove('flyout-visible'), 120);
+            };
+            wrap.addEventListener('mouseenter', showFlyout);
+            wrap.addEventListener('mouseleave', hideFlyout);
+            submenu.addEventListener('mouseenter', () => clearTimeout(leaveTimer));
+            submenu.addEventListener('mouseleave', hideFlyout);
+        });
+
+        // Toggle dropdown mobile
+        document.getElementById('btnMenu')?.addEventListener('click', () =>
+            document.getElementById('menuLinks')?.classList.toggle('ativo-mobile'));
+
         document.getElementById('btnSair')?.addEventListener('click', (e) => { e.preventDefault(); logout(); });
     }
 

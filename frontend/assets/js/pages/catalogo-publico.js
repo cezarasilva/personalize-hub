@@ -41,13 +41,21 @@
         return [loja.banner_desktop_1_url || loja.banner_desktop_url || loja.banner_url, loja.banner_desktop_2_url, loja.banner_desktop_3_url].filter(Boolean);
     }
 
+    // Garante que só URLs http/https entram no CSS — evita CSS injection
+    function urlImgSegura(url) {
+        if (!url || typeof url !== 'string') return '';
+        const u = url.trim();
+        return (u.startsWith('https://') || u.startsWith('http://')) ? u.replace(/'/g, '%27') : '';
+    }
+
     function aplicarBanner() {
         const banners = bannersAtivos();
         const layer = document.getElementById('bannerLayer');
         if (!layer) return;
         if (!banners.length) { layer.style.backgroundImage = ''; return; }
         bannerIndex = bannerIndex % banners.length;
-        layer.style.backgroundImage = `url('${banners[bannerIndex]}')`;
+        const safe = urlImgSegura(banners[bannerIndex]);
+        layer.style.backgroundImage = safe ? `url('${safe}')` : '';
     }
 
     function iniciarBanners() {
@@ -140,29 +148,52 @@
     }
 
     function renderProdutos() {
-        const termo = (document.getElementById('floatingSearchInput')?.value || '').toLowerCase();
-        const origem = '';
-        const grid = document.getElementById('catalogoGrid');
+        const termoInline  = (document.getElementById('catSearchInline')?.value || '').toLowerCase();
+        const termoFloat   = (document.getElementById('floatingSearchInput')?.value || '').toLowerCase();
+        const termo = termoInline || termoFloat;
+        const grid  = document.getElementById('catalogoGrid');
+        const count = document.getElementById('catCount');
         const filtrados = produtos.filter(p => {
             const busca = `${p.nome} ${p.descricao} ${p.categoria}`.toLowerCase().includes(termo);
             const catOk = categoriaAtiva === 'TODOS' || categoriaProduto(p) === categoriaAtiva;
             return busca && catOk;
         });
-        if (!filtrados.length) { grid.innerHTML = '<div class="card"><p class="text-muted">Nenhum produto encontrado.</p></div>'; return; }
-        grid.innerHTML = filtrados.map(p => `
-            <article class="catalogo-card">
-                ${renderGallery(p)}
-                <div class="catalogo-card-body">
-                    <div class="catalogo-badges">
-                        <span class="catalogo-origin">${p.origem_publica === 'PERSONALIZE' ? 'PERSONALIZE' : 'Produto da loja'}</span>
-                        ${p.produto_destaque ? '<span class="catalogo-featured"><i class="bx bxs-star"></i> Destaque</span>' : ''}
+        if (count) count.textContent = filtrados.length
+            ? `${filtrados.length} produto${filtrados.length !== 1 ? 's' : ''}`
+            : '';
+        if (!filtrados.length) {
+            grid.innerHTML = `
+                <div style="grid-column:1/-1; text-align:center; padding:48px 20px; color:var(--muted);">
+                    <i class='bx bx-search-alt' style="font-size:44px; display:block; margin-bottom:12px; opacity:.4;"></i>
+                    <p style="font-weight:600;">Nenhum produto encontrado.</p>
+                </div>`;
+            return;
+        }
+        grid.innerHTML = filtrados.map(p => {
+            const originLabel = p.origem_publica === 'PERSONALIZE' ? 'PERSONALIZE' : 'Produto da loja';
+            const originClass = p.origem_publica === 'PERSONALIZE' ? '' : 'store';
+            const gallery     = renderGallery(p);
+            return `
+            <article class="cat-card">
+                <div class="cat-card-media">
+                    ${gallery}
+                    <div class="cat-card-badges">
+                        <span class="cat-badge-origin ${originClass}">${originLabel}</span>
+                        ${p.produto_destaque ? '<span class="cat-badge-star"><i class="bx bxs-star"></i> Destaque</span>' : ''}
                     </div>
-                    <div class="catalogo-card-title">${esc(p.nome)}</div>
-                    <div class="catalogo-card-desc">${esc(p.descricao || '')}</div>
-                    <div class="catalogo-price">${money(p.preco_publico)}</div>
-                    <button class="btn btn-success w-full" onclick="adicionarItem(${p.id}, ${p.variacao_id})"><i class="bx bx-cart-add"></i> Adicionar</button>
                 </div>
-            </article>`).join('');
+                <div class="cat-card-body">
+                    <h3 class="cat-card-name">${esc(p.nome)}</h3>
+                    <p class="cat-card-desc">${esc(p.descricao || '')}</p>
+                    <div class="cat-card-bottom">
+                        <span class="cat-card-price">${money(p.preco_publico)}</span>
+                        <button class="cat-btn-add" onclick="adicionarItem(${p.id}, ${p.variacao_id})">
+                            <i class="bx bx-cart-add"></i> Adicionar
+                        </button>
+                    </div>
+                </div>
+            </article>`;
+        }).join('');
     }
 
     window.adicionarItem = (produtoId, variacaoId) => {
@@ -404,11 +435,20 @@
     document.addEventListener('click', (e) => {
         const searchBox = document.getElementById('floatingSearch');
         if (searchBox.classList.contains('active') && !searchBox.contains(e.target)) fecharBusca();
+        // fecha nav mobile ao clicar fora
+        const nav = document.getElementById('catalogoNav');
+        const toggle = document.getElementById('catalogoMenuToggle');
+        if (nav?.classList.contains('active') && !nav.contains(e.target) && !toggle?.contains(e.target)) nav.classList.remove('active');
     });
     window.addEventListener('resize', aplicarBanner);
     document.getElementById('floatingSearchInput').addEventListener('input', renderProdutos);
     document.getElementById('floatingSearchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); renderProdutos(); } });
+    // busca inline
+    document.getElementById('catSearchInline')?.addEventListener('input', renderProdutos);
+    document.getElementById('catSearchInline')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); renderProdutos(); } });
     document.getElementById('btnFinalizarPedido').addEventListener('click', () => finalizarPedido().catch(err => Swal.fire('Erro', err.message, 'error')));
-    document.getElementById('formPedidoPersonalizado').addEventListener('submit', enviarPersonalizado);
-    carregar().catch(err => { document.getElementById('catalogoGrid').innerHTML = `<div class="card"><p class="text-danger">${esc(err.message)}</p></div>`; });
+    // form personalizado — suporta o novo ID e o antigo
+    (document.getElementById('formPedidoPersonalizadoForm') || document.getElementById('formPedidoPersonalizado'))
+        ?.addEventListener('submit', enviarPersonalizado);
+    carregar().catch(err => { document.getElementById('catalogoGrid').innerHTML = `<div style="grid-column:1/-1;padding:32px;text-align:center;"><p class="text-danger">${esc(err.message)}</p></div>`; });
 })();

@@ -12,15 +12,44 @@ const db = require('./config/db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'chave_super_secreta_personalize';
+if (!process.env.JWT_SECRET) {
+    console.error('❌ FATAL: JWT_SECRET não definido. Defina a variável de ambiente antes de iniciar.');
+    process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const upload = multer({ storage: multer.memoryStorage() });
+// Tipos de imagem permitidos em uploads
+const UPLOAD_ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const UPLOAD_ALLOWED_EXT  = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (UPLOAD_ALLOWED_MIME.has(file.mimetype) && UPLOAD_ALLOWED_EXT.has(ext)) {
+            return cb(null, true);
+        }
+        cb(new Error('Tipo de arquivo não permitido. Envie uma imagem JPEG, PNG, WebP ou GIF.'));
+    }
+});
 
-app.use(cors());
+// CORS: em produção restrito às origens em ALLOWED_ORIGINS (vírgula separadas)
+const _allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+app.use(cors({
+    origin: (origin, cb) => {
+        // sem origin = chamada server-side / curl / mesma origem
+        if (!origin) return cb(null, true);
+        if (_allowedOrigins.length === 0 || _allowedOrigins.includes(origin)) return cb(null, true);
+        cb(new Error('Origem não permitida pelo CORS.'));
+    },
+    credentials: true
+}));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(express.static(path.join(__dirname, '../frontend')));
@@ -475,7 +504,9 @@ app.post('/api/usuarios/recuperar', async (req, res) => {
         if (!resend) return res.status(500).json({ erro: 'Resend não configurado no servidor.' });
 
         const user = userRes.rows[0];
-        const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+        // Inclui os últimos 8 caracteres do hash atual — invalida o token após troca de senha
+        const phk = user.senha_hash ? user.senha_hash.slice(-8) : '';
+        const token = jwt.sign({ id: user.id, email: user.email, phk }, JWT_SECRET, { expiresIn: '1h' });
         const host = req.get('host');
         const protocolo = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
         const link = `${protocolo}://${host}/redefinir-senha.html?token=${token}`;
@@ -520,6 +551,14 @@ app.post('/api/usuarios/reset-password', async (req, res) => {
             decoded = jwt.verify(token, JWT_SECRET);
         } catch (err) {
             return res.status(400).json({ erro: 'Link expirado ou inválido. Solicite novamente.' });
+        }
+
+        // Verifica fingerprint do hash — garante que o link só funciona uma vez
+        const userR = await db.query('SELECT senha_hash FROM usuarios WHERE id = $1', [decoded.id]);
+        if (!userR.rows.length) return res.status(400).json({ erro: 'Usuário não encontrado.' });
+        const phkAtual = userR.rows[0].senha_hash ? userR.rows[0].senha_hash.slice(-8) : '';
+        if (decoded.phk !== phkAtual) {
+            return res.status(400).json({ erro: 'Link já utilizado ou expirado. Solicite um novo link.' });
         }
 
         const hash = await bcrypt.hash(novaSenha, 10);
@@ -1115,7 +1154,7 @@ app.delete('/api/produtos/:id', autenticar, somenteAdmin, async (req, res) => {
 });
 
 
-app.get('/api/produtos/:id/precificacoes', autenticar, async (req, res) => {
+app.get('/api/produtos/:id/precificacoes', autenticar, somenteAdmin, async (req, res) => {
     try {
         const r = await db.query(
             `SELECT pr.*, u.nome AS usuario_nome
@@ -2739,184 +2778,6 @@ app.put('/api/financeiro/repasses/:id/pagar', autenticar, somenteAdmin, async (r
 
 // =========================================================
 
-// =========================================================
-// PRODUÇÃO / ENTRADA DE ESTOQUE CENTRAL
-// =========================================================
-
-app.get('/api/producoes', autenticar, somenteAdmin, async (req, res) => {
-    try {
-        const r = await db.query(`
-            SELECT pr.*, 
-                   TO_CHAR(pr.data_producao, 'DD/MM/YYYY HH24:MI') AS data_formatada,
-                   p.nome AS produto_nome, p.imagem_url,
-                   v.variacao, v.sku,
-                   m.nome AS maquina_nome,
-                   u.nome AS usuario_nome
-            FROM producoes pr
-            LEFT JOIN produtos p ON p.id = pr.produto_id
-            LEFT JOIN produto_variacoes v ON v.id = pr.variacao_id
-            LEFT JOIN maquinas m ON m.id = pr.maquina_id
-            LEFT JOIN usuarios u ON u.id = pr.usuario_id
-            ORDER BY pr.id DESC
-            LIMIT 200
-        `);
-        res.json(r.rows);
-    } catch (e) {
-        console.error('❌ Erro produções:', e);
-        res.status(500).json({ erro: 'Erro ao listar produções: ' + e.message });
-    }
-});
-
-app.post('/api/producoes', autenticar, somenteAdmin, async (req, res) => {
-    try {
-        const body = req.body || {};
-        const produtoId = toInt(body.produto_id, 0);
-        const variacaoId = toInt(body.variacao_id, 0);
-        const quantidadeProduzida = toInt(body.quantidade_produzida, 0);
-        const status = String(body.status || 'FINALIZADA').toUpperCase();
-        if (!produtoId || !variacaoId) return res.status(400).json({ erro: 'Produto e variação são obrigatórios.' });
-        if (quantidadeProduzida <= 0 && status === 'FINALIZADA') return res.status(400).json({ erro: 'Quantidade produzida precisa ser maior que zero para finalizar.' });
-
-        let producaoId;
-        await transacao(async (client) => {
-            const produto = await client.query(`
-                SELECT p.nome, v.variacao, v.estoque_central
-                FROM produtos p
-                JOIN produto_variacoes v ON v.produto_id = p.id
-                WHERE p.id = $1 AND v.id = $2
-                LIMIT 1
-            `, [produtoId, variacaoId]);
-            if (produto.rows.length === 0) throw new Error('Produto/variação não encontrado.');
-
-            let maquina = null;
-            const maquinaId = body.maquina_id ? toInt(body.maquina_id, 0) : null;
-            if (maquinaId) {
-                const maq = await client.query('SELECT id, nome, custo_total_hora FROM maquinas WHERE id = $1', [maquinaId]);
-                maquina = maq.rows[0] || null;
-            }
-
-            const codigo = gerarCodigo('PROD');
-            const estoqueLancado = status === 'FINALIZADA';
-            const dataProducao = body.data_producao ? new Date(body.data_producao) : new Date();
-
-            const ins = await client.query(`
-                INSERT INTO producoes (
-                    codigo, produto_id, variacao_id, maquina_id, maquina_nome_snapshot, usuario_id,
-                    status, quantidade_planejada, quantidade_produzida, quantidade_perdida, unidade,
-                    peso_gramas, valor_kg_material, tempo_maquina_horas, custo_hora_maquina,
-                    custo_material, custo_maquina, custo_energia, custo_mao_obra, custo_embalagem,
-                    custo_acessorios, custo_perdas, custo_extra, custo_total, custo_unitario,
-                    data_producao, estoque_lancado, observacao
-                ) VALUES (
-                    $1,$2,$3,$4,$5,$6,
-                    $7,$8,$9,$10,$11,
-                    $12,$13,$14,$15,
-                    $16,$17,$18,$19,$20,
-                    $21,$22,$23,$24,$25,
-                    $26,$27,$28
-                ) RETURNING id
-            `, [
-                codigo, produtoId, variacaoId, maquina?.id || null, maquina?.nome || null, req.user.id,
-                status, toInt(body.quantidade_planejada, 0), quantidadeProduzida, toInt(body.quantidade_perdida, 0), body.unidade || 'UNIDADE',
-                parseMoeda(body.peso_gramas), parseMoeda(body.valor_kg_material), parseMoeda(body.tempo_maquina_horas), parseMoeda(body.custo_hora_maquina || maquina?.custo_total_hora),
-                parseMoeda(body.custo_material), parseMoeda(body.custo_maquina), parseMoeda(body.custo_energia), parseMoeda(body.custo_mao_obra), parseMoeda(body.custo_embalagem),
-                parseMoeda(body.custo_acessorios), parseMoeda(body.custo_perdas), parseMoeda(body.custo_extra), parseMoeda(body.custo_total), parseMoeda(body.custo_unitario),
-                dataProducao, estoqueLancado, body.observacao || null
-            ]);
-            producaoId = ins.rows[0].id;
-
-            if (estoqueLancado) {
-                await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', [quantidadeProduzida, variacaoId]);
-                await registrarMovimentacao(client, {
-                    produto_id: produtoId,
-                    variacao_id: variacaoId,
-                    usuario_id: req.user.id,
-                    tipo: 'ENTRADA_PRODUCAO',
-                    quantidade: quantidadeProduzida,
-                    estoque_destino: 'CENTRAL',
-                    referencia_tipo: 'PRODUCAO',
-                    referencia_id: producaoId,
-                    observacao: `Entrada por produção ${codigo}`
-                });
-            }
-        });
-
-        await registrarAuditoria(req.user.id, `Registrou produção ID ${producaoId}`);
-        res.status(201).json({ mensagem: 'Produção registrada com sucesso.', id: producaoId });
-    } catch (e) {
-        console.error('❌ Erro cadastrar produção:', e);
-        res.status(500).json({ erro: 'Erro ao registrar produção: ' + e.message });
-    }
-});
-
-app.put('/api/producoes/:id/finalizar', autenticar, somenteAdmin, async (req, res) => {
-    try {
-        const id = req.params.id;
-        await transacao(async (client) => {
-            const r = await client.query('SELECT * FROM producoes WHERE id = $1 FOR UPDATE', [id]);
-            if (r.rows.length === 0) throw new Error('Produção não encontrada.');
-            const p = r.rows[0];
-            if (p.status === 'CANCELADA') throw new Error('Produção cancelada não pode ser finalizada.');
-            if (p.estoque_lancado) throw new Error('Estoque desta produção já foi lançado.');
-            const qtd = toInt(p.quantidade_produzida, 0);
-            if (qtd <= 0) throw new Error('Quantidade produzida precisa ser maior que zero.');
-            await client.query(`UPDATE producoes SET status = 'FINALIZADA', estoque_lancado = true, atualizado_em = CURRENT_TIMESTAMP WHERE id = $1`, [id]);
-            await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', [qtd, p.variacao_id]);
-            await registrarMovimentacao(client, {
-                produto_id: p.produto_id,
-                variacao_id: p.variacao_id,
-                usuario_id: req.user.id,
-                tipo: 'ENTRADA_PRODUCAO',
-                quantidade: qtd,
-                estoque_destino: 'CENTRAL',
-                referencia_tipo: 'PRODUCAO',
-                referencia_id: id,
-                observacao: `Finalização da produção ${p.codigo || id}`
-            });
-        });
-        await registrarAuditoria(req.user.id, `Finalizou produção ID ${id}`);
-        res.json({ mensagem: 'Produção finalizada e estoque lançado.' });
-    } catch (e) {
-        res.status(400).json({ erro: 'Erro ao finalizar produção: ' + e.message });
-    }
-});
-
-app.put('/api/producoes/:id/cancelar', autenticar, somenteAdmin, async (req, res) => {
-    try {
-        const id = req.params.id;
-        const motivo = req.body?.motivo || '';
-        await transacao(async (client) => {
-            const r = await client.query('SELECT * FROM producoes WHERE id = $1 FOR UPDATE', [id]);
-            if (r.rows.length === 0) throw new Error('Produção não encontrada.');
-            const p = r.rows[0];
-            if (p.status === 'CANCELADA') throw new Error('Produção já está cancelada.');
-            const qtd = toInt(p.quantidade_produzida, 0);
-            if (p.estoque_lancado && qtd > 0) {
-                const est = await client.query('SELECT estoque_central FROM produto_variacoes WHERE id = $1', [p.variacao_id]);
-                const atual = toInt(est.rows[0]?.estoque_central, 0);
-                if (atual < qtd) throw new Error('Não é possível cancelar: estoque central atual é menor que a quantidade lançada.');
-                await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, p.variacao_id]);
-                await registrarMovimentacao(client, {
-                    produto_id: p.produto_id,
-                    variacao_id: p.variacao_id,
-                    usuario_id: req.user.id,
-                    tipo: 'ESTORNO_PRODUCAO',
-                    quantidade: -qtd,
-                    estoque_origem: 'CENTRAL',
-                    referencia_tipo: 'PRODUCAO',
-                    referencia_id: id,
-                    observacao: `Cancelamento da produção ${p.codigo || id}. ${motivo}`
-                });
-            }
-            await client.query(`UPDATE producoes SET status = 'CANCELADA', motivo_cancelamento = $2, estoque_lancado = false, atualizado_em = CURRENT_TIMESTAMP WHERE id = $1`, [id, motivo]);
-        });
-        await registrarAuditoria(req.user.id, `Cancelou produção ID ${id}`);
-        res.json({ mensagem: 'Produção cancelada.' });
-    } catch (e) {
-        res.status(400).json({ erro: 'Erro ao cancelar produção: ' + e.message });
-    }
-});
-
 
 // =========================================================
 // FINANCEIRO V3 - ROTAS DE COMPATIBILIDADE DA TELA FINANCEIRO
@@ -2932,9 +2793,9 @@ app.get('/api/financeiro/v3/resumo', autenticar, async (req, res) => {
         if (req.user.perfil === 'PARCEIRO') {
             params.push(req.user.parceiro_id);
             filtroParceiro = `AND v.parceiro_id = $${params.length}`;
-        } else if (String(req.query.parceiro_id) === '0') {
+        } else if (req.user.perfil === 'ADMIN' && String(req.query.parceiro_id) === '0') {
             filtroParceiro = `AND v.parceiro_id IS NULL`;
-        } else if (req.query.parceiro_id) {
+        } else if (req.user.perfil === 'ADMIN' && req.query.parceiro_id) {
             params.push(req.query.parceiro_id);
             filtroParceiro = `AND v.parceiro_id = $${params.length}`;
         }
@@ -3756,13 +3617,15 @@ app.put('/api/meus-produtos/:id', autenticar, upload.fields([{ name: 'imagem', m
                      preco_venda = COALESCE($3, preco_venda),
                      preco_catalogo = COALESCE($3, preco_catalogo),
                      estoque_central = COALESCE($4, estoque_central)
-                 WHERE produto_id = $5`,
+                 WHERE produto_id = $5
+                   AND produto_id IN (SELECT id FROM produtos WHERE parceiro_id = $6)`,
                 [
                     req.body.sku !== undefined && req.body.sku !== '' ? normalizarSku(req.body.sku) : null,
                     req.body.variacao || null,
                     req.body.preco_venda !== undefined && req.body.preco_venda !== '' ? parseMoeda(req.body.preco_venda) : null,
                     req.body.estoque !== undefined && req.body.estoque !== '' ? toInt(req.body.estoque, 0) : null,
-                    id
+                    id,
+                    parceiroId
                 ]
             );
 
@@ -4386,7 +4249,7 @@ app.post('/api/assinaturas/sincronizar-status', autenticar, somenteAdmin, async 
 // COBRANÇA MANUAL PIX / WHATSAPP - V5.7
 // =========================================================
 
-app.get('/api/assinaturas/pagamento-config', autenticar, async (req, res) => {
+app.get('/api/assinaturas/pagamento-config', autenticar, somenteAdmin, async (req, res) => {
     try {
         const result = await db.query(`SELECT * FROM catalogo_pagamento_config WHERE id = 1`).catch(() => ({ rows: [] }));
         const cfg = result.rows[0] || {};
