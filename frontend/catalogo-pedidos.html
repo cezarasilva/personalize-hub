@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM de Leads - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body>
+<div class="layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    <main class="main">
+
+        <!-- Header -->
+        <header class="page-header">
+            <div class="page-title">
+                <h1><i class="bx bx-message-square-dots"></i> CRM de Leads</h1>
+                <p>Gerencie leads, converta em vendas e acompanhe o funil de atendimento.</p>
+            </div>
+            <div class="crm-actions-top">
+                <select id="filtroStatus">
+                    <option value="">Todos os status</option>
+                    <option value="NOVO">Novo</option>
+                    <option value="EM_ATENDIMENTO">Em atendimento</option>
+                    <option value="ORCADO">Orçado</option>
+                    <option value="AGUARDANDO_CLIENTE">Aguardando cliente</option>
+                    <option value="FECHADO">Fechado</option>
+                    <option value="PERDIDO">Perdido</option>
+                    <option value="CANCELADO">Cancelado</option>
+                </select>
+                <select id="filtroOrigem">
+                    <option value="">Todas origens</option>
+                    <option value="CARRINHO">Pedidos catálogo</option>
+                    <option value="FOOTER">Leads do footer</option>
+                    <option value="PERSONALIZADO">Personalizado</option>
+                </select>
+                <input id="buscaLead" placeholder="Cliente, código, produto...">
+            </div>
+        </header>
+
+        <!-- Métricas -->
+        <section class="grid grid-4 mb-2" id="metricas">
+            <div class="stat-card">
+                <span>Novos</span>
+                <strong id="crmNovos">0</strong>
+            </div>
+            <div class="stat-card">
+                <span>Em atendimento</span>
+                <strong id="crmAtendimento">0</strong>
+            </div>
+            <div class="stat-card">
+                <span>Fechados</span>
+                <strong id="crmFechados">0</strong>
+            </div>
+            <div class="stat-card">
+                <span>Total estimado</span>
+                <strong id="crmValor">R$ 0,00</strong>
+            </div>
+        </section>
+
+        <!-- View principal -->
+        <section class="card">
+            <div class="card-title">
+                <span>Atendimentos</span>
+                <div class="crm-view-tabs">
+                    <button class="crm-view-tab active" data-view="kanban"><i class="bx bx-columns"></i> Kanban</button>
+                    <button class="crm-view-tab" data-view="lista"><i class="bx bx-list-ul"></i> Lista</button>
+                    <button class="crm-view-tab" data-view="funil"><i class="bx bx-filter-alt"></i> Funil</button>
+                    <button class="crm-view-tab" data-view="relatorio"><i class="bx bx-bar-chart-alt-2"></i> Relatório</button>
+                </div>
+            </div>
+
+            <!-- Kanban -->
+            <div id="viewKanban" class="crm-kanban"></div>
+
+            <!-- Lista -->
+            <div id="viewLista" class="crm-list-view" style="display:none;"></div>
+
+            <!-- Funil -->
+            <div id="viewFunil" style="display:none;">
+                <div class="crm-conv-metrics" id="funilMetrics"></div>
+                <div class="crm-funil-wrap" id="funilBars"></div>
+            </div>
+
+            <!-- Relatório -->
+            <div id="viewRelatorio" style="display:none;">
+                <div class="table-container">
+                    <table class="crm-relatorio-table">
+                        <thead id="relatorioHead"></thead>
+                        <tbody id="relatorioBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<!-- ========== DRAWER CRM ========== -->
+<div class="crm-drawer-overlay" id="crmDrawerOverlay"></div>
+<aside class="crm-drawer" id="crmDrawer">
+    <div class="crm-drawer-header">
+        <div>
+            <span class="crm-drawer-code" id="drawerCodigo"></span>
+            <div class="crm-drawer-cliente" id="drawerCliente"></div>
+            <div class="crm-drawer-sub" id="drawerSub"></div>
+        </div>
+        <button class="icon-btn" id="btnFecharDrawer" type="button"><i class="bx bx-x"></i></button>
+    </div>
+
+    <div class="crm-drawer-body" id="drawerBody">
+        <!-- Injetado via JS -->
+    </div>
+
+    <div class="crm-drawer-footer">
+        <button class="btn btn-light" id="btnCancelarDrawer" type="button">Cancelar</button>
+        <button class="btn btn-primary" id="btnSalvarDrawer" type="button">
+            <i class="bx bx-check"></i> Salvar
+        </button>
+    </div>
+</aside>
+
+<script src="assets/js/core.js"></script>
+<script src="assets/js/pages/catalogo-pedidos.js"></script>
+</body>
+</html>

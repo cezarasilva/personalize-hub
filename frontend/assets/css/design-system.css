@@ -1,0 +1,69 @@
+/* ============================================================
+   PERSONALIZE HUB — Design System Components v6.0
+   Camada de componentes reutilizáveis e correções responsivas
+   ============================================================ */
+
+html, body { -webkit-text-size-adjust: 100%; overflow-x: hidden; }
+img, video, canvas, svg { max-width: 100%; }
+body { overflow-x: hidden; }
+
+/* ---- Botões: garantias de alinhamento ---- */
+.btn, .btn-primary, .btn-success, .btn-danger, .btn-warning, .btn-secondary,
+button.btn, a.btn {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  line-height: 1.15;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+}
+.btn i, button i, a.btn i { font-size: 1.1em; line-height: 1; }
+.btn-icon, .icon-btn, .action-btn {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+.actions, .table-actions, .catalogo-actions, .form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---- Cards e grids: overflow seguro ---- */
+.card, .stat-card, .product-card, .catalog-card, .lead-card { min-width: 0; overflow-wrap: anywhere; }
+.grid, .grid-2, .grid-3, .grid-4, .chart-grid { min-width: 0; }
+
+/* ---- Tabelas responsivas ---- */
+.table-wrap, .responsive-table, .table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table { width: 100%; border-collapse: collapse; }
+td, th { vertical-align: middle; }
+
+/* ---- Formulários: limites de tamanho ---- */
+input, select, textarea, .input, .select { max-width: 100%; }
+input[type="file"] { width: 100%; }
+.form-grid, .filters-grid, .catalogo-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+/* ---- Título de página responsivo ---- */
+.page-title h1 { font-size: clamp(22px, 4vw, 34px); line-height: 1.12; }
+.page-title p  { font-size: clamp(13px, 2.5vw, 16px); line-height: 1.5; }
+
+/* ---- Preço / dinheiro ---- */
+.price-note  { font-size: 12px; color: var(--muted); font-weight: 600; }
+.input-money { font-weight: 700; }
+.badge-info  { background: #e0f2fe; color: #0369a1; }

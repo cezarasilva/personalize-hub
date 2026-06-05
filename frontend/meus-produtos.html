@@ -1,0 +1,69 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meus Produtos - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-purchase-tag"></i> Meus Produtos</h1>
+                    <p>Cadastre produtos próprios da sua loja. Eles aparecem junto com os produtos PERSONALIZE no seu catálogo.</p>
+                </div>
+                <a href="meu-catalogo.html" class="btn btn-primary"><i class="bx bx-store"></i> Configurar catálogo</a>
+            </header>
+
+            <section class="grid grid-2">
+                <div class="card">
+                    <div class="card-title"><span><i class="bx bx-plus-circle"></i> Produto da loja</span></div>
+                    <form id="formProdutoLoja" class="form-grid" enctype="multipart/form-data">
+                        <input type="hidden" id="produtoId" value="">
+                        <div class="form-group"><label>Nome</label><input name="nome" id="nome" required></div>
+                        <div class="form-group"><label>Categoria</label><input name="categoria" id="categoria" placeholder="Ex.: Papelaria, Presentes"></div>
+                        <div class="form-group"><label>Variação</label><input name="variacao" id="variacao" placeholder="Único"></div>
+                        <div class="form-group"><label>SKU opcional</label><input name="sku" id="sku"></div>
+                        <div class="form-group"><label>Preço público</label><input name="preco_venda" id="preco_venda" placeholder="29,90" required></div>
+                        <div class="form-group"><label>Estoque interno</label><input name="estoque" id="estoque" type="number" min="0" value="0"></div>
+                        <div class="form-group"><label>Status</label><select name="status" id="status"><option value="ATIVO">Ativo</option><option value="INATIVO">Inativo</option></select></div>
+                        <div class="form-group"><label>Visível no catálogo?</label><select name="visivel_catalogo" id="visivel_catalogo"><option value="true">Sim</option><option value="false">Não</option></select></div>
+                        <div class="form-group" style="grid-column:1/-1;"><label>Descrição</label><textarea name="descricao" id="descricao" rows="4"></textarea></div>
+                        <div class="form-group" style="grid-column:1/-1;"><label>Fotos até 10 imagens</label><input name="imagens" id="imagens" type="file" multiple accept="image/*"><div id="previewImagem" class="gallery-preview-empty mt-2">Sem fotos selecionadas</div></div>
+                        <button class="btn btn-success" style="grid-column:1/-1;"><i class="bx bx-save"></i> Salvar produto</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <div class="card-title"><span><i class="bx bx-list-ul"></i> Produtos cadastrados</span></div>
+                    <input id="busca" placeholder="Buscar meus produtos...">
+                    <div id="listaProdutos" class="mt-3"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/meus-produtos.js"></script>
+
+    <div id="modalCropProduto" class="crop-modal hidden" aria-hidden="true">
+        <div class="crop-box">
+            <div class="crop-header">
+                <div><strong>Recortar foto do produto</strong><small id="cropStatusProduto">Ajuste a imagem antes de salvar.</small></div>
+                <button type="button" class="icon-btn" id="btnFecharCropProduto"><i class="bx bx-x"></i></button>
+            </div>
+            <div class="crop-area"><img id="imagemCropProduto" alt="Recorte"></div>
+            <div class="crop-actions">
+                <button type="button" class="btn btn-light" id="btnCancelarCropProduto">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnAplicarCropProduto">Aplicar recorte</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

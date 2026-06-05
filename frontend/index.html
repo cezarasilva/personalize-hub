@@ -1,0 +1,38 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/auth.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body class="auth-body">
+    <main class="auth-box">
+        <section class="auth-brand">
+            <h1>PERSONALIZE <span>Hub</span></h1>
+            <p>Gestão de peças, consignação, vendas e parceiros.</p>
+        </section>
+        <form id="formLogin">
+            <div class="form-group">
+                <label for="usuario">Usuário ou e-mail</label>
+                <input type="text" id="usuario" name="usuario" placeholder="Ex: personalize.loja1" required>
+            </div>
+            <div class="form-group mt-2">
+                <label for="senha">Senha</label>
+                <input type="password" id="senha" name="senha" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-full mt-3" id="btnEntrar">Entrar no Sistema</button>
+        </form>
+        <div id="mensagem" class="msg"></div>
+        <footer class="auth-footer">
+            <a href="recuperar.html">Esqueci minha senha</a>
+            <a href="registrar.html">Quero ser um revendedor</a>
+        </footer>
+    </main>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/index.js"></script>
+</body>
+</html>

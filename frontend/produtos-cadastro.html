@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Produto - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body>
+<div class="layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    <main class="main">
+
+        <header class="page-header">
+            <div class="page-title">
+                <h1 id="tituloPagina">Nova Oferta</h1>
+                <p id="subtituloPagina">Siga os passos para cadastrar sua oferta de forma completa.</p>
+            </div>
+            <div class="page-actions">
+                <a href="produtos-lista.html" class="btn btn-light"><i class="bx bx-arrow-back"></i> Lista de produtos</a>
+            </div>
+        </header>
+
+        <!-- BARRA DE PROGRESSO -->
+        <div class="wizard-bar card" id="wizardBar">
+            <div class="wizard-step-dot active" data-dot="1">
+                <div class="wizard-dot-num">1</div>
+                <span class="wizard-dot-label">Tipo</span>
+            </div>
+            <div class="wizard-step-dot" data-dot="2">
+                <div class="wizard-dot-num">2</div>
+                <span class="wizard-dot-label">Informações</span>
+            </div>
+            <div class="wizard-step-dot" data-dot="3">
+                <div class="wizard-dot-num">3</div>
+                <span class="wizard-dot-label">Precificação</span>
+            </div>
+            <div class="wizard-step-dot" data-dot="4">
+                <div class="wizard-dot-num">4</div>
+                <span class="wizard-dot-label">Destino</span>
+            </div>
+        </div>
+
+        <form id="formProduto" enctype="multipart/form-data">
+            <input type="hidden" id="produtoId"     name="produtoId">
+            <input type="hidden" id="precificado"   name="precificado"   value="false">
+            <input type="hidden" id="tipo_oferta"   name="tipo_oferta"   value="PRODUTO_PROPRIO">
+            <input type="hidden" id="status_fluxo"  name="status_fluxo"  value="ATIVO">
+            <input type="hidden" id="destino_final" name="destino_final" value="ESTOQUE">
+
+            <!-- ====================================================
+                 PASSO 1 — Tipo de oferta
+                 ==================================================== -->
+            <section class="card wizard-section active" id="step1">
+                <div class="card-title">Que tipo de oferta você vai cadastrar?</div>
+                <p class="text-muted mb-2">Escolha o tipo que melhor descreve o que você oferece. Ele define os campos de precificação e o fluxo de aprovação.</p>
+                <div class="oferta-grid" id="ofertaGrid"></div>
+                <div class="wizard-nav">
+                    <div></div>
+                    <div class="wizard-nav-right">
+                        <button type="button" class="btn btn-primary" id="btnP1Prox">Próximo <i class="bx bx-chevron-right"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====================================================
+                 PASSO 2 — Informações básicas
+                 ==================================================== -->
+            <section class="card wizard-section" id="step2">
+                <div class="card-title">
+                    <span>Informações básicas</span>
+                    <span class="tipo-badge" id="badge2"></span>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="nome">Nome *</label>
+                        <input id="nome" name="nome" required placeholder="Ex.: Saboneteira personalizada">
+                    </div>
+                    <div class="form-group">
+                        <label for="categoria">Categoria</label>
+                        <input id="categoria" name="categoria" placeholder="Ex.: Impressão 3D, Design, Artesanato...">
+                    </div>
+                    <div class="form-group">
+                        <label for="variacao">Variação *</label>
+                        <input id="variacao" name="variacao" required placeholder="Cor, tamanho, modelo, padrão...">
+                    </div>
+                    <div class="form-group">
+                        <label for="sku">SKU</label>
+                        <input id="sku" name="sku" placeholder="Gerado automaticamente se vazio">
+                    </div>
+                </div>
+                <div class="form-group mt-2">
+                    <label for="descricao">Descrição</label>
+                    <textarea id="descricao" name="descricao" placeholder="Materiais, dimensões, personalizações disponíveis..."></textarea>
+                </div>
+                <div class="form-group mt-2">
+                    <label for="imagens">Fotos do produto (até 10)</label>
+                    <input id="imagens" name="imagens" type="file" accept="image/*" multiple>
+                    <small class="text-muted">Ao editar, selecionar novas fotos substitui a galeria atual.</small>
+                </div>
+                <div class="preview-box mt-2 gallery-preview-box">
+                    <div id="previewImagem" class="gallery-preview-empty">Sem fotos selecionadas</div>
+                    <div>
+                        <strong>Pré-visualização</strong>
+                        <p class="text-muted">Até 10 fotos. A primeira será a principal.</p>
+                    </div>
+                </div>
+                <div class="wizard-nav">
+                    <div>
+                        <button type="button" class="btn btn-light" id="btnP2Ant"><i class="bx bx-chevron-left"></i> Anterior</button>
+                    </div>
+                    <div class="wizard-nav-right">
+                        <button type="button" class="btn btn-primary" id="btnP2Prox">Próximo <i class="bx bx-chevron-right"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====================================================
+                 PASSO 3 — Precificação (conteúdo dinâmico por tipo)
+                 ==================================================== -->
+            <section class="card wizard-section" id="step3">
+                <div class="card-title">
+                    <span>Precificação e detalhes</span>
+                    <span class="tipo-badge" id="badge3"></span>
+                </div>
+                <div id="step3Content"></div>
+                <div class="wizard-nav">
+                    <div>
+                        <button type="button" class="btn btn-light" id="btnP3Ant"><i class="bx bx-chevron-left"></i> Anterior</button>
+                    </div>
+                    <div class="wizard-nav-right">
+                        <button type="button" class="btn btn-primary" id="btnP3Prox">Próximo <i class="bx bx-chevron-right"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====================================================
+                 PASSO 4 — Destino e publicação
+                 ==================================================== -->
+            <section class="card wizard-section" id="step4">
+                <div class="card-title">Destino e publicação</div>
+
+                <p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">Para onde vai este produto/serviço após execução?</p>
+                <div class="destino-grid" id="destinoGrid"></div>
+
+                <p style="font-size:13px;font-weight:700;color:var(--text);margin:20px 0 8px;">Status inicial</p>
+                <div class="choice-grid" id="statusGrid">
+                    <button type="button" class="choice-card ativo" data-fluxo="ATIVO">
+                        <strong><i class="bx bxs-check-circle" style="color:var(--success)"></i> Publicar agora</strong>
+                        <small>Produto ativo e disponível para parceiros e catálogo.</small>
+                    </button>
+                    <button type="button" class="choice-card" data-fluxo="RASCUNHO">
+                        <strong><i class="bx bx-edit" style="color:var(--muted)"></i> Salvar como rascunho</strong>
+                        <small>Fica oculto até você publicar manualmente.</small>
+                    </button>
+                    <button type="button" class="choice-card" data-fluxo="AGUARDANDO_APROVACAO">
+                        <strong><i class="bx bx-time-five" style="color:var(--warning)"></i> Enviar para aprovação</strong>
+                        <small>Aguarda revisão de um administrador antes de publicar.</small>
+                    </button>
+                </div>
+
+                <div class="wizard-nav">
+                    <div>
+                        <button type="button" class="btn btn-light" id="btnP4Ant"><i class="bx bx-chevron-left"></i> Anterior</button>
+                    </div>
+                    <div class="wizard-nav-right">
+                        <button type="button" class="btn btn-primary" id="btnSalvar">
+                            <i class="bx bx-check"></i> <span id="lblSalvar">Salvar produto</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </form>
+
+    </main>
+</div>
+
+<!-- Modal crop -->
+<div id="modalCropProduto" class="crop-modal hidden" aria-hidden="true">
+    <div class="crop-modal-card">
+        <div class="crop-modal-header">
+            <div>
+                <h3>Recortar imagem</h3>
+                <p id="cropStatusProduto">Ajuste a imagem antes de salvar.</p>
+            </div>
+            <button type="button" class="icon-btn" id="btnFecharCropProduto"><i class="bx bx-x"></i></button>
+        </div>
+        <div class="crop-image-wrap"><img id="imagemCropProduto" alt="Imagem para recorte"></div>
+        <div class="crop-modal-actions">
+            <button type="button" class="btn btn-light"    id="btnCancelarCropProduto">Cancelar</button>
+            <button type="button" class="btn btn-primary"  id="btnAplicarCropProduto">Aplicar recorte</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/core.js"></script>
+<script src="assets/js/pages/produtos-cadastro.js"></script>
+</body>
+</html>

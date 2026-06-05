@@ -1,0 +1,116 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remessas - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1> Remessas</h1>
+                    <p>Envie produtos, acompanhe remessas por loja, gere PDF com foto, valor consignado e assinatura digital, e estorne remessas quando necessário.</p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-dark" id="btnPdfEstoque">PDF estoque atual</button>
+                    <button class="btn btn-primary" id="btnAtualizarTudo">Atualizar</button>
+                </div>
+            </header>
+
+            <section class="card">
+                <div class="card-title">Loja selecionada</div>
+                <div class="form-grid-3">
+                    <div class="form-group">
+                        <label for="parceiroDestino">Loja de destino / consulta</label>
+                        <select id="parceiroDestino"><option value="">Selecione uma loja...</option></select>
+                    </div>
+                    <div class="stat-card compact-stat">
+                        <span>Estoque atual</span>
+                        <strong id="statQtdEstoque">0</strong>
+                    </div>
+                    <div class="stat-card compact-stat">
+                        <span>Valor consignado atual</span>
+                        <strong id="statValorEstoque">R$ 0,00</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="novaRemessaCard">
+                <div class="card-title">Nova remessa em lote</div>
+                <div class="form-grid-4">
+                    <div class="form-group search-wrap">
+                        <label for="buscaProdutoRemessa">Produto</label>
+                        <input id="buscaProdutoRemessa" type="search" placeholder="Digite para buscar produto...">
+                        <div id="sugestoesProduto" class="suggestions hidden"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="qtdRemessa">Quantidade</label>
+                        <input id="qtdRemessa" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="valorConsignacaoRemessa">Consignação desta remessa</label>
+                        <input id="valorConsignacaoRemessa" class="input-money" type="text" inputmode="decimal" placeholder="Ex.: 9,99">
+                        <small class="price-note">Não altera o preço padrão do produto.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary w-full" id="btnAddLote">Adicionar ao lote</button>
+                    </div>
+                </div>
+                <div id="produtoSelecionadoBox" class="preview-box mt-2 hidden"></div>
+                <div class="form-group mt-2">
+                    <label for="observacaoRemessa">Observação da remessa</label>
+                    <textarea id="observacaoRemessa" placeholder="Ex.: reposição semanal, entrega feita por Cezar, conferido com responsável..."></textarea>
+                </div>
+                <div class="hr"></div>
+                <div class="card-title">Itens prontos para envio</div>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>Produto</th><th>Qtd</th><th>Valor padrão</th><th>Valor nesta remessa</th><th>Total da remessa</th><th>Ações</th></tr></thead>
+                        <tbody id="tabelaLote"></tbody>
+                    </table>
+                </div>
+                <button class="btn btn-success w-full mt-3" id="btnEnviarLote">Confirmar envio da remessa</button>
+            </section>
+
+            <section class="card">
+                <div class="card-title">
+                    Histórico de remessas da loja
+                    <small class="text-muted" id="avisoHistorico"></small>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Código</th><th>Data</th><th>Loja</th><th>Status</th><th>Itens</th><th>Qtd</th><th>Valor original</th><th>Saldo</th><th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaHistoricoRemessas"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-title">Estoque consignado atual da loja</div>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>Produto</th><th>Qtd atual</th><th>Qtd enviada</th><th>Qtd vendida</th><th>Preço consignação</th><th>Valor atual</th><th>Ações</th></tr></thead>
+                        <tbody id="tabelaEstoque"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/remessas.js"></script>
+</body>
+</html>

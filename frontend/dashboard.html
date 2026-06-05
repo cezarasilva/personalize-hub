@@ -1,0 +1,51 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Admin - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body class="admin-dark">
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <section class="dashboard-hero">
+                <div class="page-title">
+                    <h1><i class="bx bxs-dashboard"></i> Dashboard Administrativo</h1>
+                    <p id="subtituloDashboard">Crescimento, vendas, parceiros e visão geral da operação.</p>
+                </div>
+                <div class="catalogo-actions">
+                    <a href="catalogo.html?loja=personalize" target="_blank" class="btn btn-primary"><i class="bx bx-store-alt"></i> Ver catálogo admin</a>
+                    <a href="vendas.html" class="btn btn-success"><i class="bx bx-cart-add"></i> Registrar venda</a>
+                </div>
+            </section>
+
+            <section class="grid grid-4 mb-2">
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-shopping-bag"></i></div><span>Vendas do mês</span><strong id="pedidosMes">0</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-money-withdraw"></i></div><span>Receita/repasse do mês</span><strong id="receitaMes">R$ 0,00</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-package"></i></div><span>Qtd. em estoque</span><strong id="qtdEstoque">0</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-buildings"></i></div><span>Custo do estoque</span><strong id="valorEstoque">R$ 0,00</strong></div>
+                <div class="stat-card dashboard-extra-stock"><div class="dashboard-metric-icon"><i class="bx bx-trending-up"></i></div><span>Estoque se vendido</span><strong id="valorEstoqueVenda">R$ 0,00</strong></div>
+            </section>
+
+            <section class="chart-grid">
+                <div class="card chart-card"><div class="card-title"><span><i class="bx bx-line-chart"></i> Crescimento em vendas</span></div><canvas id="graficoCrescimentoVendas"></canvas></div>
+                <div class="card chart-card"><div class="card-title"><span><i class="bx bx-buildings"></i> Novas parcerias</span></div><canvas id="graficoParcerias"></canvas></div>
+            </section>
+
+            <section class="grid grid-3">
+                <div class="card"><div class="card-title"><span><i class="bx bx-store"></i> Estoque por loja</span></div><div id="estoqueParceiros"></div></div>
+                <div class="card"><div class="card-title"><span><i class="bx bx-error-circle"></i> Estoque baixo</span></div><div id="estoqueBaixo"></div></div>
+                <div class="card"><div class="card-title"><span><i class="bx bx-trophy"></i> Mais vendidos</span></div><div id="rankingProdutos"></div></div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/dashboard.js"></script>
+</body>
+</html>

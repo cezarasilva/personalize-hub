@@ -1,0 +1,63 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assinaturas do Catálogo - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-receipt"></i> Assinaturas do Catálogo</h1>
+                    <p>Controle dos 3 meses grátis, cobranças e bloqueio/ativação dos catálogos das lojas.</p>
+                </div>
+                <div class="catalogo-actions action-wrap">
+                    <button class="btn btn-secondary" id="btnSincronizar"><i class="bx bx-refresh"></i> Sincronizar vencidos</button>
+                    <button class="btn btn-primary" id="btnGerarCobrancas"><i class="bx bx-money"></i> Gerar cobranças</button>
+                </div>
+            </header>
+
+            <section class="grid grid-4 mb-2">
+                <div class="stat-card"><span>Teste grátis</span><strong id="statTeste">0</strong></div>
+                <div class="stat-card"><span>Ativas</span><strong id="statAtivas">0</strong></div>
+                <div class="stat-card"><span>Pendentes</span><strong id="statPendentes">0</strong></div>
+                <div class="stat-card"><span>Valor pendente</span><strong id="statValorPendente">R$ 0,00</strong></div>
+            </section>
+
+            <section class="card mb-2">
+                <div class="card-title"><span><i class="bx bx-credit-card"></i> Configuração de pagamento</span></div>
+                <form id="formPagamentoConfig" class="form-grid">
+                    <div class="form-group"><label>Nome do recebedor</label><input name="nome_recebedor" placeholder="PERSONALIZE"></div>
+                    <div class="form-group"><label>CPF/CNPJ</label><input name="documento_recebedor" placeholder="Opcional"></div>
+                    <div class="form-group"><label>Tipo chave Pix</label><input name="tipo_chave_pix" placeholder="CPF, CNPJ, e-mail, telefone, aleatória"></div>
+                    <div class="form-group"><label>Chave Pix</label><input name="chave_pix" placeholder="Sua chave Pix"></div>
+                    <div class="form-group"><label>Banco</label><input name="banco" placeholder="Opcional"></div>
+                    <div class="form-group"><label>WhatsApp de cobrança</label><input name="whatsapp_cobranca" placeholder="5541999999999"></div>
+                    <div class="form-group span-2"><label>Link de pagamento padrão</label><input name="link_pagamento_padrao" placeholder="Mercado Pago, link Pix, etc."></div>
+                    <div class="form-group span-2"><label>Instruções</label><textarea name="instrucoes_pagamento" rows="3" placeholder="Instruções exibidas para a loja"></textarea></div>
+                    <button class="btn btn-primary" type="submit"><i class="bx bx-save"></i> Salvar dados de pagamento</button>
+                </form>
+            </section>
+
+            <section class="card mb-2">
+                <div class="card-title"><span><i class="bx bx-store"></i> Lojas e planos</span></div>
+                <div id="listaAssinaturas"></div>
+            </section>
+
+            <section class="card">
+                <div class="card-title"><span><i class="bx bx-list-ul"></i> Cobranças geradas</span></div>
+                <div id="listaCobrancas"></div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/assinaturas.js"></script>
+</body>
+</html>

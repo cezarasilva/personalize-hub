@@ -1,0 +1,151 @@
+@import url('https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+/* ============================================================
+   PERSONALIZE HUB v6.0 — Design System
+   Dois temas: Light Pro (padrão) / Dark Premium
+   ============================================================ */
+
+:root {
+  /* --- Marca --- */
+  --primary:       #6366f1;
+  --primary-dark:  #4f46e5;
+  --primary-soft:  #eef2ff;
+  --primary-rgb:   99, 102, 241;
+
+  /* --- Status --- */
+  --success:       #10b981;
+  --success-soft:  #ecfdf5;
+  --success-text:  #065f46;
+  --danger:        #ef4444;
+  --danger-soft:   #fef2f2;
+  --danger-text:   #991b1b;
+  --warning:       #f59e0b;
+  --warning-soft:  #fffbeb;
+  --warning-text:  #92400e;
+
+  /* --- Superfícies (Light) --- */
+  --bg:            #f7f8fc;
+  --surface:       #ffffff;
+  --surface-2:     #f1f5f9;
+  --border:        #e8edf4;
+  --border-strong: #cbd5e1;
+
+  /* --- Texto (Light) --- */
+  --text:          #0f172a;
+  --text-2:        #475569;
+  --muted:         #94a3b8;
+
+  /* --- Sidebar (Light) --- */
+  --sidebar-bg:          #ffffff;
+  --sidebar-border:      #f0f4f9;
+  --sidebar-text:        #64748b;
+  --sidebar-hover-bg:    #f7f8fc;
+  --sidebar-active-bg:   #eef2ff;
+  --sidebar-active-text: #4f46e5;
+  --sidebar-active-bar:  #6366f1;
+  --sidebar-brand-bg:    #f7f8fc;
+
+  /* --- Inputs (Light) --- */
+  --input-bg:     #f7f8fc;
+  --input-border: #e2e8f0;
+  --input-focus:  #6366f1;
+
+  /* --- Sombras (Light) --- */
+  --shadow-xs: 0 1px 2px rgba(15,23,42,.04);
+  --shadow-sm: 0 1px 3px rgba(15,23,42,.06), 0 2px 8px rgba(15,23,42,.03);
+  --shadow:    0 2px 8px rgba(15,23,42,.07), 0 6px 24px rgba(15,23,42,.04);
+  --shadow-md: 0 4px 18px rgba(15,23,42,.09), 0 2px 6px rgba(15,23,42,.05);
+  --shadow-lg: 0 10px 44px rgba(15,23,42,.11), 0 4px 14px rgba(15,23,42,.06);
+
+  /* --- Raios --- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius:    12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+}
+
+/* ============================================================
+   Dark Premium
+   ============================================================ */
+[data-theme="dark"] {
+  --primary:       #818cf8;
+  --primary-dark:  #6366f1;
+  --primary-soft:  rgba(99,102,241,.14);
+  --primary-rgb:   129, 140, 248;
+
+  --success:       #34d399;
+  --success-soft:  rgba(52,211,153,.12);
+  --success-text:  #34d399;
+  --danger:        #f87171;
+  --danger-soft:   rgba(248,113,113,.12);
+  --danger-text:   #f87171;
+  --warning:       #fbbf24;
+  --warning-soft:  rgba(251,191,36,.12);
+  --warning-text:  #fbbf24;
+
+  --bg:            #0c1117;
+  --surface:       #131d2d;
+  --surface-2:     #0f1724;
+  --border:        rgba(255,255,255,.07);
+  --border-strong: rgba(255,255,255,.14);
+
+  --text:          #f1f5f9;
+  --text-2:        #94a3b8;
+  --muted:         #64748b;
+
+  --sidebar-bg:          #0f1724;
+  --sidebar-border:      rgba(255,255,255,.04);
+  --sidebar-text:        #64748b;
+  --sidebar-hover-bg:    rgba(255,255,255,.03);
+  --sidebar-active-bg:   rgba(129,140,248,.12);
+  --sidebar-active-text: #818cf8;
+  --sidebar-active-bar:  #818cf8;
+  --sidebar-brand-bg:    rgba(255,255,255,.02);
+
+  --input-bg:     #0f1724;
+  --input-border: rgba(255,255,255,.1);
+  --input-focus:  #818cf8;
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,.3);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.2);
+  --shadow:    0 2px 8px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.22);
+  --shadow-md: 0 4px 18px rgba(0,0,0,.38), 0 2px 6px rgba(0,0,0,.28);
+  --shadow-lg: 0 10px 44px rgba(0,0,0,.48), 0 4px 14px rgba(0,0,0,.32);
+}
+
+/* ============================================================
+   Reset base
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+html, body { width: 100%; overflow-x: hidden; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+img, video, canvas, svg { max-width: 100%; }
+
+/* ============================================================
+   Utilitários
+   ============================================================ */
+.hidden { display: none !important; }
+.text-muted { color: var(--muted); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+.text-primary { color: var(--primary); }
+.mt-1 { margin-top: 4px; }
+.mt-2 { margin-top: 10px; }
+.mt-3 { margin-top: 18px; }
+.mb-2 { margin-bottom: 10px; }
+.w-full { width: 100%; }

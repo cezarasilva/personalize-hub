@@ -1,0 +1,135 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar Catálogo - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-store"></i> Configurar Catálogo</h1>
+                    <p>Configure logo, banners rotativos, cores e rodapé do catálogo.</p>
+                </div>
+                <a id="btnVerCatalogo" href="#" target="_blank" class="btn btn-primary"><i class="bx bx-link-external"></i> Abrir catálogo</a>
+            </header>
+
+            <section class="grid grid-2">
+                <div class="card">
+                    <div class="card-title"><span><i class="bx bx-cog"></i> Configurações públicas</span></div>
+                    <form id="formCatalogo" class="form-grid" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label>Link/slug do catálogo</label>
+                            <input type="text" id="slug_catalogo" name="slug_catalogo" placeholder="minha-loja">
+                        </div>
+                        <div class="form-group">
+                            <label>WhatsApp que receberá os pedidos</label>
+                            <input type="text" id="whatsapp_catalogo" name="whatsapp_catalogo" placeholder="41999999999">
+                        </div>
+                        <div class="form-group">
+                            <label>Instagram</label>
+                            <input type="text" id="instagram_catalogo" name="instagram_catalogo" placeholder="@sualoja">
+                        </div>
+                        <div class="form-group">
+                            <label>Catálogo ativo?</label>
+                            <select id="catalogo_ativo" name="catalogo_ativo">
+                                <option value="true">Sim</option>
+                                <option value="false">Não</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tema do catálogo</label>
+                            <select id="tema_catalogo" name="tema_catalogo">
+                                <option value="CLARO">Claro premium</option>
+                                <option value="DARK_PREMIUM">Dark premium / app</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Cor dos títulos</label>
+                            <input type="color" id="cor_titulo" name="cor_titulo" value="#2563eb">
+                        </div>
+                        <div class="form-group">
+                            <label>Cor dos preços</label>
+                            <input type="color" id="cor_preco" name="cor_preco" value="#16a34a">
+                        </div>
+                        <div class="form-group">
+                            <label>Cor do botão adicionar</label>
+                            <input type="color" id="cor_botao" name="cor_botao" value="#2563eb">
+                        </div>
+
+                        <div class="form-group" style="grid-column:1/-1;">
+                            <label>Descrição do catálogo</label>
+                            <textarea id="descricao_catalogo" name="descricao_catalogo" rows="4" placeholder="Produtos personalizados, presentes criativos e novidades..."></textarea>
+                        </div>
+
+                        <div class="form-group" style="grid-column:1/-1;">
+                            <div class="card-title compact"><span><i class="bx bx-image"></i> Logo</span></div>
+                            <div class="catalogo-upload-row">
+                                <input type="file" name="logo" accept="image/*">
+                                <label class="mini-check"><input type="checkbox" name="remover_logo" value="true"> Excluir logo atual</label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="grid-column:1/-1;">
+                            <div class="card-title compact"><span><i class="bx bx-desktop"></i> Banners desktop / PC</span><small>Rotação a cada 15 segundos</small></div>
+                            <div class="banner-input-grid">
+                                <label>Banner PC 1<input type="file" name="banner_desktop_1" accept="image/*"><span><input type="checkbox" name="remover_banner_desktop_1" value="true"> excluir</span></label>
+                                <label>Banner PC 2<input type="file" name="banner_desktop_2" accept="image/*"><span><input type="checkbox" name="remover_banner_desktop_2" value="true"> excluir</span></label>
+                                <label>Banner PC 3<input type="file" name="banner_desktop_3" accept="image/*"><span><input type="checkbox" name="remover_banner_desktop_3" value="true"> excluir</span></label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="grid-column:1/-1;">
+                            <div class="card-title compact"><span><i class="bx bx-tablet"></i> Banners tablet</span><small>Rotação a cada 15 segundos</small></div>
+                            <div class="banner-input-grid">
+                                <label>Banner tablet 1<input type="file" name="banner_tablet_1" accept="image/*"><span><input type="checkbox" name="remover_banner_tablet_1" value="true"> excluir</span></label>
+                                <label>Banner tablet 2<input type="file" name="banner_tablet_2" accept="image/*"><span><input type="checkbox" name="remover_banner_tablet_2" value="true"> excluir</span></label>
+                                <label>Banner tablet 3<input type="file" name="banner_tablet_3" accept="image/*"><span><input type="checkbox" name="remover_banner_tablet_3" value="true"> excluir</span></label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="grid-column:1/-1;">
+                            <div class="card-title compact"><span><i class="bx bx-mobile-alt"></i> Banners mobile</span><small>Rotação a cada 15 segundos</small></div>
+                            <div class="banner-input-grid">
+                                <label>Banner mobile 1<input type="file" name="banner_mobile_1" accept="image/*"><span><input type="checkbox" name="remover_banner_mobile_1" value="true"> excluir</span></label>
+                                <label>Banner mobile 2<input type="file" name="banner_mobile_2" accept="image/*"><span><input type="checkbox" name="remover_banner_mobile_2" value="true"> excluir</span></label>
+                                <label>Banner mobile 3<input type="file" name="banner_mobile_3" accept="image/*"><span><input type="checkbox" name="remover_banner_mobile_3" value="true"> excluir</span></label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="grid-column:1/-1;">
+                            <div class="card-title compact"><span><i class="bx bx-footer"></i> Rodapé do catálogo</span></div>
+                        </div>
+                        <div class="form-group"><label>Contato do rodapé</label><input id="footer_contato" name="footer_contato" placeholder="WhatsApp, telefone ou e-mail"></div>
+                        <div class="form-group"><label>Localização</label><input id="footer_localizacao" name="footer_localizacao" placeholder="Cidade, bairro ou endereço"></div>
+                        <div class="form-group"><label>Meios de pagamento</label><input id="footer_pagamentos" name="footer_pagamentos" placeholder="Pix, dinheiro, cartão..."></div>
+                        <div class="form-group"><label>Copyright</label><input id="footer_copyright" name="footer_copyright" placeholder="© 2026 Minha Loja"></div>
+
+                        <button class="btn btn-success" type="submit"><i class="bx bx-save"></i> Salvar catálogo</button>
+                        <button class="btn btn-danger" type="button" id="btnResetarCatalogo"><i class="bx bx-reset"></i> Resetar logo e banners</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span><i class="bx bx-image"></i> Prévia atual</span></div>
+                    <div id="previewCatalogo" class="catalogo-config-preview mb-2"></div>
+                    <div class="catalogo-link-tools" id="catalogoLinkTools"></div>
+                    <div class="catalogo-qr-box" id="catalogoQrBox"></div>
+                    <div id="boxAssinatura" class="assinatura-box"></div>
+                    <div class="notice mt-3">Os banners são exibidos em rotação automática de 15 segundos, escolhendo a versão correta para PC, tablet ou celular.</div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/meu-catalogo.js"></script>
+</body>
+</html>

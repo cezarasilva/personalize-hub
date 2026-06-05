@@ -1,0 +1,87 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financeiro V3 - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body>
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1> Financeiro V3</h1>
+                    <p>Fechamento de repasses por loja, controle de status e PDF financeiro detalhado.</p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-success" id="btnGerarTodos">Gerar fechamentos</button>
+                    <button class="btn btn-dark" id="btnPdfGeral">PDF geral</button>
+                    <button class="btn btn-primary" id="btnAtualizar">Atualizar</button>
+                </div>
+            </header>
+
+            <section class="card">
+                <div class="card-title">Filtros do fechamento</div>
+                <div class="form-grid-3">
+                    <div class="form-group">
+                        <label for="periodo">Mês referência</label>
+                        <input type="month" id="periodo">
+                    </div>
+                    <div class="form-group">
+                        <label for="filtroParceiro">Loja</label>
+                        <select id="filtroParceiro"><option value="">Todas as lojas</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary" id="btnFiltrarFinanceiro">Carregar fechamento</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="grid grid-4 mb-2">
+                <div class="stat-card"><span>Total vendido</span><strong id="finTotalVendido">R$ 0,00</strong></div>
+                <div class="stat-card"><span>A receber PERSONALIZE</span><strong id="finLiquido">R$ 0,00</strong></div>
+                <div class="stat-card"><span>Margem lojas</span><strong id="finComissao">R$ 0,00</strong></div>
+                <div class="stat-card"><span>Pendente</span><strong id="finPendente">R$ 0,00</strong></div>
+            </section>
+
+            <section class="card">
+                <div class="card-title">Resumo por loja</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Loja</th><th>Vendas</th><th>Peças</th><th>Total vendido</th><th>Margem loja</th><th>A receber</th><th>Status</th><th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaFinanceiro"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-title">Repasses / fechamentos gerados</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Loja</th><th>Mês</th><th>Total vendido</th><th>Margem loja</th><th>A receber</th><th>Status</th><th>Atualizado</th><th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaRepasses"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/financeiro.js"></script>
+</body>
+</html>
