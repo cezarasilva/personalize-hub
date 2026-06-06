@@ -6,9 +6,11 @@
     <title>Cadastro de Produto - PERSONALIZE Hub</title>
     <link rel="stylesheet" href="assets/css/base.css">
     <link rel="stylesheet" href="assets/css/app.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
     <script src="/assets/js/theme.js"></script>
 </head>
 <body>
@@ -95,20 +97,24 @@
                     </div>
                 </div>
                 <div class="form-group mt-2">
-                    <label for="descricao">Descrição</label>
+                    <label for="descricao">Descrição curta</label>
                     <textarea id="descricao" name="descricao" placeholder="Materiais, dimensões, personalizações disponíveis..."></textarea>
+                </div>
+                <div class="form-group mt-2">
+                    <label>Especificações técnicas e detalhes completos</label>
+                    <div id="editorDescLonga" class="quill-editor-wrap"></div>
+                    <input type="hidden" id="descricao_longa" name="descricao_longa">
                 </div>
                 <div class="form-group mt-2">
                     <label for="imagens">Fotos do produto (até 10)</label>
                     <input id="imagens" name="imagens" type="file" accept="image/*" multiple>
-                    <small class="text-muted">Ao editar, selecionar novas fotos substitui a galeria atual.</small>
+                    <small class="text-muted">Cada foto passa pelo recorte quadrado (1:1). Ao editar, novas fotos substituem a galeria atual.</small>
                 </div>
-                <div class="preview-box mt-2 gallery-preview-box">
-                    <div id="previewImagem" class="gallery-preview-empty">Sem fotos selecionadas</div>
-                    <div>
-                        <strong>Pré-visualização</strong>
-                        <p class="text-muted">Até 10 fotos. A primeira será a principal.</p>
-                    </div>
+                <div id="galeriaWrap" style="display:none;margin-top:12px">
+                    <label style="font-size:12px;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:6px;margin-bottom:8px">
+                        <i class="bx bx-images"></i> Galeria — use ← → para reorganizar, ★ para definir a principal
+                    </label>
+                    <div id="previewImagem"></div>
                 </div>
                 <div class="wizard-nav">
                     <div>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="pageTitle">Produto - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="/assets/css/base.css">
+    <link rel="stylesheet" href="/assets/css/app.css">
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body class="catalogo-publico">
+
+    <!-- Topbar -->
+    <nav class="cat-topbar" id="detalheTopbar">
+        <a class="cat-brand" href="#" id="detalheBrand">
+            <img id="topbarLogo" src="" alt="" style="display:none">
+            <span id="topbarNome">Catálogo</span>
+        </a>
+        <div class="cat-nav">
+            <a href="#" id="btnVoltar" class="det-back-link">
+                <i class="bx bx-arrow-back"></i> Voltar ao catálogo
+            </a>
+            <a href="#" id="topbarWhatsapp" target="_blank" rel="noopener noreferrer" style="display:none">
+                <i class="bx bxl-whatsapp"></i> WhatsApp
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main -->
+    <main class="det-main">
+
+        <!-- Loading -->
+        <div class="det-loading" id="detLoading">
+            <div class="det-spinner"></div>
+            <p>Carregando produto...</p>
+        </div>
+
+        <!-- Conteúdo -->
+        <div id="detConteudo" style="display:none">
+
+            <!-- Breadcrumb -->
+            <nav class="det-breadcrumb" aria-label="Navegação">
+                <a href="#" id="detBreadBack"><i class="bx bx-store-alt"></i> Catálogo</a>
+                <span class="det-bread-sep" aria-hidden="true">›</span>
+                <span id="detBreadNome">Produto</span>
+            </nav>
+
+            <!-- Hero: galeria + info -->
+            <section class="det-hero">
+                <div class="det-gallery-col" id="detGaleriaCol"></div>
+                <div class="det-info-col" id="detInfoCol"></div>
+            </section>
+
+            <!-- Especificações -->
+            <section class="det-specs-section" id="detSpecsSection" style="display:none">
+                <div class="det-specs-wrap">
+                    <h2 class="det-specs-title">
+                        <i class="bx bx-list-check"></i> Especificações e detalhes
+                    </h2>
+                    <div class="det-specs-body" id="detSpecsBody"></div>
+                </div>
+            </section>
+
+            <!-- Voltar (footer) -->
+            <div class="det-footer-nav">
+                <a href="#" id="detVoltarBottom" class="det-btn-voltar">
+                    <i class="bx bx-arrow-back"></i> Voltar ao catálogo
+                </a>
+            </div>
+
+        </div>
+
+        <!-- Erro -->
+        <div class="det-erro" id="detErro" style="display:none">
+            <i class="bx bx-error-circle"></i>
+            <p id="detErroMsg">Produto não encontrado.</p>
+            <a href="#" id="detErroVoltar" class="cat-btn-add" style="text-decoration:none;margin-top:8px">
+                <i class="bx bx-arrow-back"></i> Voltar ao catálogo
+            </a>
+        </div>
+
+    </main>
+
+    <!-- WhatsApp float -->
+    <a href="#" class="whatsapp-float" id="whatsappFloat" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" style="display:none">
+        <i class="bx bxl-whatsapp"></i>
+    </a>
+
+    <script src="/assets/js/pages/produto-detalhe.js"></script>
+</body>
+</html>

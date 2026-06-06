@@ -270,6 +270,20 @@ async function migrarColunasV67() {
 }
 migrarColunasV67();
 
+async function migrarColunasV66() {
+    const alteracoes = [
+        `ALTER TABLE maquinas ADD COLUMN IF NOT EXISTS observacao TEXT`,
+        `ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS itens_precificacao_json TEXT`,
+        `ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_entrega           NUMERIC(12,4) DEFAULT 0`,
+        `ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS custo_taxas             NUMERIC(12,4) DEFAULT 0`,
+        `ALTER TABLE precificacoes ADD COLUMN IF NOT EXISTS perdas_tipo             VARCHAR(20) DEFAULT 'VALOR'`,
+    ];
+    for (const sql of alteracoes) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V6.6:', e.message); }
+    }
+}
+migrarColunasV66();
+
 function gerarCodigo(prefixo) {
     const agora = new Date();
     const yyyy = agora.getFullYear();
@@ -513,7 +527,11 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
         preco_total_lote: parseMoeda(body.preco_total_lote),
         preco_repasse_final: parseMoeda(body.preco_repasse),
         canal_venda: body.canal_venda || 'Venda direta',
-        tipo_precificacao: 'IMPRESSAO_3D'
+        tipo_precificacao: body.tipo_precificacao || 'UNIVERSAL',
+        custo_entrega: parseMoeda(body.custo_entrega),
+        custo_taxas: parseMoeda(body.custo_taxas),
+        perdas_tipo: body.perdas_tipo || 'VALOR',
+        itens_precificacao_json: body.itens_precificacao_json || null,
     };
 
     const sp = 'sp_precificacao_produto';
@@ -528,9 +546,10 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
                 custo_embalagem, custo_acessorios, custo_perdas, custo_extra,
                 custo_total, custo_total_producao, custo_unitario,
                 margem_percentual, taxa_canal_percentual, taxa_canal_fixa,
-                preco_sugerido, preco_sugerido_unitario, preco_venda_final, preco_final_unitario, preco_total_lote, preco_repasse_final
+                preco_sugerido, preco_sugerido_unitario, preco_venda_final, preco_final_unitario, preco_total_lote, preco_repasse_final,
+                custo_entrega, custo_taxas, perdas_tipo, itens_precificacao_json
             ) VALUES (
-                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39
             )`,
             [
                 produtoId, variacaoId || null, usuarioId || null, dados.tipo_precificacao, dados.canal_venda,
@@ -540,7 +559,8 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
                 dados.custo_embalagem, dados.custo_acessorios, dados.custo_perdas, dados.custo_extra,
                 dados.custo_total, dados.custo_total_producao, dados.custo_unitario,
                 dados.margem_percentual, dados.taxa_canal_percentual, dados.taxa_canal_fixa,
-                dados.preco_sugerido, dados.preco_sugerido_unitario, dados.preco_venda_final, dados.preco_final_unitario, dados.preco_total_lote, dados.preco_repasse_final
+                dados.preco_sugerido, dados.preco_sugerido_unitario, dados.preco_venda_final, dados.preco_final_unitario, dados.preco_total_lote, dados.preco_repasse_final,
+                dados.custo_entrega, dados.custo_taxas, dados.perdas_tipo, dados.itens_precificacao_json
             ]
         );
         await client.query(`RELEASE SAVEPOINT ${sp}`);
@@ -1013,12 +1033,13 @@ app.post('/api/maquinas', autenticar, somenteAdmin, async (req, res) => {
             INSERT INTO maquinas (
                 nome, modelo, tipo, valor_compra, vida_util_horas, potencia_kw, valor_kwh,
                 custo_manutencao_hora, custo_depreciacao_hora, custo_energia_hora, custo_total_hora,
-                custo_hora_manual, usar_custo_manual, status
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+                custo_hora_manual, usar_custo_manual, status, observacao
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
             [
                 body.nome, body.modelo || null, body.tipo || 'OUTRA', parseMoeda(body.valor_compra), parseMoeda(body.vida_util_horas),
                 parseMoeda(body.potencia_kw), parseMoeda(body.valor_kwh), parseMoeda(body.custo_manutencao_hora),
-                c.custo_depreciacao_hora, c.custo_energia_hora, c.custo_total_hora, c.custo_hora_manual, c.usar_custo_manual, body.status || 'ATIVA'
+                c.custo_depreciacao_hora, c.custo_energia_hora, c.custo_total_hora, c.custo_hora_manual, c.usar_custo_manual, body.status || 'ATIVA',
+                body.observacao || null
             ]
         );
         await registrarAuditoria(req.user.id, `Cadastrou máquina ${body.nome}`);
@@ -1038,12 +1059,14 @@ app.put('/api/maquinas/:id', autenticar, somenteAdmin, async (req, res) => {
                 nome = COALESCE($1, nome), modelo = $2, tipo = COALESCE($3, tipo),
                 valor_compra = $4, vida_util_horas = $5, potencia_kw = $6, valor_kwh = $7,
                 custo_manutencao_hora = $8, custo_depreciacao_hora = $9, custo_energia_hora = $10, custo_total_hora = $11,
-                custo_hora_manual = $12, usar_custo_manual = $13, status = COALESCE($14, status), atualizado_em = CURRENT_TIMESTAMP
-            WHERE id = $15 RETURNING *`,
+                custo_hora_manual = $12, usar_custo_manual = $13, status = COALESCE($14, status),
+                observacao = $15, atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = $16 RETURNING *`,
             [
                 body.nome || null, body.modelo || null, body.tipo || null, parseMoeda(body.valor_compra), parseMoeda(body.vida_util_horas),
                 parseMoeda(body.potencia_kw), parseMoeda(body.valor_kwh), parseMoeda(body.custo_manutencao_hora),
-                c.custo_depreciacao_hora, c.custo_energia_hora, c.custo_total_hora, c.custo_hora_manual, c.usar_custo_manual, body.status || null, req.params.id
+                c.custo_depreciacao_hora, c.custo_energia_hora, c.custo_total_hora, c.custo_hora_manual, c.usar_custo_manual, body.status || null,
+                body.observacao || null, req.params.id
             ]
         );
         if (r.rows.length === 0) return res.status(404).json({ erro: 'Máquina não encontrada.' });
@@ -1165,11 +1188,12 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imag
 
         let produtoId;
         await transacao(async (client) => {
+            const descricaoLonga = String(req.body.descricao_longa || '').trim() || null;
             const nP = await client.query(
-                `INSERT INTO produtos (nome, categoria, imagem_url, descricao, status, tipo_oferta, status_fluxo, destino_final)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                `INSERT INTO produtos (nome, categoria, imagem_url, descricao, descricao_longa, status, tipo_oferta, status_fluxo, destino_final)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING id`,
-                [nome, categoria || 'Impressão 3D', imagem_url, descricao || '', status || 'ATIVO', tipoOferta, statusFluxo, destinoFinal]
+                [nome, categoria || 'Impressão 3D', imagem_url, descricao || '', descricaoLonga, status || 'ATIVO', tipoOferta, statusFluxo, destinoFinal]
             );
             produtoId = nP.rows[0].id;
 
@@ -1210,10 +1234,72 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imag
     }
 });
 
+app.get('/api/produtos/:id', autenticar, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const r = await db.query(`
+            SELECT
+                p.id, p.nome, p.categoria, p.descricao, p.descricao_longa, p.status,
+                p.tipo_oferta, p.status_fluxo, p.destino_final,
+                COALESCE(
+                    (SELECT pi.imagem_url FROM produto_imagens pi
+                     WHERE pi.produto_id = p.id ORDER BY pi.principal DESC, pi.ordem ASC LIMIT 1),
+                    p.imagem_url
+                ) AS imagem_url,
+                COALESCE(
+                    (SELECT jsonb_agg(
+                        jsonb_build_object('url', pi.imagem_url, 'ordem', pi.ordem, 'principal', pi.principal)
+                        ORDER BY pi.ordem ASC, pi.id ASC)
+                     FROM produto_imagens pi WHERE pi.produto_id = p.id),
+                    CASE WHEN p.imagem_url IS NOT NULL AND p.imagem_url <> ''
+                         THEN jsonb_build_array(jsonb_build_object('url', p.imagem_url, 'ordem', 1, 'principal', true))
+                         ELSE '[]'::jsonb END
+                ) AS galeria,
+                v.id AS variacao_id, v.sku, v.variacao,
+                v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central,
+                COALESCE(v.lead_time_dias, 0) AS lead_time_dias,
+                COALESCE(v.qtd_minima, 1)     AS qtd_minima,
+                pr.id AS prec_id,
+                pr.custo_material, pr.custo_maquina, pr.custo_mao_obra,
+                pr.custo_embalagem, pr.custo_entrega, pr.custo_taxas,
+                pr.custo_extra, pr.custo_perdas, pr.perdas_tipo,
+                pr.margem_percentual, pr.canal_venda,
+                pr.taxa_canal_percentual, pr.taxa_canal_fixa,
+                pr.quantidade_produzida, pr.unidade_precificacao,
+                pr.itens_precificacao_json,
+                pr.preco_sugerido, pr.preco_total_lote,
+                pr.custo_total_producao, pr.custo_unitario
+            FROM produtos p
+            JOIN produto_variacoes v ON v.produto_id = p.id
+            LEFT JOIN LATERAL (
+                SELECT id, custo_material, custo_maquina, custo_mao_obra,
+                       custo_embalagem, custo_entrega, custo_taxas,
+                       custo_extra, custo_perdas, perdas_tipo,
+                       margem_percentual, canal_venda,
+                       taxa_canal_percentual, taxa_canal_fixa,
+                       quantidade_produzida, unidade_precificacao,
+                       itens_precificacao_json,
+                       preco_sugerido, preco_total_lote,
+                       custo_total_producao, custo_unitario
+                FROM precificacoes
+                WHERE produto_id = p.id
+                ORDER BY id DESC LIMIT 1
+            ) pr ON true
+            WHERE p.id = $1
+            ORDER BY v.id ASC LIMIT 1
+        `, [id]);
+        if (!r.rows.length) return res.status(404).json({ erro: 'Produto não encontrado.' });
+        res.json(r.rows[0]);
+    } catch (e) {
+        console.error('❌ Erro produto por id:', e);
+        res.status(500).json({ erro: 'Erro: ' + e.message });
+    }
+});
+
 app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.fields([{ name: 'imagem', maxCount: 1 }, { name: 'imagens', maxCount: 10 }]), async (req, res) => {
     try {
         const { id } = req.params;
-        const { nome, categoria, descricao, status, variacao, sku, preco_venda, preco_repasse, custo_producao, estoque_central, estoque } = req.body;
+        const { nome, categoria, descricao, descricao_longa, status, variacao, sku, preco_venda, preco_repasse, custo_producao, estoque_central, estoque } = req.body;
         const imagensUrls = await uploadImagensProduto(arquivosProduto(req));
         const imagem_url = imagensUrls[0] || null;
         const novoEstoque = estoque_central !== undefined ? estoque_central : estoque;
@@ -1235,14 +1321,22 @@ app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.fields([{ name: 'i
                  SET nome = COALESCE($1, nome),
                      categoria = COALESCE($2, categoria),
                      descricao = COALESCE($3, descricao),
-                     status = COALESCE($4, status),
-                     imagem_url = COALESCE($5, imagem_url)
-                 WHERE id = $6`,
-                [nome || null, categoria || null, descricao || null, status || null, imagem_url || null, id]
+                     descricao_longa = COALESCE($4, descricao_longa),
+                     status = COALESCE($5, status),
+                     imagem_url = COALESCE($6, imagem_url)
+                 WHERE id = $7`,
+                [nome || null, categoria || null, descricao || null, descricao_longa || null, status || null, imagem_url || null, id]
             );
 
             if (imagensUrls.length) {
                 await salvarGaleriaProduto(client, id, imagensUrls);
+            } else if (req.body.galeria_ordem_json) {
+                try {
+                    const ordemUrls = JSON.parse(req.body.galeria_ordem_json);
+                    if (Array.isArray(ordemUrls) && ordemUrls.length) {
+                        await salvarGaleriaProduto(client, id, ordemUrls);
+                    }
+                } catch {}
             }
 
             const variacaoId = produtoAtual.rows[0].variacao_id;
@@ -3906,6 +4000,67 @@ app.delete('/api/meus-produtos/:id/permanente', autenticar, async (req, res) => 
 });
 
 
+app.get('/api/catalogo-publico/:slug/produto/:id', async (req, res) => {
+    try {
+        const slug = slugifyCatalogo(req.params.slug);
+        const id = Number(req.params.id);
+        if (!id) return res.status(400).json({ erro: 'ID inválido.' });
+
+        const isAdminCatalogo = slug === 'personalize' || slug === 'admin';
+        let loja;
+        if (isAdminCatalogo) {
+            loja = { nome_loja: 'PERSONALIZE', slug_catalogo: slug, whatsapp_catalogo: null, logo_url: null };
+        } else {
+            const lojaRes = await db.query(
+                `SELECT nome_loja, whatsapp_catalogo, telefone, logo_url, slug_catalogo, catalogo_ativo,
+                        cor_tema, cor_titulo, cor_preco, cor_botao
+                 FROM parceiros WHERE slug_catalogo = $1`,
+                [slug]
+            );
+            if (!lojaRes.rows.length) return res.status(404).json({ erro: 'Catálogo não encontrado.' });
+            loja = lojaRes.rows[0];
+            if (!loja.catalogo_ativo) return res.status(403).json({ erro: 'Catálogo indisponível.' });
+        }
+
+        const r = await db.query(`
+            SELECT p.id, p.nome, p.descricao, p.descricao_longa, p.categoria,
+                   p.dono_tipo, COALESCE(p.produto_destaque, false) AS produto_destaque,
+                   COALESCE(imgs.imagens, '[]'::json) AS imagens,
+                   COALESCE(
+                       (SELECT pi.imagem_url FROM produto_imagens pi
+                        WHERE pi.produto_id = p.id ORDER BY pi.principal DESC, pi.ordem ASC LIMIT 1),
+                       p.imagem_url
+                   ) AS imagem_url,
+                   v.id AS variacao_id, v.variacao,
+                   COALESCE(v.lead_time_dias, 0) AS lead_time_dias,
+                   COALESCE(v.qtd_minima, 1) AS qtd_minima,
+                   v.estoque_central,
+                   CASE
+                       WHEN p.dono_tipo = 'PARCEIRO' THEN v.preco_venda
+                       ELSE COALESCE(v.preco_catalogo, v.preco_venda)
+                   END AS preco_publico,
+                   CASE WHEN p.dono_tipo = 'PARCEIRO' THEN 'LOJA' ELSE 'PERSONALIZE' END AS origem_publica
+            FROM produtos p
+            JOIN produto_variacoes v ON v.produto_id = p.id
+            LEFT JOIN LATERAL (
+                SELECT json_agg(pi.imagem_url ORDER BY pi.principal DESC, pi.ordem ASC, pi.id ASC) AS imagens
+                FROM produto_imagens pi WHERE pi.produto_id = p.id
+            ) imgs ON true
+            WHERE p.id = $1
+              AND COALESCE(p.status, 'ATIVO') = 'ATIVO'
+              AND COALESCE(p.visivel_catalogo, true) = true
+              AND COALESCE(p.aprovado_admin, true) = true
+            ORDER BY v.id ASC LIMIT 1
+        `, [id]);
+
+        if (!r.rows.length) return res.status(404).json({ erro: 'Produto não encontrado.' });
+        res.json({ loja, produto: r.rows[0] });
+    } catch (e) {
+        console.error('❌ Erro produto público detalhe:', e);
+        res.status(500).json({ erro: 'Erro ao carregar produto: ' + e.message });
+    }
+});
+
 app.get('/api/catalogo-publico/:slug', async (req, res) => {
     try {
         const slug = slugifyCatalogo(req.params.slug);
@@ -3953,7 +4108,7 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
 
         const produtos = await db.query(
             `SELECT
-                p.id, p.nome, p.descricao, p.categoria, p.dono_tipo, p.parceiro_id, p.origem_produto, COALESCE(p.produto_destaque, false) AS produto_destaque,
+                p.id, p.nome, p.descricao, p.descricao_longa, p.categoria, p.dono_tipo, p.parceiro_id, p.origem_produto, COALESCE(p.produto_destaque, false) AS produto_destaque,
                 COALESCE((imgs.imagens->>0), p.imagem_url) AS imagem_url,
                 COALESCE(imgs.imagens, '[]'::json) AS imagens,
                 v.id AS variacao_id, v.variacao,
@@ -4856,4 +5011,15 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.listen(PORT, () => console.log(`🔥 PERSONALIZE Hub Online: http://localhost:${PORT}`));
+async function migrarBanco() {
+    const migrações = [
+        'ALTER TABLE produtos ADD COLUMN IF NOT EXISTS descricao_longa TEXT',
+    ];
+    for (const sql of migrações) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ Migração ignorada:', e.message); }
+    }
+}
+
+migrarBanco().then(() =>
+    app.listen(PORT, () => console.log(`🔥 PERSONALIZE Hub Online: http://localhost:${PORT}`))
+);

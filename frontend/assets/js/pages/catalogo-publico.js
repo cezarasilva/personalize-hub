@@ -187,9 +187,12 @@
                     <p class="cat-card-desc">${esc(p.descricao || '')}</p>
                     <div class="cat-card-bottom">
                         <span class="cat-card-price">${money(p.preco_publico)}</span>
-                        <button class="cat-btn-add" onclick="adicionarItem(${p.id}, ${p.variacao_id})">
-                            <i class="bx bx-cart-add"></i> Adicionar
-                        </button>
+                        <div class="cat-card-btns">
+                            <a class="cat-btn-more" href="produto-detalhe.html?loja=${esc(slug)}&id=${p.id}&vid=${p.variacao_id}">Ver mais</a>
+                            <button class="cat-btn-add" onclick="adicionarItem(${p.id}, ${p.variacao_id})">
+                                <i class="bx bx-cart-add"></i> Adicionar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </article>`;
@@ -415,6 +418,16 @@
         if (loja.instagram_catalogo) links.push(`<a class="btn btn-light" target="_blank" href="https://instagram.com/${esc(String(loja.instagram_catalogo).replace('@',''))}"><i class="bx bxl-instagram"></i> Instagram</a>`);
         document.getElementById('linksContato').innerHTML = links.join('');
         renderTopbar(); renderFooter(); iniciarBanners(); renderCarrinho(); renderCategorias(); renderProdutos();
+
+        // Processar item pendente adicionado na página de detalhe
+        const pendingCart = JSON.parse(localStorage.getItem('catalogoPending') || '[]');
+        if (pendingCart.length) {
+            localStorage.removeItem('catalogoPending');
+            pendingCart.forEach(p => {
+                const prod = produtos.find(x => Number(x.id) === Number(p.produto_id) && Number(x.variacao_id) === Number(p.variacao_id));
+                if (prod) adicionarItem(prod.id, prod.variacao_id);
+            });
+        }
     }
 
     document.getElementById('floatingSearchIcon').addEventListener('click', (e) => {
