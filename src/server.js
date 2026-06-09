@@ -230,6 +230,27 @@ verificarVencidas();
 setInterval(verificarVencidas, 24 * 60 * 60 * 1000);
 
 // =========================================================
+// V6.9 — Migração: preços individuais por parceiro no catálogo
+// =========================================================
+async function migrarPrecosParceiroCatalogo() {
+    const ops = [
+        `CREATE TABLE IF NOT EXISTS parceiro_precos_catalogo (
+            id             SERIAL PRIMARY KEY,
+            parceiro_id    INTEGER NOT NULL REFERENCES parceiros(id)        ON DELETE CASCADE,
+            variacao_id    INTEGER NOT NULL REFERENCES produto_variacoes(id) ON DELETE CASCADE,
+            preco_catalogo NUMERIC(10,2) NOT NULL CHECK (preco_catalogo >= 0),
+            atualizado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(parceiro_id, variacao_id)
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_ppc_parceiro ON parceiro_precos_catalogo(parceiro_id)`
+    ];
+    for (const sql of ops) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V6.9:', e.message); }
+    }
+}
+migrarPrecosParceiroCatalogo();
+
+// =========================================================
 // V6.8 — Migração: histórico e responsável no CRM
 // =========================================================
 async function migrarColunasV68() {
@@ -1573,6 +1594,7 @@ app.get('/api/parceiro/catalogo', autenticar, async (req, res) => {
                 p.categoria,
                 p.descricao,
                 p.status,
+                COALESCE(p.dono_tipo, 'ADMIN') AS dono_tipo,
                 COALESCE((SELECT pi.imagem_url FROM produto_imagens pi WHERE pi.produto_id = p.id ORDER BY pi.principal DESC, pi.ordem ASC, pi.id ASC LIMIT 1), p.imagem_url) AS imagem_url,
                 pv.sku,
                 pv.variacao,
@@ -1581,10 +1603,12 @@ app.get('/api/parceiro/catalogo', autenticar, async (req, res) => {
                 COALESCE(pv.estoque_central, 0) AS estoque_central,
                 COALESCE(c.quantidade_atual, 0) AS quantidade_na_loja,
                 COALESCE(c.quantidade_vendida, 0) AS quantidade_vendida_loja,
-                CASE WHEN COALESCE(pv.estoque_central, 0) > 0 THEN true ELSE false END AS disponivel_central
+                CASE WHEN COALESCE(pv.estoque_central, 0) > 0 THEN true ELSE false END AS disponivel_central,
+                ppc.preco_catalogo AS preco_catalogo_parceiro
             FROM produtos p
             JOIN produto_variacoes pv ON pv.produto_id = p.id
             LEFT JOIN consignacoes_estoque c ON c.variacao_id = pv.id AND c.parceiro_id = $1
+            LEFT JOIN parceiro_precos_catalogo ppc ON ppc.variacao_id = pv.id AND ppc.parceiro_id = $1
             WHERE COALESCE(p.status, 'ATIVO') <> 'INATIVO'
               AND ($2 = '%%' OR p.nome ILIKE $2 OR COALESCE(pv.sku,'') ILIKE $2 OR COALESCE(pv.variacao,'') ILIKE $2 OR COALESCE(p.categoria,'') ILIKE $2)
               AND ($3::boolean = false OR COALESCE(pv.estoque_central, 0) > 0)
@@ -1595,6 +1619,46 @@ app.get('/api/parceiro/catalogo', autenticar, async (req, res) => {
     } catch (e) {
         console.error('❌ Erro catálogo parceiro:', e);
         res.status(500).json({ erro: 'Erro ao carregar catálogo: ' + e.message });
+    }
+});
+
+// Parceiro define seu próprio preço de catálogo por variação
+app.put('/api/parceiro/catalogo/preco', autenticar, async (req, res) => {
+    try {
+        const parceiroId = req.user.perfil === 'PARCEIRO'
+            ? req.user.parceiro_id
+            : (normalizarPerfil(req.user.perfil) === 'ADMIN' ? req.body.parceiro_id : null);
+        if (!parceiroId) return res.status(403).json({ erro: 'Acesso negado.' });
+        if (!garantirParceiroPermitido(req, parceiroId)) return res.status(403).json({ erro: 'Acesso negado para esta loja.' });
+
+        const variacaoId = toInt(req.body.variacao_id);
+        const precoNovo  = parseMoeda(req.body.preco);
+        if (!variacaoId || precoNovo < 0) return res.status(400).json({ erro: 'Dados inválidos.' });
+
+        // Valida mínimo: preço não pode ser menor que o repasse definido no produto
+        const vRow = await db.query(
+            'SELECT preco_repasse FROM produto_variacoes WHERE id = $1', [variacaoId]
+        );
+        if (!vRow.rowCount) return res.status(404).json({ erro: 'Variação não encontrada.' });
+        const precoRepasse = parseMoeda(vRow.rows[0].preco_repasse || 0);
+        if (precoRepasse > 0 && precoNovo < precoRepasse) {
+            return res.status(400).json({
+                erro: `Preço não pode ser menor que o valor de repasse (${money(precoRepasse)}).`
+            });
+        }
+
+        await db.query(
+            `INSERT INTO parceiro_precos_catalogo (parceiro_id, variacao_id, preco_catalogo)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (parceiro_id, variacao_id)
+             DO UPDATE SET preco_catalogo = $3, atualizado_em = NOW()`,
+            [parceiroId, variacaoId, precoNovo]
+        );
+
+        res.json({ mensagem: 'Preço atualizado.', preco: precoNovo });
+    } catch (e) {
+        console.error('❌ Erro preço catálogo parceiro:', e);
+        res.status(500).json({ erro: 'Erro ao salvar preço.' });
     }
 });
 
@@ -4133,7 +4197,8 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
                 COALESCE(imgs.imagens, '[]'::json) AS imagens,
                 v.id AS variacao_id, v.variacao,
                 CASE
-                    WHEN p.dono_tipo = 'PARCEIRO' THEN v.preco_venda
+                    WHEN ppc.preco_catalogo IS NOT NULL THEN ppc.preco_catalogo
+                    WHEN p.dono_tipo = 'PARCEIRO'       THEN v.preco_venda
                     ELSE COALESCE(v.preco_catalogo, v.preco_venda)
                 END AS preco_publico,
                 CASE WHEN p.dono_tipo = 'PARCEIRO' THEN 'LOJA' ELSE 'PERSONALIZE' END AS origem_publica
@@ -4144,12 +4209,14 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
                 FROM produto_imagens pi
                 WHERE pi.produto_id = p.id
              ) imgs ON true
+             LEFT JOIN parceiro_precos_catalogo ppc
+                ON ppc.variacao_id = v.id AND ppc.parceiro_id = ${parceiroId ? `$${params.length + 1}` : 'NULL'}
              WHERE ${where}
                AND COALESCE(p.status, 'ATIVO') = 'ATIVO'
                AND COALESCE(p.visivel_catalogo, true) = true
                AND COALESCE(p.aprovado_admin, true) = true
              ORDER BY COALESCE(p.produto_destaque, false) DESC, CASE WHEN COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' THEN 0 ELSE 1 END, COALESCE(p.catalogo_ordem, 999999), p.nome ASC`,
-            params
+            parceiroId ? [...params, parceiroId] : params
         );
 
         res.json({ loja, tipo_catalogo: isAdminCatalogo ? 'ADMIN' : 'PARCEIRO', produtos: produtos.rows });
