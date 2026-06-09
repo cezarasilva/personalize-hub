@@ -383,6 +383,9 @@
                     <div class="payment-grid textual">
                         <span>Pix</span><span>Cartão</span><span>Dinheiro</span><span>Boleto</span>
                     </div>
+                    <a href="/index.html" class="footer-admin-link">
+                        <i class='bx bx-lock-alt'></i> Acesso à plataforma
+                    </a>
                 </div>
             </div>
             <div class="footer-bottom"></div>
