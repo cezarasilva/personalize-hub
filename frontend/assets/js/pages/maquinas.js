@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         tbody.innerHTML = maquinas.map(m => `
             <tr>
-                <td><strong>${App.escapeHtml(m.nome)}</strong><br><small>${App.escapeHtml(m.modelo || '')}</small></td>
+                <td><strong>${App.escapeHtml(m.nome)}</strong><br><small>${App.escapeHtml(m.modelo || '')}${m.observacao ? ' · ' + App.escapeHtml(m.observacao) : ''}</small></td>
                 <td>${App.escapeHtml(m.tipo || '')}</td>
                 <td><strong>${App.money(m.custo_total_hora)}</strong><br><small>${m.usar_custo_manual ? 'manual' : 'calculado'}</small></td>
                 <td><small>Dep: ${App.money(m.custo_depreciacao_hora)} • Energia: ${App.money(m.custo_energia_hora)} • Manut: ${App.money(m.custo_manutencao_hora)}</small></td>
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = maquinas.find(x => Number(x.id) === Number(id));
         if (!m) return;
         editando = m;
-        ['nome','modelo','tipo','valor_compra','vida_util_horas','potencia_kw','valor_kwh','custo_manutencao_hora','custo_hora_manual','status'].forEach(k => set(k, m[k] ?? ''));
+        ['nome','modelo','tipo','valor_compra','vida_util_horas','potencia_kw','valor_kwh','custo_manutencao_hora','custo_hora_manual','status','observacao'].forEach(k => set(k, m[k] ?? ''));
         document.getElementById('usar_custo_manual').checked = !!m.usar_custo_manual;
         document.getElementById('tituloMaquina').textContent = `Editando: ${m.nome}`;
         document.getElementById('btnCancelarEdicaoMaquina').classList.remove('hidden');
@@ -67,14 +67,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     document.querySelectorAll('#formMaquina input, #formMaquina select').forEach(el => el.addEventListener('input', calcularPreview));
-    document.getElementById('btnCancelarEdicaoMaquina').addEventListener('click', () => { editando = null; form.reset(); set('vida_util_horas', 20000); set('potencia_kw', 0.20); set('valor_kwh', 0.90); document.getElementById('tituloMaquina').textContent = 'Cadastrar máquina'; document.getElementById('btnCancelarEdicaoMaquina').classList.add('hidden'); calcularPreview(); });
+    document.getElementById('btnCancelarEdicaoMaquina').addEventListener('click', () => { editando = null; form.reset(); set('vida_util_horas', 20000); set('potencia_kw', 0.20); set('valor_kwh', 0.90); set('observacao', ''); document.getElementById('tituloMaquina').textContent = 'Cadastrar máquina'; document.getElementById('btnCancelarEdicaoMaquina').classList.add('hidden'); calcularPreview(); });
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const body = {
             nome: v('nome'), modelo: v('modelo'), tipo: v('tipo'), status: v('status'),
             valor_compra: n('valor_compra'), vida_util_horas: n('vida_util_horas'), potencia_kw: n('potencia_kw'), valor_kwh: n('valor_kwh'),
-            custo_manutencao_hora: n('custo_manutencao_hora'), custo_hora_manual: n('custo_hora_manual'), usar_custo_manual: document.getElementById('usar_custo_manual').checked
+            custo_manutencao_hora: n('custo_manutencao_hora'), custo_hora_manual: n('custo_hora_manual'), usar_custo_manual: document.getElementById('usar_custo_manual').checked,
+            observacao: v('observacao') || null
         };
         try {
             if (editando) await App.api(`/maquinas/${editando.id}`, { method: 'PUT', body: JSON.stringify(body) });

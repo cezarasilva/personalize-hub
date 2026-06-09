@@ -27,7 +27,20 @@
                 <div class="form-grid">
                     <div class="form-group"><label>Nome da máquina</label><input id="nome" required placeholder="Ex: Bambu Lab A1"></div>
                     <div class="form-group"><label>Modelo</label><input id="modelo" placeholder="Ex: A1 Combo"></div>
-                    <div class="form-group"><label>Tipo</label><select id="tipo"><option value="IMPRESSORA_3D">Impressora 3D</option><option value="PLOTTER">Plotter</option><option value="LASER">Laser</option><option value="PRENSA">Prensa</option><option value="OUTRA">Outra</option></select></div>
+                    <div class="form-group"><label>Tipo</label><select id="tipo">
+                        <option value="IMPRESSORA_3D">Impressora 3D</option>
+                        <option value="IMPRESSORA_PAPEL">Impressora papel</option>
+                        <option value="PLOTTER">Plotter de recorte</option>
+                        <option value="PRENSA">Prensa térmica</option>
+                        <option value="LAMINADORA">Laminadora</option>
+                        <option value="GUILHOTINA">Guilhotina</option>
+                        <option value="LASER">Laser / CNC</option>
+                        <option value="COMPUTADOR">Computador / design</option>
+                        <option value="SOFTWARE">Software / licença</option>
+                        <option value="FERRAMENTA">Ferramenta manual</option>
+                        <option value="ACABAMENTO">Equipamento de acabamento</option>
+                        <option value="OUTRA">Outro</option>
+                    </select></div>
                     <div class="form-group"><label>Valor de compra</label><input id="valor_compra" type="number" step="0.01" min="0" value="0"></div>
                     <div class="form-group"><label>Vida útil estimada (horas)</label><input id="vida_util_horas" type="number" step="0.01" min="0" value="20000"></div>
                     <div class="form-group"><label>Potência média (kW)</label><input id="potencia_kw" type="number" step="0.0001" min="0" value="0.20"></div>
@@ -35,6 +48,7 @@
                     <div class="form-group"><label>Manutenção/insumos por hora</label><input id="custo_manutencao_hora" type="number" step="0.01" min="0" value="0"></div>
                     <div class="form-group"><label>Status</label><select id="status"><option value="ATIVA">ATIVA</option><option value="INATIVA">INATIVA</option><option value="MANUTENCAO">MANUTENÇÃO</option></select></div>
                     <div class="form-group"><label><input id="usar_custo_manual" type="checkbox"> Usar custo/hora manual</label><input id="custo_hora_manual" type="number" step="0.01" min="0" placeholder="Ex: 1,00"></div>
+                    <div class="form-group" style="grid-column:1/-1"><label>Observação</label><input id="observacao" placeholder="Notas sobre uso, insumos específicos, restrições..."></div>
                 </div>
                 <div class="pricing-result mt-3">
                     <div><small>Depreciação/h</small><strong id="resDepreciacao">R$ 0,00</strong></div>
