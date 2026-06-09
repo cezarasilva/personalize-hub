@@ -28,7 +28,18 @@
                 <div class="card"><div class="card-title"> Solicitar modelos</div><p class="text-muted">Peça mais unidades de um produto existente ou solicite um modelo que ainda não está disponível.</p><a href="solicitar-produto.html" class="btn btn-success mt-2 w-full">Nova solicitação</a></div>
                 <div class="card"><div class="card-title"><i class="bx bx-list-check"></i> Acompanhamento</div><p class="text-muted"><strong id="pendencias">0</strong> solicitação(ões) em análise.</p><a href="minhas-cotacoes.html" class="btn btn-dark mt-2 w-full">Ver solicitações</a></div>
             </section>
-            <section class="card"><div class="card-title"> Estoque consignado atual</div><div class="table-container"><table><thead><tr><th>Produto</th><th>Variação</th><th>Qtd atual</th><th>Preço consignação</th><th>Total</th></tr></thead><tbody id="tabelaEstoque"></tbody></table></div></section>
+            <section class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span><i class="bx bx-bell"></i> Leads não respondidos <span id="badgeLeads" class="badge badge-red hidden">0</span></span>
+                    <a href="catalogo-pedidos.html" class="btn btn-sm btn-dark">Ver todos</a>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>Código</th><th>Cliente</th><th>Produto</th><th>Qtd</th><th>Valor</th><th>Data</th><th>Ação</th></tr></thead>
+                        <tbody id="tabelaLeads"></tbody>
+                    </table>
+                </div>
+            </section>
         </main>
     </div>
     <script src="assets/js/core.js"></script>

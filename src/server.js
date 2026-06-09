@@ -4285,14 +4285,19 @@ app.post('/api/catalogo-publico/:slug/cotacoes', limiterCatalogoPublico, upload.
 app.get('/api/catalogo-pedidos', autenticar, async (req, res) => {
     try {
         const params = [];
-        let where = '';
+        const conds = [];
         if (normalizarPerfil(req.user.perfil) === 'PARCEIRO') {
             params.push(req.user.parceiro_id);
-            where = 'WHERE cp.parceiro_id = $1';
+            conds.push(`cp.parceiro_id = $${params.length}`);
         } else if (req.query.parceiro_id) {
             params.push(req.query.parceiro_id);
-            where = 'WHERE cp.parceiro_id = $1';
+            conds.push(`cp.parceiro_id = $${params.length}`);
         }
+        if (req.query.status) {
+            params.push(String(req.query.status).toUpperCase());
+            conds.push(`cp.status = $${params.length}`);
+        }
+        const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
 
         const result = await db.query(
             `SELECT cp.*, parc.nome_loja, resp.nome AS responsavel_nome,

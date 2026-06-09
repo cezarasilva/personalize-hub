@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSugestoes() {
         const termo = buscaProdutoVenda.value.trim().toLowerCase();
         if (!termo) {
-            sugestoesProdutoVenda.innerHTML = produtos.slice(0, 12).map(cardSugestao).join('') || '<div class="suggestion-item text-muted">Nenhum produto disponível</div>';
+            sugestoesProdutoVenda.innerHTML = produtos.map(cardSugestao).join('') || '<div class="suggestion-item text-muted">Nenhum produto disponível</div>';
             sugestoesProdutoVenda.classList.remove('hidden');
             return;
         }

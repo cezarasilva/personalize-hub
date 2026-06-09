@@ -423,81 +423,232 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
+    const TERMO_GUARDA = 'A loja parceira declara receber os produtos listados neste relatório em regime de consignação, comprometendo-se a zelar pela guarda, conservação, exposição e controle dos itens enquanto estiverem sob sua responsabilidade. Os produtos permanecem vinculados à PERSONALIZE até a venda, devolução, estorno ou acerto financeiro. Em caso de venda, perda, dano, extravio ou divergência de estoque, a loja parceira compromete-se a comunicar a PERSONALIZE e realizar o respectivo acerto conforme os valores de consignação descritos neste documento.';
+
     async function abrirAssinaturaRemessa(id) {
+        const existente = await App.api(`/remessas/${id}/assinatura`).catch(() => null);
+        if (existente) {
+            return Swal.fire({
+                title: 'Remessa já assinada',
+                html: `<div style="text-align:left"><b>Responsável:</b> ${App.escapeHtml(existente.nome_responsavel || '-')}<br><b>Documento:</b> ${App.escapeHtml(existente.documento_responsavel || '-')}<br><b>Data:</b> ${App.escapeHtml(existente.data_assinatura_formatada || '')}</div><div style="margin-top:14px;text-align:center"><img src="${existente.assinatura_base64}" style="max-width:280px;border:1px solid #ddd;border-radius:8px;background:#fff"></div>`,
+                confirmButtonText: 'Ok'
+            });
+        }
         try {
-            const existente = await App.api(`/remessas/${id}/assinatura`).catch(() => null);
-            if (existente) {
-                return Swal.fire({
-                    title: 'Remessa já assinada',
-                    html: `<div style="text-align:left"><b>Responsável:</b> ${App.escapeHtml(existente.nome_responsavel || '-')}<br><b>Documento:</b> ${App.escapeHtml(existente.documento_responsavel || '-')}<br><b>Data:</b> ${App.escapeHtml(existente.data_assinatura_formatada || '')}</div><div style="margin-top:14px;text-align:center"><img src="${existente.assinatura_base64}" style="max-width:280px;border:1px solid #ddd;border-radius:8px;background:#fff"></div>`,
-                    confirmButtonText: 'Ok'
-                });
-            }
-            const html = `
-                <div style="text-align:left">
-                    <label style="font-weight:800;font-size:13px;">Nome do responsável</label>
-                    <input id="assNome" class="swal2-input" placeholder="Nome completo" style="width:100%;margin:6px 0 10px 0">
-                    <label style="font-weight:800;font-size:13px;">CPF/CNPJ ou documento</label>
-                    <input id="assDoc" class="swal2-input" placeholder="Documento" style="width:100%;margin:6px 0 10px 0">
-                    <label style="font-weight:800;font-size:13px;">Assinatura</label>
-                    <canvas id="canvasAssinatura" width="640" height="220" style="width:100%;height:180px;border:2px dashed #94a3b8;border-radius:12px;background:#fff;touch-action:none;"></canvas>
-                    <button type="button" id="btnLimparAss" class="swal2-cancel swal2-styled" style="display:inline-block;margin-top:8px;">Limpar assinatura</button>
-                    <p style="font-size:12px;color:#64748b;margin-top:8px;">Assinatura eletrônica simples para comprovação interna de recebimento da remessa.</p>
-                </div>`;
-            const resp = await Swal.fire({
-                title: 'Assinar recebimento',
-                html,
-                width: 760,
-                showCancelButton: true,
-                confirmButtonText: 'Confirmar assinatura',
-                cancelButtonText: 'Cancelar',
-                didOpen: () => prepararCanvasAssinatura(),
-                preConfirm: () => {
-                    const nome = document.getElementById('assNome')?.value?.trim();
-                    const documento = document.getElementById('assDoc')?.value?.trim();
-                    const canvas = document.getElementById('canvasAssinatura');
-                    const assinatura_base64 = canvas?.toDataURL('image/png');
-                    if (!nome || nome.length < 3) {
-                        Swal.showValidationMessage('Informe o nome do responsável.');
-                        return false;
-                    }
-                    return { nome, documento, assinatura_base64 };
-                }
-            });
-            if (!resp.isConfirmed) return;
-            const { nome, documento, assinatura_base64 } = resp.value;
-            const result = await App.api(`/remessas/${id}/assinar`, {
-                method: 'POST',
-                body: JSON.stringify({ nome_responsavel: nome, documento_responsavel: documento, assinatura_base64 })
-            });
-            App.toast('success', result.mensagem || 'Remessa assinada.');
-            await carregarDadosLoja();
+            const dados = await App.api(`/remessas/${id}`);
+            _abrirPreviewAssinatura(id, dados.remessa, dados.itens);
         } catch (err) { App.toast('error', err.message); }
     }
 
-    function prepararCanvasAssinatura() {
-        const canvas = document.getElementById('canvasAssinatura');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = '#111827';
+    function _abrirPreviewAssinatura(id, r, itens) {
+        const esc = App.escapeHtml;
+        const qtdItem = (i) => Number(i.quantidade || i.quantidade_enviada || 0);
+        const repasseItem = (i) => Number(i.preco_repasse_snapshot || i.preco_repasse_unitario || i.preco_repasse || 0);
+        const totalOriginal = itens.reduce((s, i) => s + qtdItem(i) * repasseItem(i), 0);
+        const totalSaldo = itens.reduce((s, i) => s + Number(i.valor_saldo || i.valor_total_saldo || ((qtdItem(i) - Number(i.quantidade_estornada || 0)) * repasseItem(i)) || 0), 0);
+
+        const rowsHTML = itens.map(i => {
+            const qtd = qtdItem(i); const est = Number(i.quantidade_estornada || 0); const rep = repasseItem(i);
+            const saldo = Number(i.valor_saldo || i.valor_total_saldo || ((qtd - est) * rep) || 0);
+            return `<tr style="border-bottom:1px solid #e2e8f0;">
+                <td style="padding:7px 8px;"><strong>${esc(i.produto_nome || '-')}</strong>${i.variacao ? `<br><small style="color:#64748b;">${esc(i.variacao)}</small>` : ''}</td>
+                <td style="padding:7px 8px;text-align:center;">${qtd}</td>
+                <td style="padding:7px 8px;text-align:center;">${est}</td>
+                <td style="padding:7px 8px;text-align:right;">${App.money(rep)}</td>
+                <td style="padding:7px 8px;text-align:right;">${App.money(qtd * rep)}</td>
+                <td style="padding:7px 8px;text-align:right;font-weight:700;">${App.money(saldo)}</td>
+            </tr>`;
+        }).join('');
+
+        const overlay = document.createElement('div');
+        overlay.id = 'assPreviewOverlay';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.82);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 16px;';
+        overlay.innerHTML = `
+            <div style="background:#fff;width:100%;max-width:820px;border-radius:14px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.5);margin:auto;">
+
+                <!-- Header -->
+                <div style="background:#1e293b;color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <strong style="font-size:15px;">Assinar recebimento da remessa</strong>
+                        <div style="font-size:12px;color:#94a3b8;margin-top:2px;">${esc(r.codigo || '#' + r.id)} — ${esc(r.nome_loja || '-')}</div>
+                    </div>
+                    <button id="btnFecharPreviewAss" style="background:transparent;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>
+                </div>
+
+                <!-- Corpo do documento -->
+                <div style="padding:32px 40px;font-family:Arial,sans-serif;font-size:12px;color:#1e293b;max-height:calc(100vh - 180px);overflow-y:auto;">
+
+                    <!-- Cabeçalho do documento -->
+                    <div style="text-align:center;border-bottom:2px solid #1e293b;padding-bottom:14px;margin-bottom:20px;">
+                        <div style="font-size:20px;font-weight:900;letter-spacing:1px;">PERSONALIZE Hub</div>
+                        <div style="font-size:12px;font-weight:700;margin-top:4px;color:#475569;text-transform:uppercase;">Relatório de Remessa / Termo de Guarda</div>
+                    </div>
+
+                    <!-- Dados da remessa -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin-bottom:18px;font-size:12px;">
+                        <div><strong>Código:</strong> ${esc(r.codigo || '-')}</div>
+                        <div><strong>Data:</strong> ${esc(r.data_formatada || new Date().toLocaleDateString('pt-BR'))}</div>
+                        <div><strong>Loja:</strong> ${esc(r.nome_loja || '-')}</div>
+                        <div><strong>Status:</strong> ${esc(r.status || '-')}</div>
+                        ${r.responsavel ? `<div><strong>Responsável:</strong> ${esc(r.responsavel)}</div>` : ''}
+                        ${r.telefone ? `<div><strong>Telefone:</strong> ${esc(r.telefone)}</div>` : ''}
+                        <div style="color:#64748b;"><strong>Emitido em:</strong> ${new Date().toLocaleString('pt-BR')}</div>
+                    </div>
+
+                    <!-- Tabela de itens -->
+                    <table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:14px;">
+                        <thead>
+                            <tr style="background:#f1f5f9;">
+                                <th style="padding:8px;text-align:left;border:1px solid #e2e8f0;">Produto</th>
+                                <th style="padding:8px;text-align:center;border:1px solid #e2e8f0;white-space:nowrap;">Qtd</th>
+                                <th style="padding:8px;text-align:center;border:1px solid #e2e8f0;white-space:nowrap;">Est.</th>
+                                <th style="padding:8px;text-align:right;border:1px solid #e2e8f0;white-space:nowrap;">Consig./un</th>
+                                <th style="padding:8px;text-align:right;border:1px solid #e2e8f0;white-space:nowrap;">Total orig.</th>
+                                <th style="padding:8px;text-align:right;border:1px solid #e2e8f0;white-space:nowrap;">Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHTML}</tbody>
+                    </table>
+
+                    <!-- Totais -->
+                    <div style="background:#f8fafc;border-radius:8px;padding:10px 16px;margin-bottom:18px;font-size:12.5px;">
+                        <div style="display:flex;justify-content:space-between;"><span>Valor total original:</span><strong>${App.money(totalOriginal)}</strong></div>
+                        <div style="display:flex;justify-content:space-between;margin-top:4px;border-top:1px solid #e2e8f0;padding-top:4px;"><span>Valor consignado em saldo:</span><strong>${App.money(totalSaldo)}</strong></div>
+                    </div>
+
+                    ${r.observacao ? `<div style="margin-bottom:16px;padding:10px 14px;border-left:3px solid #94a3b8;background:#f8fafc;font-size:11.5px;"><strong>Observação:</strong> ${esc(r.observacao)}</div>` : ''}
+
+                    <!-- Termo de guarda -->
+                    <div style="font-size:10.5px;color:#475569;line-height:1.6;padding:12px 14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:28px;">
+                        <strong style="color:#1e293b;display:block;margin-bottom:4px;">TERMO DE GUARDA E RESPONSABILIDADE</strong>
+                        ${esc(TERMO_GUARDA)}
+                    </div>
+
+                    <!-- Seção de assinaturas -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:end;">
+
+                        <!-- PERSONALIZE (linha vazia) -->
+                        <div style="text-align:center;">
+                            <div style="height:56px;"></div>
+                            <div style="border-top:2px solid #334155;padding-top:8px;">
+                                <div style="font-size:11px;font-weight:700;">Assinatura PERSONALIZE</div>
+                                <div style="font-size:10px;color:#64748b;margin-top:2px;">Representante autorizado</div>
+                            </div>
+                        </div>
+
+                        <!-- Loja parceira (canvas interativo) -->
+                        <div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                                <div>
+                                    <label style="font-size:11px;font-weight:700;display:block;margin-bottom:3px;">Nome do responsável *</label>
+                                    <input id="assPreviewNome" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;box-sizing:border-box;" placeholder="Nome completo">
+                                </div>
+                                <div>
+                                    <label style="font-size:11px;font-weight:700;display:block;margin-bottom:3px;">CPF / CNPJ</label>
+                                    <input id="assPreviewDoc" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;box-sizing:border-box;" placeholder="Documento">
+                                </div>
+                            </div>
+                            <canvas id="canvasPreviewAssinatura" style="width:100%;height:130px;border:2px dashed #94a3b8;border-radius:10px;background:#fafafa;touch-action:none;cursor:crosshair;display:block;"></canvas>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;">
+                                <span style="font-size:10.5px;color:#94a3b8;">Assine acima</span>
+                                <button id="btnLimparPreviewAss" style="font-size:11px;background:none;border:1px solid #cbd5e1;border-radius:5px;padding:3px 10px;cursor:pointer;color:#64748b;">Limpar</button>
+                            </div>
+                            <div style="border-top:2px solid #334155;padding-top:8px;margin-top:10px;text-align:center;">
+                                <div style="font-size:11px;font-weight:700;">Assinatura da Loja Parceira</div>
+                                <div style="font-size:10px;color:#64748b;margin-top:2px;">Responsável pelo recebimento</div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <p style="font-size:10px;color:#94a3b8;text-align:center;margin-top:16px;">Assinatura eletrônica simples para comprovação interna. Ao confirmar, o PDF com assinatura será gerado automaticamente.</p>
+                </div>
+
+                <!-- Footer -->
+                <div style="padding:14px 24px;border-top:1px solid #e2e8f0;display:flex;gap:12px;justify-content:flex-end;background:#f8fafc;">
+                    <button id="btnCancelarPreviewAss" style="padding:9px 20px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:#475569;">Cancelar</button>
+                    <button id="btnConfirmarAssinatura" style="padding:9px 22px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✓ Assinar e gerar PDF</button>
+                </div>
+            </div>`;
+
+        document.body.appendChild(overlay);
+        document.body.style.overflow = 'hidden';
+
+        const fechar = () => { overlay.remove(); document.body.style.overflow = ''; };
+        document.getElementById('btnFecharPreviewAss').addEventListener('click', fechar);
+        document.getElementById('btnCancelarPreviewAss').addEventListener('click', fechar);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) fechar(); });
+
+        // Canvas: sincroniza dimensão interna com CSS para coordenadas exatas
+        const canvas = document.getElementById('canvasPreviewAssinatura');
+        requestAnimationFrame(() => {
+            canvas.width  = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            setupCtx();
+        });
+
+        let ctx;
+        function setupCtx() {
+            ctx = canvas.getContext('2d');
+            ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1e293b';
+        }
+
         let desenhando = false;
         const getPos = (ev) => {
             const rect = canvas.getBoundingClientRect();
             const point = ev.touches ? ev.touches[0] : ev;
-            return { x: (point.clientX - rect.left) * (canvas.width / rect.width), y: (point.clientY - rect.top) * (canvas.height / rect.height) };
+            // Sem escala — canvas interno == CSS agora
+            return { x: point.clientX - rect.left, y: point.clientY - rect.top };
         };
-        const iniciar = (ev) => { ev.preventDefault(); desenhando = true; const p = getPos(ev); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-        const mover = (ev) => { if (!desenhando) return; ev.preventDefault(); const p = getPos(ev); ctx.lineTo(p.x, p.y); ctx.stroke(); };
-        const parar = () => { desenhando = false; };
-        canvas.addEventListener('mousedown', iniciar);
-        canvas.addEventListener('mousemove', mover);
-        window.addEventListener('mouseup', parar, { once: false });
-        canvas.addEventListener('touchstart', iniciar, { passive: false });
-        canvas.addEventListener('touchmove', mover, { passive: false });
-        canvas.addEventListener('touchend', parar);
-        document.getElementById('btnLimparAss')?.addEventListener('click', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
+        canvas.addEventListener('mousedown', (ev) => { ev.preventDefault(); desenhando = true; const p = getPos(ev); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+        canvas.addEventListener('mousemove', (ev) => { if (!desenhando) return; ev.preventDefault(); const p = getPos(ev); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+        window.addEventListener('mouseup', () => { desenhando = false; });
+        canvas.addEventListener('touchstart', (ev) => { ev.preventDefault(); desenhando = true; const p = getPos(ev); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: false });
+        canvas.addEventListener('touchmove', (ev) => { if (!desenhando) return; ev.preventDefault(); const p = getPos(ev); ctx.lineTo(p.x, p.y); ctx.stroke(); }, { passive: false });
+        canvas.addEventListener('touchend', () => { desenhando = false; });
+        document.getElementById('btnLimparPreviewAss').addEventListener('click', () => { if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); });
+
+        document.getElementById('btnConfirmarAssinatura').addEventListener('click', async () => {
+            const nome = document.getElementById('assPreviewNome')?.value?.trim();
+            const documento = document.getElementById('assPreviewDoc')?.value?.trim();
+            if (!nome || nome.length < 3) { App.toast('warning', 'Informe o nome do responsável (mínimo 3 caracteres).'); return; }
+            const assinatura_base64 = canvas.toDataURL('image/png');
+            const btnConfirmar = document.getElementById('btnConfirmarAssinatura');
+            btnConfirmar.disabled = true;
+            btnConfirmar.textContent = 'Salvando…';
+            try {
+                const result = await App.api(`/remessas/${id}/assinar`, {
+                    method: 'POST',
+                    body: JSON.stringify({ nome_responsavel: nome, documento_responsavel: documento || '', assinatura_base64 })
+                });
+                App.toast('success', result.mensagem || 'Remessa assinada com sucesso!');
+
+                // Assinatura disponível em memória — gera PDF direto sem re-fetch
+                const assinatura = {
+                    nome_responsavel: nome,
+                    documento_responsavel: documento || '',
+                    assinatura_base64,
+                    data_assinatura_formatada: new Date().toLocaleString('pt-BR')
+                };
+                fechar();
+                await carregarDadosLoja();
+                const dados = await App.api(`/remessas/${id}`);
+                await gerarPDF({
+                    titulo: 'RELATÓRIO DE REMESSA / TERMO DE GUARDA',
+                    codigo: dados.remessa.codigo || `REMESSA #${dados.remessa.id}`,
+                    loja: dados.remessa,
+                    itens: dados.itens,
+                    observacao: dados.remessa.observacao || '',
+                    data: dados.remessa.data_formatada,
+                    status: dados.remessa.status,
+                    assinatura
+                });
+            } catch (err) {
+                App.toast('error', err.message);
+                btnConfirmar.disabled = false;
+                btnConfirmar.textContent = '✓ Assinar e gerar PDF';
+            }
+        });
     }
 
     async function gerarPDFEstoqueAtual() {
@@ -601,7 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
             y += 4;
         }
 
-        const termo = 'TERMO DE GUARDA E RESPONSABILIDADE: A loja parceira declara receber os produtos listados neste relatório em regime de consignação, comprometendo-se a zelar pela guarda, conservação, exposição e controle dos itens enquanto estiverem sob sua responsabilidade. Os produtos permanecem vinculados à PERSONALIZE até a venda, devolução, estorno ou acerto financeiro. Em caso de venda, perda, dano, extravio ou divergência de estoque, a loja parceira compromete-se a comunicar a PERSONALIZE e realizar o respectivo acerto conforme os valores de consignação descritos neste documento.';
+        const termo = 'TERMO DE GUARDA E RESPONSABILIDADE: ' + TERMO_GUARDA;
         ensure(12);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('Termo de guarda', 14, y); y += 6;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(9);

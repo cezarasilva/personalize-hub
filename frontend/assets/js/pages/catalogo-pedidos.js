@@ -5,20 +5,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================
     // CONSTANTES
     // =========================================================
-    const STATUS = ['NOVO','EM_ATENDIMENTO','ORCADO','AGUARDANDO_CLIENTE','FECHADO','PERDIDO','CANCELADO'];
+    const STATUS = ['NOVO','EM_ATENDIMENTO','ORCADO','AGUARDANDO_CLIENTE','FECHADO','CANCELADO'];
     const STATUS_LABEL = {
         NOVO:'Novos', EM_ATENDIMENTO:'Em atendimento', ORCADO:'Orçados',
-        AGUARDANDO_CLIENTE:'Aguardando cliente', FECHADO:'Fechados',
-        PERDIDO:'Perdidos', CANCELADO:'Cancelados'
+        AGUARDANDO_CLIENTE:'Aguardando cliente', FECHADO:'Fechados', CANCELADO:'Cancelados'
     };
     const STATUS_COR = {
         NOVO:'badge-blue', EM_ATENDIMENTO:'badge-yellow', ORCADO:'badge-info',
-        AGUARDANDO_CLIENTE:'badge-yellow', FECHADO:'badge-green',
-        PERDIDO:'badge-red', CANCELADO:'badge-red'
+        AGUARDANDO_CLIENTE:'badge-yellow', FECHADO:'badge-green', CANCELADO:'badge-red'
     };
     const FUNIL_BAR_COR = {
         NOVO:'', EM_ATENDIMENTO:'', ORCADO:'',
-        AGUARDANDO_CLIENTE:'warning', FECHADO:'success', PERDIDO:'danger', CANCELADO:'danger'
+        AGUARDANDO_CLIENTE:'warning', FECHADO:'success', CANCELADO:'danger'
     };
     const esc = App.escapeHtml;
 
@@ -56,6 +54,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    async function avancarStatusSeLead(id, novoStatus) {
+        try {
+            await App.api(`/catalogo-pedidos/${id}/status`, { method:'PATCH', body: JSON.stringify({ status: novoStatus }) });
+            const lead = pedidos.find(x => x.id === id);
+            if (lead) lead.status = novoStatus;
+        } catch { /* silencioso */ }
+    }
+
     // =========================================================
     // CARD DO LEAD
     // =========================================================
@@ -87,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${proximo ? `<p class="crm-next"><i class="bx bx-calendar"></i> Próx. contato: ${proximo}</p>` : ''}
             <div class="crm-card-actions">
                 <select onchange="alterarStatusPedido(${p.id},this.value)">${statusOptions(p.status)}</select>
-                ${whats ? `<a class="btn btn-success" target="_blank" href="https://wa.me/55${whats}?text=${msg}"><i class="bx bxl-whatsapp"></i></a>` : ''}
+                ${whats ? `<button class="btn btn-success" onclick="abrirWhatsApp(${p.id},'${whats}','${encodeURIComponent(msg)}')"><i class="bx bxl-whatsapp"></i></button>` : ''}
                 <button class="btn btn-light" onclick="abrirDrawerLead(${p.id})"><i class="bx bx-edit"></i> CRM</button>
             </div>
         </article>`;
@@ -152,14 +158,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // FUNIL
     // =========================================================
     function renderFunil(rows) {
-        const total  = rows.length || 1;
-        const novos  = rows.filter(p => p.status === 'NOVO').length;
-
-        // Métricas resumo
-        const fechados   = rows.filter(p => p.status === 'FECHADO').length;
-        const perdidos   = rows.filter(p => p.status === 'PERDIDO').length;
-        const taxaConv   = rows.length ? Math.round(fechados / rows.length * 100) : 0;
-        const ticketMed  = fechados ? rows.filter(p=>p.status==='FECHADO').reduce((s,p)=>s+Number(p.subtotal||p.valor_negociado||0),0) / fechados : 0;
+        const total    = rows.length || 1;
+        const fechados  = rows.filter(p => p.status === 'FECHADO').length;
+        const cancelados = rows.filter(p => p.status === 'CANCELADO').length;
+        const taxaConv  = rows.length ? Math.round(fechados / rows.length * 100) : 0;
+        const ticketMed = fechados ? rows.filter(p=>p.status==='FECHADO').reduce((s,p)=>s+Number(p.subtotal||p.valor_negociado||0),0) / fechados : 0;
 
         document.getElementById('funilMetrics').innerHTML = `
             <div class="crm-conv-metric">
@@ -171,8 +174,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <span>Ticket médio fechado</span>
             </div>
             <div class="crm-conv-metric">
-                <strong>${perdidos}</strong>
-                <span>Leads perdidos</span>
+                <strong>${cancelados}</strong>
+                <span>Leads cancelados</span>
             </div>`;
 
         document.getElementById('funilBars').innerHTML = STATUS.map(st => {
@@ -197,22 +200,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         const porLoja = {};
         rows.forEach(p => {
             const k = p.nome_loja || 'Catálogo admin';
-            if (!porLoja[k]) porLoja[k] = { total:0, fechados:0, perdidos:0, valor:0 };
+            if (!porLoja[k]) porLoja[k] = { total:0, fechados:0, cancelados:0, valor:0 };
             porLoja[k].total++;
             if (p.status === 'FECHADO') { porLoja[k].fechados++; porLoja[k].valor += Number(p.subtotal||p.valor_negociado||0); }
-            if (p.status === 'PERDIDO') porLoja[k].perdidos++;
+            if (p.status === 'CANCELADO') porLoja[k].cancelados++;
         });
         const lojas = Object.entries(porLoja).sort((a,b) => b[1].total - a[1].total);
 
         document.getElementById('relatorioHead').innerHTML =
-            `<tr><th>Loja</th><th>Total leads</th><th>Fechados</th><th>Perdidos</th><th>Taxa conv.</th><th>Valor total</th></tr>`;
+            `<tr><th>Loja</th><th>Total leads</th><th>Fechados</th><th>Cancelados</th><th>Taxa conv.</th><th>Valor total</th></tr>`;
         document.getElementById('relatorioBody').innerHTML = lojas.map(([loja, d]) => {
             const taxa = d.total ? Math.round(d.fechados/d.total*100) : 0;
             return `<tr>
                 <td>${esc(loja)}</td>
                 <td>${d.total}</td>
                 <td><span class="badge badge-green">${d.fechados}</span></td>
-                <td><span class="badge badge-red">${d.perdidos}</span></td>
+                <td><span class="badge badge-red">${d.cancelados}</span></td>
                 <td><strong>${taxa}%</strong></td>
                 <td>${App.money(d.valor)}</td>
             </tr>`;
@@ -231,9 +234,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (err) { App.toast('error', err.message); }
     };
 
-    window.abrirDrawerLead = (id) => abrirDrawer(id);
+    window.abrirWhatsApp = async (id, whats, msg) => {
+        const lead = pedidos.find(x => x.id === id);
+        if (lead && lead.status === 'NOVO') {
+            await avancarStatusSeLead(id, 'EM_ATENDIMENTO');
+            await adicionarHistoricoLocal(id, 'contato', 'Contato via WhatsApp iniciado.');
+            await carregar();
+        }
+        window.open(`https://wa.me/55${whats}?text=${msg}`, '_blank');
+    };
 
-    // Mantém compatibilidade com código legado
+    window.abrirDrawerLead = (id) => abrirDrawer(id);
     window.abrirDetalhesLead = (id) => abrirDrawer(id);
 
     // =========================================================
@@ -250,6 +261,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('crmDrawer').classList.add('active');
         document.getElementById('crmDrawerOverlay').classList.add('active');
         carregarHistoricoDrawer(id);
+
+        // Auto-avança NOVO para EM_ATENDIMENTO ao abrir CRM
+        if (p.status === 'NOVO') {
+            avancarStatusSeLead(id, 'EM_ATENDIMENTO').then(() => {
+                adicionarHistoricoLocal(id, 'status', 'Lead aberto no CRM — marcado como Em atendimento.');
+                p.status = 'EM_ATENDIMENTO';
+                // Atualiza o select dentro do drawer
+                const drStatus = document.getElementById('drStatus');
+                if (drStatus) drStatus.value = 'EM_ATENDIMENTO';
+            });
+        }
     }
 
     function fecharDrawer() {
@@ -259,10 +281,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderDrawerBody(p) {
-        // Filtra responsáveis pela sede do lead:
-        // - lead admin (sem parceiro_id) → só usuários ADMIN
-        // - lead de parceiro → só usuários daquele parceiro_id
-        // No futuro, operadores adicionados à sede entram automaticamente
         const usuariosResponsaveis = p.parceiro_id
             ? usuarios.filter(u => String(u.parceiro_id) === String(p.parceiro_id))
             : usuarios.filter(u => (u.perfil || '').toUpperCase() === 'ADMIN');
@@ -271,7 +289,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             `<option value="${u.id}" ${String(u.id) === String(p.responsavel_id) ? 'selected':''}>${esc(u.nome)}</option>`
         ).join('');
 
-        // Texto informativo sobre o escopo da lista
         const respInfo = p.parceiro_id
             ? `<small class="text-muted">Operadores da loja ${esc(p.nome_loja||'parceira')}</small>`
             : `<small class="text-muted">Administradores do sistema</small>`;
@@ -324,7 +341,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <textarea id="drObs">${esc(p.observacoes_internas||'')}</textarea>
                     </div>
                     <div class="form-group" style="grid-column:1/-1;">
-                        <label>Motivo de perda / recusa</label>
+                        <label>Motivo de recusa / cancelamento</label>
                         <input id="drMotivo" value="${esc(p.motivo_perda||'')}">
                     </div>
                 </div>
@@ -343,8 +360,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <button class="crm-action-btn" onclick="marcarComoOrcado(${p.id})">
                         <i class="bx bx-file"></i> Marcar como orçado
                     </button>
-                    <button class="crm-action-btn danger" onclick="marcarComoPerdido(${p.id})">
-                        <i class="bx bx-x-circle"></i> Marcar como perdido
+                    <button class="crm-action-btn" onclick="marcarComoNaoAtendido(${p.id})">
+                        <i class="bx bx-reset"></i> Marcar como não atendido
                     </button>
                 </div>
             </div>
@@ -381,7 +398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             tl.innerHTML = '<p style="font-size:13px;color:var(--muted);text-align:center;padding:12px;">Nenhuma interação registrada.</p>';
             return;
         }
-        const tipoIcone = { status:'bx-transfer', nota:'bx-note', contato:'bx-phone', venda:'bx-dollar-circle', orcamento:'bx-file', perda:'bx-x-circle' };
+        const tipoIcone = { status:'bx-transfer', nota:'bx-note', contato:'bx-phone', venda:'bx-dollar-circle', orcamento:'bx-file' };
         tl.innerHTML = historico.map(h => {
             const tipo = h.tipo || 'nota';
             return `<div class="crm-timeline-item">
@@ -503,27 +520,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (err) { App.toast('error', err.message); }
     };
 
-    window.marcarComoPerdido = async (id) => {
-        const { value: motivo, isConfirmed } = await Swal.fire({
-            title: 'Marcar como perdido',
-            input: 'text',
-            inputLabel: 'Motivo da perda (opcional)',
-            inputPlaceholder: 'Ex.: preço, prazo, concorrência...',
+    window.marcarComoNaoAtendido = async (id) => {
+        const ok = await Swal.fire({
+            title: 'Marcar como não atendido?',
+            text: 'O lead voltará para a coluna "Novos" e reaparecerá no painel da loja como pendente.',
+            icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Confirmar',
             cancelButtonText: 'Cancelar'
         });
-        if (!isConfirmed) return;
+        if (!ok.isConfirmed) return;
         try {
-            await App.api(`/catalogo-pedidos/${id}/crm`, {
-                method: 'PATCH',
-                body: JSON.stringify({ status: 'PERDIDO', motivo_perda: motivo || '' })
-            });
-            await App.api(`/catalogo-pedidos/${id}/historico`, {
-                method: 'POST',
-                body: JSON.stringify({ tipo: 'perda', descricao: `Perdido. ${motivo ? 'Motivo: ' + motivo : ''}` })
-            });
-            App.toast('info', 'Lead marcado como perdido.');
+            await App.api(`/catalogo-pedidos/${id}/status`, { method:'PATCH', body: JSON.stringify({ status:'NOVO' }) });
+            await adicionarHistoricoLocal(id, 'status', 'Marcado manualmente como não atendido.');
+            App.toast('info', 'Lead marcado como não atendido.');
             fecharDrawer();
             await carregar();
         } catch (err) { App.toast('error', err.message); }

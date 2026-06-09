@@ -71,7 +71,7 @@
         const imgs = imagensProduto(p);
         const key = `${p.id}-${p.variacao_id}`;
         const idx = galeriasEstado.get(key) || 0;
-        if (!imgs.length) return '<div class="catalogo-gallery"><div class="img-placeholder" style="width:100%;height:100%;">Sem foto</div></div>';
+        if (!imgs.length) return '<div class="catalogo-gallery"><div class="img-placeholder"><i class="bx bx-image"></i>Sem foto</div></div>';
         const nav = imgs.length > 1 ? `
             <button class="gallery-nav prev" onclick="moverFoto('${key}', -1)"><i class="bx bx-chevron-left"></i></button>
             <button class="gallery-nav next" onclick="moverFoto('${key}', 1)"><i class="bx bx-chevron-right"></i></button>` : '';
@@ -170,15 +170,12 @@
             return;
         }
         grid.innerHTML = filtrados.map(p => {
-            const originLabel = p.origem_publica === 'PERSONALIZE' ? 'PERSONALIZE' : 'Produto da loja';
-            const originClass = p.origem_publica === 'PERSONALIZE' ? '' : 'store';
-            const gallery     = renderGallery(p);
+            const gallery = renderGallery(p);
             return `
             <article class="cat-card">
                 <div class="cat-card-media">
                     ${gallery}
                     <div class="cat-card-badges">
-                        <span class="cat-badge-origin ${originClass}">${originLabel}</span>
                         ${p.produto_destaque ? '<span class="cat-badge-star"><i class="bx bxs-star"></i> Destaque</span>' : ''}
                     </div>
                 </div>
