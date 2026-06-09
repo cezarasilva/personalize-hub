@@ -952,7 +952,7 @@ app.post('/api/parceiros/solicitar', async (req, res) => {
 app.put('/api/parceiros/:id', autenticar, somenteAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { nome_loja, responsavel, telefone, status, usuario, cnpj_cpf, cep, rua, numero, complemento } = req.body;
+        const { nome_loja, responsavel, telefone, status, usuario, email, senha, cnpj_cpf, cep, rua, numero, complemento } = req.body;
 
         await transacao(async (client) => {
             const resultado = await client.query(
@@ -977,6 +977,21 @@ app.put('/api/parceiros/:id', autenticar, somenteAdmin, async (req, res) => {
                 await client.query('UPDATE usuarios SET usuario = $1 WHERE parceiro_id = $2', [usuario, id]);
             }
 
+            if (email) {
+                const emailExiste = await client.query(
+                    'SELECT id FROM usuarios WHERE email = $1 AND parceiro_id != $2',
+                    [email, id]
+                );
+                if (emailExiste.rowCount > 0) throw new Error('Este e-mail já está em uso por outro usuário.');
+                await client.query('UPDATE usuarios SET email = $1 WHERE parceiro_id = $2', [email, id]);
+            }
+
+            if (senha) {
+                if (String(senha).length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.');
+                const hash = await bcrypt.hash(senha, 10);
+                await client.query('UPDATE usuarios SET senha_hash = $1 WHERE parceiro_id = $2', [hash, id]);
+            }
+
             if (status === 'ATIVO') {
                 await client.query('UPDATE usuarios SET ativo = true WHERE parceiro_id = $1', [id]);
             } else if (status === 'INATIVO' || status === 'PENDENTE') {
@@ -984,7 +999,12 @@ app.put('/api/parceiros/:id', autenticar, somenteAdmin, async (req, res) => {
             }
         });
 
-        await registrarAuditoria(req.user.id, `Atualizou parceiro ID ${id}`);
+        const alteracoes = [
+            email && 'e-mail',
+            senha && 'senha',
+            usuario && 'usuário',
+        ].filter(Boolean).join(', ');
+        await registrarAuditoria(req.user.id, `Atualizou parceiro ID ${id}${alteracoes ? ` (alterou: ${alteracoes})` : ''}`);
         res.json({ mensagem: '✅ Loja atualizada com sucesso!' });
     } catch (erro) {
         console.error('❌ Erro atualizar parceiro:', erro);
