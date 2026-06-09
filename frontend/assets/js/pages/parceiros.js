@@ -42,17 +42,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function render() {
         if (!parceiros.length) return tabela.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma loja encontrada.</td></tr>';
-        tabela.innerHTML = parceiros.map(p => `<tr>
-            <td>${App.badgeStatus(p.status)}</td>
-            <td><strong>${App.escapeHtml(p.nome_loja)}</strong><br><small>${App.escapeHtml(p.cnpj_cpf || '')}</small></td>
-            <td>${App.escapeHtml(p.responsavel || '-')}</td>
-            <td>${App.escapeHtml(p.telefone || '-')}</td>
-            <td>${App.escapeHtml(p.usuario || p.email_login || '-')}</td>
-            <td><div class="actions">
-                <button class="icon-btn" data-edit="${p.id}" title="Editar"><i class="bx bx-edit"></i></button>
-                <button class="icon-btn" data-del="${p.id}" title="Excluir"><i class="bx bx-trash"></i></button>
-            </div></td>
-        </tr>`).join('');
+        tabela.innerHTML = parceiros.map(p => {
+            const tel = String(p.telefone || '').replace(/\D/g, '');
+            const msg = encodeURIComponent(`Olá, ${p.nome_loja} tudo bem?`);
+            const whatsBtn = tel
+                ? `<a class="icon-btn" href="https://wa.me/55${tel}?text=${msg}" target="_blank" rel="noopener" title="WhatsApp ${p.nome_loja}" style="color:#25d366;"><i class="bx bxl-whatsapp"></i></a>`
+                : `<button class="icon-btn" disabled title="Telefone não cadastrado" style="opacity:.35;cursor:not-allowed;"><i class="bx bxl-whatsapp"></i></button>`;
+            return `<tr>
+                <td>${App.badgeStatus(p.status)}</td>
+                <td><strong>${App.escapeHtml(p.nome_loja)}</strong><br><small>${App.escapeHtml(p.cnpj_cpf || '')}</small></td>
+                <td>${App.escapeHtml(p.responsavel || '-')}</td>
+                <td>${App.escapeHtml(p.telefone || '-')}</td>
+                <td>${App.escapeHtml(p.usuario || p.email_login || '-')}</td>
+                <td><div class="actions">
+                    ${whatsBtn}
+                    <button class="icon-btn" data-edit="${p.id}" title="Editar"><i class="bx bx-edit"></i></button>
+                    <button class="icon-btn" data-del="${p.id}" title="Excluir"><i class="bx bx-trash"></i></button>
+                </div></td>
+            </tr>`;
+        }).join('');
     }
 
     async function carregar() { parceiros = await App.api('/parceiros'); render(); }
