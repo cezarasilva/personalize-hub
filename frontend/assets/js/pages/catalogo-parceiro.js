@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function cardPrecificacao(p) {
         const min = Number(p.preco_repasse || 0);
         const atual = precoAtual(p);
+        const visivel = p.visivel_parceiro !== false;
         const hint = min > 0
             ? `<small class="text-muted" style="font-size:11px;">Mínimo: ${App.money(min)} (repasse)</small>`
             : '';
@@ -35,8 +36,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         data-var="${p.variacao_id}"
                         style="padding:7px 14px;min-height:36px;font-size:12px;"
                     ><i class="bx bx-check"></i></button>
+                    <button
+                        type="button"
+                        class="icon-btn btn-toggle-visivel"
+                        data-var="${p.variacao_id}"
+                        data-visivel="${visivel}"
+                        title="${visivel ? 'Visível no seu catálogo — clique para ocultar' : 'Oculto do seu catálogo — clique para exibir'}"
+                        style="min-height:36px;color:${visivel ? 'var(--success)' : 'var(--muted)'};"
+                    ><i class="bx ${visivel ? 'bx-show' : 'bx-hide'}"></i></button>
                 </div>
                 ${hint}
+                <small class="visivel-status" data-var="${p.variacao_id}" style="display:block;margin-top:4px;font-size:11px;font-weight:600;color:${visivel ? 'var(--success)' : 'var(--muted)'};">
+                    <i class="bx ${visivel ? 'bx-check-circle' : 'bx-x-circle'}"></i> ${visivel ? 'Visível no seu catálogo' : 'Oculto do seu catálogo'}
+                </small>
             </div>`;
     }
 
@@ -62,6 +74,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isNaN(val) || val < 0) return App.toast('error', 'Informe um valor válido.');
                 if (min > 0 && val < min) return App.toast('error', `Preço mínimo: ${App.money(min)} (repasse).`);
                 salvarPreco(varId, val);
+            });
+        });
+    }
+
+    async function salvarVisibilidade(variacaoId, visivel) {
+        await App.api('/parceiro/catalogo/visibilidade', {
+            method: 'PUT',
+            body: JSON.stringify({ variacao_id: variacaoId, visivel })
+        });
+    }
+
+    function bindVisibilidade() {
+        grid.querySelectorAll('.btn-toggle-visivel').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const varId = btn.dataset.var;
+                const novoVisivel = btn.dataset.visivel !== 'true';
+                btn.disabled = true;
+                try {
+                    await salvarVisibilidade(varId, novoVisivel);
+                    btn.dataset.visivel = String(novoVisivel);
+                    btn.title = novoVisivel ? 'Visível no seu catálogo — clique para ocultar' : 'Oculto do seu catálogo — clique para exibir';
+                    btn.style.color = novoVisivel ? 'var(--success)' : 'var(--muted)';
+                    btn.innerHTML = `<i class="bx ${novoVisivel ? 'bx-show' : 'bx-hide'}"></i>`;
+                    const status = grid.querySelector(`.visivel-status[data-var="${varId}"]`);
+                    if (status) {
+                        status.style.color = novoVisivel ? 'var(--success)' : 'var(--muted)';
+                        status.innerHTML = `<i class="bx ${novoVisivel ? 'bx-check-circle' : 'bx-x-circle'}"></i> ${novoVisivel ? 'Visível no seu catálogo' : 'Oculto do seu catálogo'}`;
+                    }
+                    App.toast('success', novoVisivel ? 'Produto visível no seu catálogo.' : 'Produto oculto do seu catálogo.');
+                } catch (err) {
+                    App.toast('error', err.message);
+                } finally {
+                    btn.disabled = false;
+                }
             });
         });
     }
@@ -125,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => solicitar(btn.dataset.id, btn.dataset.var, btn.dataset.nome))
         );
         bindPrecificacao();
+        bindVisibilidade();
     }
 
     async function solicitar(produto_id, variacao_id, nome) {

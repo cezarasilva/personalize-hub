@@ -238,14 +238,16 @@ async function migrarPrecosParceiroCatalogo() {
             id             SERIAL PRIMARY KEY,
             parceiro_id    INTEGER NOT NULL REFERENCES parceiros(id)        ON DELETE CASCADE,
             variacao_id    INTEGER NOT NULL REFERENCES produto_variacoes(id) ON DELETE CASCADE,
-            preco_catalogo NUMERIC(10,2) NOT NULL CHECK (preco_catalogo >= 0),
+            preco_catalogo NUMERIC(10,2) CHECK (preco_catalogo IS NULL OR preco_catalogo >= 0),
             atualizado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(parceiro_id, variacao_id)
         )`,
-        `CREATE INDEX IF NOT EXISTS idx_ppc_parceiro ON parceiro_precos_catalogo(parceiro_id)`
+        `CREATE INDEX IF NOT EXISTS idx_ppc_parceiro ON parceiro_precos_catalogo(parceiro_id)`,
+        `ALTER TABLE parceiro_precos_catalogo ALTER COLUMN preco_catalogo DROP NOT NULL`,
+        `ALTER TABLE parceiro_precos_catalogo ADD COLUMN IF NOT EXISTS visivel BOOLEAN NOT NULL DEFAULT true`
     ];
     for (const sql of ops) {
-        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V6.9:', e.message); }
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V6.9/V7.0:', e.message); }
     }
 }
 migrarPrecosParceiroCatalogo();
@@ -1137,6 +1139,7 @@ app.get('/api/produtos', autenticar, async (req, res) => {
     try {
         const queryComGaleria = `SELECT
                 p.id, p.nome, p.descricao, p.categoria, p.status,
+                COALESCE(p.visivel_catalogo, true) AS visivel_catalogo,
                 COALESCE(
                     (SELECT pi.imagem_url
                      FROM produto_imagens pi
@@ -1178,6 +1181,7 @@ app.get('/api/produtos', autenticar, async (req, res) => {
 
         const querySemGaleria = `SELECT
                 p.id, p.nome, p.descricao, p.categoria, p.status, p.imagem_url,
+                COALESCE(p.visivel_catalogo, true) AS visivel_catalogo,
                 CASE
                     WHEN p.imagem_url IS NOT NULL AND p.imagem_url <> ''
                     THEN jsonb_build_array(jsonb_build_object('url', p.imagem_url, 'imagem_url', p.imagem_url, 'ordem', 1, 'principal', true))
@@ -1428,6 +1432,24 @@ app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.fields([{ name: 'i
     }
 });
 
+// Admin: alterna se o produto aparece no catálogo digital (próprio/remessa)
+app.patch('/api/produtos/:id/visibilidade', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const visivel = String(req.body.visivel) === 'true';
+        const result = await db.query(
+            'UPDATE produtos SET visivel_catalogo = $1 WHERE id = $2 RETURNING id',
+            [visivel, id]
+        );
+        if (!result.rows.length) return res.status(404).json({ erro: 'Produto não encontrado.' });
+        await registrarAuditoria(req.user.id, `${visivel ? 'Exibiu' : 'Ocultou'} produto ID ${id} no catálogo digital`);
+        res.json({ mensagem: visivel ? 'Produto visível no catálogo.' : 'Produto oculto do catálogo.', visivel });
+    } catch (e) {
+        console.error('❌ Erro visibilidade produto:', e);
+        res.status(500).json({ erro: 'Erro ao atualizar visibilidade: ' + e.message });
+    }
+});
+
 app.patch('/api/produtos/estoque/:id', autenticar, somenteAdmin, async (req, res) => {
     try {
         const novoEstoque = toInt(req.body.novo_estoque, 0);
@@ -1604,7 +1626,8 @@ app.get('/api/parceiro/catalogo', autenticar, async (req, res) => {
                 COALESCE(c.quantidade_atual, 0) AS quantidade_na_loja,
                 COALESCE(c.quantidade_vendida, 0) AS quantidade_vendida_loja,
                 CASE WHEN COALESCE(pv.estoque_central, 0) > 0 THEN true ELSE false END AS disponivel_central,
-                ppc.preco_catalogo AS preco_catalogo_parceiro
+                ppc.preco_catalogo AS preco_catalogo_parceiro,
+                COALESCE(ppc.visivel, true) AS visivel_parceiro
             FROM produtos p
             JOIN produto_variacoes pv ON pv.produto_id = p.id
             LEFT JOIN consignacoes_estoque c ON c.variacao_id = pv.id AND c.parceiro_id = $1
@@ -1659,6 +1682,34 @@ app.put('/api/parceiro/catalogo/preco', autenticar, async (req, res) => {
     } catch (e) {
         console.error('❌ Erro preço catálogo parceiro:', e);
         res.status(500).json({ erro: 'Erro ao salvar preço.' });
+    }
+});
+
+// Parceiro define se um produto (próprio ou da remessa) aparece no seu catálogo digital
+app.put('/api/parceiro/catalogo/visibilidade', autenticar, async (req, res) => {
+    try {
+        const parceiroId = req.user.perfil === 'PARCEIRO'
+            ? req.user.parceiro_id
+            : (normalizarPerfil(req.user.perfil) === 'ADMIN' ? req.body.parceiro_id : null);
+        if (!parceiroId) return res.status(403).json({ erro: 'Acesso negado.' });
+        if (!garantirParceiroPermitido(req, parceiroId)) return res.status(403).json({ erro: 'Acesso negado para esta loja.' });
+
+        const variacaoId = toInt(req.body.variacao_id);
+        if (!variacaoId) return res.status(400).json({ erro: 'Dados inválidos.' });
+        const visivel = String(req.body.visivel) === 'true';
+
+        await db.query(
+            `INSERT INTO parceiro_precos_catalogo (parceiro_id, variacao_id, visivel)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (parceiro_id, variacao_id)
+             DO UPDATE SET visivel = $3, atualizado_em = NOW()`,
+            [parceiroId, variacaoId, visivel]
+        );
+
+        res.json({ mensagem: visivel ? 'Produto visível no seu catálogo.' : 'Produto oculto do seu catálogo.', visivel });
+    } catch (e) {
+        console.error('❌ Erro visibilidade catálogo parceiro:', e);
+        res.status(500).json({ erro: 'Erro ao salvar visibilidade.' });
     }
 });
 
@@ -4189,6 +4240,10 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
                 (p.dono_tipo = 'PARCEIRO' AND p.parceiro_id = $1)
             )`;
         }
+        // O toggle global "visivel_catalogo" do admin só vale para o catálogo do próprio admin.
+        // Nos catálogos dos parceiros, produtos de remessa (dono_tipo=ADMIN) são controlados
+        // apenas pela visibilidade individual de cada parceiro (parceiro_precos_catalogo.visivel).
+        const ignorarVisivelAdmin = !isAdminCatalogo;
 
         const produtos = await db.query(
             `SELECT
@@ -4213,8 +4268,12 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
                 ON ppc.variacao_id = v.id AND ppc.parceiro_id = ${parceiroId ? `$${params.length + 1}` : 'NULL'}
              WHERE ${where}
                AND COALESCE(p.status, 'ATIVO') = 'ATIVO'
-               AND COALESCE(p.visivel_catalogo, true) = true
+               AND (
+                   (COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' AND ${ignorarVisivelAdmin})
+                   OR COALESCE(p.visivel_catalogo, true) = true
+               )
                AND COALESCE(p.aprovado_admin, true) = true
+               AND COALESCE(ppc.visivel, true) = true
              ORDER BY COALESCE(p.produto_destaque, false) DESC, CASE WHEN COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' THEN 0 ELSE 1 END, COALESCE(p.catalogo_ordem, 999999), p.nome ASC`,
             parceiroId ? [...params, parceiroId] : params
         );

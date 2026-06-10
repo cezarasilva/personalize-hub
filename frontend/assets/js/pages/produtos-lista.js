@@ -27,6 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         tabela.innerHTML = lista.map(p => {
             const totalFotos = galeriaUrls(p).length;
+            const visivel = p.visivel_catalogo !== false;
+            const visBtn = `<button class="icon-btn" data-toggle-visivel="${p.id}" data-visivel="${visivel}"
+                title="${visivel ? 'Visível no catálogo digital — clique para ocultar' : 'Oculto do catálogo digital — clique para exibir'}"
+                style="color:${visivel ? 'var(--success)' : 'var(--muted)'};">
+                <i class="bx ${visivel ? 'bx-show' : 'bx-hide'}"></i>
+            </button>`;
             return `
             <tr>
                 <td>
@@ -45,9 +51,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${App.money(p.custo_producao)}</td>
                 <td><strong>${App.number(p.estoque_central)}</strong></td>
                 <td>${App.badgeStatus(p.status)}</td>
-                <td><div class="actions"><a class="icon-btn" href="produtos-cadastro.html?id=${p.id}" title="Editar"><i class="bx bx-edit"></i></a><button class="icon-btn" data-del="${p.id}" title="Excluir"><i class="bx bx-trash"></i></button></div></td>
+                <td><div class="actions">${visBtn}<a class="icon-btn" href="produtos-cadastro.html?id=${p.id}" title="Editar"><i class="bx bx-edit"></i></a><button class="icon-btn" data-del="${p.id}" title="Excluir"><i class="bx bx-trash"></i></button></div></td>
             </tr>`;
         }).join('');
+    }
+
+    function filtrarLista() {
+        const q = busca.value.toLowerCase().trim();
+        if (!q) return produtos;
+        return produtos.filter(p => [p.nome, p.categoria, p.variacao, p.sku].join(' ').toLowerCase().includes(q));
     }
 
     async function carregar() {
@@ -65,6 +77,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tabela.addEventListener('click', async (e) => {
         const delId = e.target.closest('[data-del]')?.dataset.del;
+        const visBtn = e.target.closest('[data-toggle-visivel]');
+        if (visBtn) {
+            const produtoId = visBtn.dataset.toggleVisivel;
+            const novoVisivel = visBtn.dataset.visivel !== 'true';
+            try {
+                await App.api(`/produtos/${produtoId}/visibilidade`, { method: 'PATCH', body: JSON.stringify({ visivel: novoVisivel }) });
+                const p = produtos.find(x => String(x.id) === String(produtoId));
+                if (p) p.visivel_catalogo = novoVisivel;
+                App.toast('success', novoVisivel ? 'Produto visível no catálogo digital.' : 'Produto oculto do catálogo digital.');
+                render(filtrarLista());
+            } catch (err) { App.toast('error', err.message); }
+            return;
+        }
         if (!delId) return;
         const ok = await App.confirmDialog({ title: 'Excluir produto?', text: 'Vendas, remessas e consignações ligadas a ele podem ser impactadas.', confirmText: 'Excluir' });
         if (!ok.isConfirmed) return;
@@ -75,10 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { App.toast('error', err.message); }
     });
 
-    busca.addEventListener('input', () => {
-        const q = busca.value.toLowerCase().trim();
-        render(produtos.filter(p => [p.nome, p.categoria, p.variacao, p.sku].join(' ').toLowerCase().includes(q)));
-    });
+    busca.addEventListener('input', () => render(filtrarLista()));
 
     carregar();
 });
