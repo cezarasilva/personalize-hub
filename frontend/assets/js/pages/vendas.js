@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let parceiros = [];
     let produtoSelecionado = null;
     let valorFinalEditadoManualmente = false;
+    let lote = [];
 
     const buscaProdutoVenda = document.getElementById('buscaProdutoVenda');
     const sugestoesProdutoVenda = document.getElementById('sugestoesProdutoVenda');
@@ -18,6 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const valorFinalVenda = document.getElementById('valorFinalVenda');
     const resumoValorVenda = document.getElementById('resumoValorVenda');
     const tabela = document.getElementById('tabelaVendas');
+    const tabelaCarrinho = document.getElementById('tabelaCarrinhoVenda');
+    const totalCarrinhoVenda = document.getElementById('totalCarrinhoVenda');
+    const formaPagamentoVenda = document.getElementById('formaPagamentoVenda');
+    const btnFecharVenda = document.getElementById('btnFecharVenda');
 
     function normalizarProduto(p) {
         return {
@@ -80,8 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const valor = parseMoedaBR(valorFinalVenda.value);
         resumoValorVenda.textContent = Number.isFinite(valor) && valor > 0
-            ? `Será registrado no extrato: ${App.money(valor)}`
-            : 'Informe o valor total final para registrar a venda direta.';
+            ? `Será adicionado ao carrinho: ${App.money(valor)}`
+            : 'Informe o valor total final deste item para adicioná-lo ao carrinho.';
     }
 
     function atualizarCampoValorFinal({ preencher = false, forcar = false } = {}) {
@@ -106,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sugestoesProdutoVenda.classList.add('hidden');
         produtoBox.classList.add('hidden');
         produtoBox.innerHTML = '';
+        quantidadeVenda.value = 1;
         atualizarCampoValorFinal();
     }
 
@@ -197,26 +203,96 @@ document.addEventListener('DOMContentLoaded', () => {
                     • Estoque ${App.number(produtoSelecionado.estoque)}
                     • ${precoLabel}
                 </p>
-                ${isVendaDiretaCentral() ? '<small class="text-success">Na venda direta, você pode alterar o valor final antes de confirmar.</small>' : ''}
+                ${isVendaDiretaCentral() ? '<small class="text-success">Na venda direta, você pode alterar o valor final antes de adicionar ao carrinho.</small>' : ''}
             </div>`;
         atualizarCampoValorFinal({ preencher: true, forcar: true });
+    }
+
+    function badgePagamento(forma) {
+        const f = String(forma || 'DINHEIRO').toUpperCase();
+        const mapa = {
+            DINHEIRO: ['Dinheiro', 'badge-green'],
+            PIX: ['Pix', 'badge-blue'],
+            CREDITO: ['Crédito', 'badge-yellow'],
+            DEBITO: ['Débito', 'badge-yellow']
+        };
+        const [label, cls] = mapa[f] || [f, 'badge-blue'];
+        return `<span class="badge ${cls}">${label}</span>`;
+    }
+
+    function renderCarrinho() {
+        if (!lote.length) {
+            tabelaCarrinho.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum produto adicionado.</td></tr>';
+            totalCarrinhoVenda.textContent = App.money(0);
+            btnFecharVenda.disabled = true;
+            return;
+        }
+        btnFecharVenda.disabled = false;
+        tabelaCarrinho.innerHTML = lote.map((item, idx) => `
+            <tr>
+                <td><div class="product-cell">${App.imageTag(item.imagem_url)}<div><strong>${App.escapeHtml(item.nome)}</strong><br><small>${App.escapeHtml(item.variacao || '')}</small>${item.manual ? '<br><small class="badge badge-yellow">valor manual</small>' : ''}</div></div></td>
+                <td>${App.number(item.quantidade)}</td>
+                <td>${App.money(item.valor_unitario)}</td>
+                <td><strong>${App.money(item.valor_total)}</strong></td>
+                <td><button class="icon-btn" data-remover-carrinho="${idx}" title="Remover do carrinho"><i class="bx bx-trash"></i></button></td>
+            </tr>`).join('');
+        const total = lote.reduce((s, i) => s + Number(i.valor_total || 0), 0);
+        totalCarrinhoVenda.textContent = App.money(total);
     }
 
     async function carregarVendas() {
         vendas = await App.api('/vendas');
         if (!vendas.length) {
-            tabela.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma venda registrada.</td></tr>';
+            tabela.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma venda registrada.</td></tr>';
             return;
         }
-        tabela.innerHTML = vendas.map(v => `
+        tabela.innerHTML = vendas.map(v => {
+            const itens = v.itens || [];
+            const primeiro = itens[0] || {};
+            const extras = itens.length > 1
+                ? `<br><small class="text-muted">+${itens.length - 1} ${itens.length - 1 === 1 ? 'item' : 'itens'}</small>`
+                : '';
+            return `
             <tr>
-                <td><div class="product-cell">${App.imageTag(v.imagem_url)}<div><strong>${App.escapeHtml(v.produto_nome)}</strong><br><small>${App.escapeHtml(v.variacao || '')}</small></div></div></td>
+                <td><div class="product-cell">${App.imageTag(primeiro.imagem_url)}<div><strong>${App.escapeHtml(primeiro.produto_nome || '')}</strong><br><small>${App.escapeHtml(primeiro.variacao || '')}</small>${extras}</div></div></td>
                 <td>${App.escapeHtml(v.data_formatada || '')}</td>
                 <td>${App.number(v.quantidade)}</td>
                 <td><strong>${App.money(v.valor_total)}</strong></td>
+                <td>${badgePagamento(v.forma_pagamento)}</td>
                 <td>${App.escapeHtml(v.loja || '-')}</td>
-                <td><button class="icon-btn" data-estornar="${v.id}" title="Estornar venda"><i class="bx bx-undo"></i></button></td>
+                <td><div class="actions">
+                    ${itens.length > 1 ? `<button class="icon-btn" data-ver-venda="${App.escapeHtml(v.lote_codigo)}" title="Ver itens"><i class="bx bx-show"></i></button>` : ''}
+                    <button class="icon-btn" data-estornar="${App.escapeHtml(v.lote_codigo)}" title="Estornar venda"><i class="bx bx-undo"></i></button>
+                </div></td>
+            </tr>`;
+        }).join('');
+    }
+
+    function abrirDetalhesVenda(codigo) {
+        const venda = vendas.find(v => v.lote_codigo === codigo);
+        if (!venda) return;
+        const itens = venda.itens || [];
+        const linhas = itens.map(i => `
+            <tr>
+                <td style="padding:6px 8px;text-align:left;border-bottom:1px solid #e2e8f0;"><strong>${App.escapeHtml(i.produto_nome || '-')}</strong>${i.variacao ? `<br><small>${App.escapeHtml(i.variacao)}</small>` : ''}</td>
+                <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e2e8f0;">${App.number(i.quantidade)}</td>
+                <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e2e8f0;">${App.money(i.valor_total)}</td>
             </tr>`).join('');
+        Swal.fire({
+            title: `Venda ${App.escapeHtml(venda.lote_codigo)}`,
+            html: `
+                <div style="text-align:left;margin-bottom:10px;font-size:13px;">
+                    <b>Data:</b> ${App.escapeHtml(venda.data_formatada || '')}<br>
+                    <b>Pagamento:</b> ${badgePagamento(venda.forma_pagamento)}<br>
+                    <b>Origem:</b> ${App.escapeHtml(venda.loja || '-')}
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead><tr><th style="text-align:left;">Produto</th><th>Qtd</th><th style="text-align:right;">Total</th></tr></thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+                <div style="text-align:right;margin-top:10px;font-weight:700;">Total: ${App.money(venda.valor_total)}</div>`,
+            confirmButtonText: 'Fechar'
+        });
     }
 
     document.addEventListener('click', (e) => {
@@ -237,6 +313,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     origemVenda.addEventListener('change', () => {
+        if (lote.length) {
+            lote = [];
+            renderCarrinho();
+            App.toast('warning', 'O carrinho foi limpo ao trocar a loja de origem.');
+        }
         carregarProdutos().catch(err => App.toast('error', err.message));
     });
 
@@ -244,36 +325,71 @@ document.addEventListener('DOMContentLoaded', () => {
         atualizarCampoValorFinal({ preencher: true, forcar: true });
     });
 
-    document.getElementById('formVenda').addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        if (!produtoSelecionado) {
-            return App.toast('warning', 'Digite e selecione um produto da lista.');
-        }
+    document.getElementById('btnAddCarrinhoVenda').addEventListener('click', () => {
+        if (!produtoSelecionado) return App.toast('warning', 'Digite e selecione um produto da lista.');
 
         const quantidade = Number(quantidadeVenda.value || 0);
         if (quantidade <= 0) return App.toast('warning', 'Informe uma quantidade válida.');
-        if (quantidade > Number(produtoSelecionado.estoque || 0)) return App.toast('error', 'Quantidade maior que o estoque disponível.');
 
-        const payload = {
-            produto_id: produtoSelecionado.produto_id,
-            quantidade,
-            parceiro_id: App.isParceiro() ? null : (origemVenda.value || null)
-        };
+        const qtdJaNoCarrinho = lote
+            .filter(i => String(i.produto_id) === String(produtoSelecionado.produto_id))
+            .reduce((s, i) => s + Number(i.quantidade || 0), 0);
+        if (quantidade + qtdJaNoCarrinho > Number(produtoSelecionado.estoque || 0)) {
+            return App.toast('error', 'Quantidade maior que o estoque disponível.');
+        }
 
+        let valorTotal;
+        let manual = false;
         if (isVendaDiretaCentral()) {
             const valorManual = parseMoedaBR(valorFinalVenda.value);
             if (!Number.isFinite(valorManual) || valorManual <= 0) {
-                return App.toast('warning', 'Informe um valor total final válido para a venda direta. Exemplo: 39,90');
+                return App.toast('warning', 'Informe um valor total final válido para este item. Exemplo: 39,90');
             }
-            payload.valor_total_manual = valorManual.toFixed(2);
+            valorTotal = valorManual;
+            manual = true;
+        } else {
+            valorTotal = Number(produtoSelecionado.preco_repasse || 0) * quantidade;
         }
 
+        lote.push({
+            produto_id: produtoSelecionado.produto_id,
+            nome: produtoSelecionado.nome,
+            variacao: produtoSelecionado.variacao,
+            imagem_url: produtoSelecionado.imagem_url,
+            quantidade,
+            valor_unitario: valorTotal / quantidade,
+            valor_total: valorTotal,
+            manual
+        });
+
+        limparProdutoSelecionado();
+        renderCarrinho();
+    });
+
+    tabelaCarrinho.addEventListener('click', (e) => {
+        const idx = e.target.closest('[data-remover-carrinho]')?.dataset.removerCarrinho;
+        if (idx !== undefined) { lote.splice(Number(idx), 1); renderCarrinho(); }
+    });
+
+    btnFecharVenda.addEventListener('click', async () => {
+        if (!lote.length) return App.toast('warning', 'Adicione produtos ao carrinho.');
+
+        const payload = {
+            parceiro_id: App.isParceiro() ? null : (origemVenda.value || null),
+            forma_pagamento: formaPagamentoVenda.value,
+            itens: lote.map(i => ({
+                produto_id: i.produto_id,
+                quantidade: i.quantidade,
+                ...(i.manual ? { valor_final_manual: i.valor_total.toFixed(2) } : {})
+            }))
+        };
+
         try {
-            await App.api('/vendas', { method: 'POST', body: JSON.stringify(payload) });
+            await App.api('/vendas/lote', { method: 'POST', body: JSON.stringify(payload) });
             App.toast('success', 'Venda registrada.');
-            quantidadeVenda.value = 1;
-            valorFinalVenda.value = '';
+            lote = [];
+            formaPagamentoVenda.value = 'DINHEIRO';
+            renderCarrinho();
             await carregarProdutos();
             await carregarVendas();
         } catch (err) {
@@ -282,12 +398,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     tabela.addEventListener('click', async (e) => {
-        const id = e.target.closest('[data-estornar]')?.dataset.estornar;
-        if (!id) return;
+        const verBtn = e.target.closest('[data-ver-venda]');
+        if (verBtn) return abrirDetalhesVenda(verBtn.dataset.verVenda);
+
+        const codigo = e.target.closest('[data-estornar]')?.dataset.estornar;
+        if (!codigo) return;
         const ok = await App.confirmDialog({ title: 'Estornar venda?', text: 'O estoque será devolvido automaticamente.', confirmText: 'Estornar' });
         if (!ok.isConfirmed) return;
         try {
-            await App.api(`/vendas/${id}`, { method: 'DELETE' });
+            await App.api(`/vendas/${encodeURIComponent(codigo)}`, { method: 'DELETE' });
             App.toast('success', 'Venda estornada.');
             await carregarProdutos();
             await carregarVendas();
@@ -309,11 +428,16 @@ document.addEventListener('DOMContentLoaded', () => {
         doc.setFontSize(10);
         doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, 14, 42);
 
+        const labelPagamento = (forma) => ({ DINHEIRO: 'Dinheiro', PIX: 'Pix', CREDITO: 'Crédito', DEBITO: 'Débito' }[String(forma || '').toUpperCase()] || forma || '-');
         const total = vendas.reduce((s, v) => s + Number(v.valor_total || 0), 0);
         doc.autoTable({
             startY: 50,
-            head: [['Produto', 'Data', 'Qtd', 'Origem', 'Total']],
-            body: vendas.map(v => [`${v.produto_nome} - ${v.variacao || ''}`, v.data_formatada, String(v.quantidade), v.loja, App.money(v.valor_total)]),
+            head: [['Produto(s)', 'Data', 'Qtd', 'Pagamento', 'Origem', 'Total']],
+            body: vendas.map(v => {
+                const itens = v.itens || [];
+                const produtosTxt = itens.map(i => `${i.produto_nome}${i.variacao ? ' - ' + i.variacao : ''} (x${i.quantidade})`).join('\n');
+                return [produtosTxt, v.data_formatada, String(v.quantidade), labelPagamento(v.forma_pagamento), v.loja, App.money(v.valor_total)];
+            }),
             theme: 'grid',
             styles: { fontSize: 8, overflow: 'linebreak' },
             headStyles: { fillColor: [16, 185, 129] }
@@ -334,6 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await carregarParceiros();
             await carregarProdutos();
             await carregarVendas();
+            renderCarrinho();
         } catch (err) {
             App.toast('error', err.message);
         }

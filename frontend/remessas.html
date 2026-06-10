@@ -100,7 +100,10 @@
             </section>
 
             <section class="card">
-                <div class="card-title">Estoque consignado atual da loja</div>
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <span>Estoque consignado atual da loja</span>
+                    <button class="btn btn-danger hidden" id="btnDevolverTudoEstoque" type="button">Devolver todo o estoque</button>
+                </div>
                 <div class="table-container">
                     <table>
                         <thead><tr><th>Produto</th><th>Qtd atual</th><th>Qtd enviada</th><th>Qtd vendida</th><th>Preço consignação</th><th>Valor atual</th><th>Ações</th></tr></thead>

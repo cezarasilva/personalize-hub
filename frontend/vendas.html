@@ -24,37 +24,71 @@
             </header>
 
             <section class="card">
-                <div class="card-title">Registrar venda</div>
-                <form id="formVenda">
-                    <div class="form-grid mt-2">
-                        <div class="form-group" id="grupoOrigemVenda">
-                            <label for="origemVenda">Venda por</label>
-                            <select id="origemVenda" name="parceiro_id">
-                                <option value="">Sede Central</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="quantidadeVenda">Quantidade</label>
-                            <input id="quantidadeVenda" name="quantidade" type="number" min="1" value="1" required>
-                        </div>
-                        <div class="form-group hidden" id="grupoValorFinalVenda">
-                            <label for="valorFinalVenda">Valor total final da venda direta</label>
-                            <input id="valorFinalVenda" name="valor_total_manual" type="text" inputmode="decimal" placeholder="Ex: 39,90">
-                            <small class="text-muted">Esse é o valor TOTAL que será registrado na venda. Aceita 39,90 ou 39.90.</small>
-                            <div id="resumoValorVenda" class="text-success mt-1"></div>
-                        </div>
+                <div class="card-title">Adicionar produto à venda</div>
+                <div class="form-grid mt-2">
+                    <div class="form-group" id="grupoOrigemVenda">
+                        <label for="origemVenda">Venda por</label>
+                        <select id="origemVenda" name="parceiro_id">
+                            <option value="">Sede Central</option>
+                        </select>
                     </div>
-
-                    <div class="form-group search-wrap mt-2">
-                        <label for="buscaProdutoVenda">Produto</label>
-                        <input id="buscaProdutoVenda" type="search" placeholder="Digite o nome, variação ou SKU do produto..." autocomplete="off" required>
-                        <div id="sugestoesProdutoVenda" class="suggestions hidden"></div>
+                    <div class="form-group">
+                        <label for="quantidadeVenda">Quantidade</label>
+                        <input id="quantidadeVenda" name="quantidade" type="number" min="1" value="1">
                     </div>
+                    <div class="form-group hidden" id="grupoValorFinalVenda">
+                        <label for="valorFinalVenda">Valor total final deste item</label>
+                        <input id="valorFinalVenda" name="valor_total_manual" type="text" inputmode="decimal" placeholder="Ex: 39,90">
+                        <small class="text-muted">Esse é o valor TOTAL deste item que será registrado na venda. Aceita 39,90 ou 39.90.</small>
+                        <div id="resumoValorVenda" class="text-success mt-1"></div>
+                    </div>
+                </div>
 
-                    <div id="produtoVendaSelecionadoBox" class="preview-box mt-2 hidden"></div>
+                <div class="form-group search-wrap mt-2">
+                    <label for="buscaProdutoVenda">Produto</label>
+                    <input id="buscaProdutoVenda" type="search" placeholder="Digite o nome, variação ou SKU do produto..." autocomplete="off">
+                    <div id="sugestoesProdutoVenda" class="suggestions hidden"></div>
+                </div>
 
-                    <button class="btn btn-success w-full mt-3" id="btnConfirmarVenda">Confirmar venda</button>
-                </form>
+                <div id="produtoVendaSelecionadoBox" class="preview-box mt-2 hidden"></div>
+
+                <button type="button" class="btn btn-primary w-full mt-3" id="btnAddCarrinhoVenda">Adicionar ao carrinho</button>
+            </section>
+
+            <section class="card">
+                <div class="card-title">Carrinho da venda</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th>Qtd</th>
+                                <th>Valor unit.</th>
+                                <th>Total</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaCarrinhoVenda"></tbody>
+                    </table>
+                </div>
+
+                <div class="form-grid mt-2">
+                    <div class="form-group">
+                        <label for="formaPagamentoVenda">Forma de pagamento</label>
+                        <select id="formaPagamentoVenda">
+                            <option value="DINHEIRO">Dinheiro</option>
+                            <option value="PIX">Pix</option>
+                            <option value="CREDITO">Cartão de Crédito</option>
+                            <option value="DEBITO">Cartão de Débito</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Total do carrinho</label>
+                        <div class="readonly-box"><strong id="totalCarrinhoVenda">R$ 0,00</strong></div>
+                    </div>
+                </div>
+
+                <button class="btn btn-success w-full mt-2" id="btnFecharVenda" disabled>Fechar venda</button>
             </section>
 
             <section class="card">
@@ -67,6 +101,7 @@
                                 <th>Data</th>
                                 <th>Qtd</th>
                                 <th>Total</th>
+                                <th>Pagamento</th>
                                 <th>Origem</th>
                                 <th>Ações</th>
                             </tr>

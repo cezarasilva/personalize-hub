@@ -24,7 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderVendas() {
         const tbody = document.getElementById('tabelaVendasLoja');
         if (!vendas.length) return tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhuma venda registrada.</td></tr>';
-        tbody.innerHTML = vendas.slice(0, 20).map(v => `<tr><td><div class="product-cell">${App.imageTag(v.imagem_url)}<div><strong>${App.escapeHtml(v.produto_nome)}</strong><br><small>${App.escapeHtml(v.variacao || '')}</small></div></div></td><td>${App.escapeHtml(v.data_formatada || '')}</td><td>${App.number(v.quantidade)}</td><td><strong>${App.money(v.valor_total)}</strong></td></tr>`).join('');
+        tbody.innerHTML = vendas.slice(0, 20).map(v => {
+            const itens = v.itens || [];
+            const primeiro = itens[0] || {};
+            const extras = itens.length > 1 ? `<br><small class="text-muted">+${itens.length - 1} ${itens.length - 1 === 1 ? 'item' : 'itens'}</small>` : '';
+            return `<tr><td><div class="product-cell">${App.imageTag(primeiro.imagem_url)}<div><strong>${App.escapeHtml(primeiro.produto_nome || '')}</strong><br><small>${App.escapeHtml(primeiro.variacao || '')}</small>${extras}</div></div></td><td>${App.escapeHtml(v.data_formatada || '')}</td><td>${App.number(v.quantidade)}</td><td><strong>${App.money(v.valor_total)}</strong></td></tr>`;
+        }).join('');
     }
 
     async function gerarPDF() {

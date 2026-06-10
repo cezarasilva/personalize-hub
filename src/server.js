@@ -253,6 +253,21 @@ async function migrarPrecosParceiroCatalogo() {
 migrarPrecosParceiroCatalogo();
 
 // =========================================================
+// V7.1 — Migração: venda em lote (carrinho) com forma de pagamento
+// =========================================================
+async function migrarVendasLote() {
+    const ops = [
+        `ALTER TABLE vendas ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(20) NOT NULL DEFAULT 'DINHEIRO'`,
+        `ALTER TABLE vendas ADD COLUMN IF NOT EXISTS venda_lote_codigo VARCHAR(40)`,
+        `CREATE INDEX IF NOT EXISTS idx_vendas_lote_codigo ON vendas(venda_lote_codigo)`
+    ];
+    for (const sql of ops) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V7.1:', e.message); }
+    }
+}
+migrarVendasLote();
+
+// =========================================================
 // V6.8 — Migração: histórico e responsável no CRM
 // =========================================================
 async function migrarColunasV68() {
@@ -2617,6 +2632,25 @@ app.delete('/api/consignacoes/:id', autenticar, somenteAdmin, async (req, res) =
     }
 });
 
+app.delete('/api/consignacoes/parceiro/:parceiro_id/tudo', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const { parceiro_id } = req.params;
+        let totalItens = 0;
+        await transacao(async (client) => {
+            const itens = await client.query('SELECT id, variacao_id, quantidade_atual FROM consignacoes_estoque WHERE parceiro_id = $1 AND quantidade_atual > 0', [parceiro_id]);
+            if (itens.rows.length === 0) throw new Error('Esta loja não possui estoque consignado para devolver.');
+            for (const item of itens.rows) {
+                await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', [item.quantidade_atual, item.variacao_id]);
+                await client.query('DELETE FROM consignacoes_estoque WHERE id = $1', [item.id]);
+                totalItens++;
+            }
+        });
+        res.json({ mensagem: `🗑️ Estoque devolvido! ${totalItens} produto(s) retornaram à central.`, total_itens: totalItens });
+    } catch (e) {
+        res.status(500).json({ erro: 'Erro ao devolver estoque: ' + e.message });
+    }
+});
+
 // Histórico real de remessas
 app.get('/api/remessas', autenticar, async (req, res) => {
     try {
@@ -2886,82 +2920,100 @@ app.post('/api/remessas/:id/estornar', autenticar, somenteAdmin, async (req, res
 // VENDAS
 // =========================================================
 
-app.post('/api/vendas', autenticar, async (req, res) => {
+const FORMAS_PAGAMENTO_VENDA = ['DINHEIRO', 'PIX', 'CREDITO', 'DEBITO'];
+
+app.post('/api/vendas/lote', autenticar, async (req, res) => {
     try {
-        const { produto_id, quantidade, parceiro_id, valor_final, valor_total_manual, valor_final_manual } = req.body;
-        const qtd = toInt(quantidade, 0);
-        if (!produto_id || qtd <= 0) return res.status(400).json({ erro: 'Produto e quantidade são obrigatórios.' });
+        const { parceiro_id, forma_pagamento, itens } = req.body;
+        if (!Array.isArray(itens) || itens.length === 0) {
+            return res.status(400).json({ erro: 'Adicione ao menos um produto à venda.' });
+        }
+
+        const forma = String(forma_pagamento || '').toUpperCase();
+        if (!FORMAS_PAGAMENTO_VENDA.includes(forma)) {
+            return res.status(400).json({ erro: 'Forma de pagamento inválida.' });
+        }
+
+        const perfil = normalizarPerfil(req.user.perfil);
+        const pIdFinal = perfil === 'PARCEIRO' ? req.user.parceiro_id : (parceiro_id || null);
+        if (pIdFinal && !garantirParceiroPermitido(req, pIdFinal)) throw new Error('Acesso negado para esta loja.');
+
+        const codigo = `VENDA-${Date.now()}`;
+        let valorTotalLote = 0;
 
         await transacao(async (client) => {
-            const info = await client.query(
-                `SELECT v.id, v.preco_venda, v.preco_repasse, v.estoque_central, p.id AS produto_id, p.nome
-                 FROM produto_variacoes v
-                 JOIN produtos p ON p.id = v.produto_id
-                 WHERE v.produto_id = $1
-                 LIMIT 1`,
-                [produto_id]
-            );
-            if (info.rows.length === 0) throw new Error('Produto não encontrado.');
-            const v = info.rows[0];
+            for (const item of itens) {
+                const { produto_id, quantidade, valor_final_manual } = item || {};
+                const qtd = toInt(quantidade, 0);
+                if (!produto_id || qtd <= 0) throw new Error('Item inválido no carrinho.');
 
-            const perfil = normalizarPerfil(req.user.perfil);
-            const pIdFinal = perfil === 'PARCEIRO' ? req.user.parceiro_id : (parceiro_id || null);
-            let valorVenda = 0;
-
-            if (pIdFinal) {
-                if (!garantirParceiroPermitido(req, pIdFinal) && perfil !== 'ADMIN') throw new Error('Acesso negado para esta loja.');
-
-                const estLoja = await client.query(
-                    'SELECT id, quantidade_atual FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2',
-                    [pIdFinal, v.id]
+                const info = await client.query(
+                    `SELECT v.id, v.preco_venda, v.preco_repasse, v.estoque_central, p.id AS produto_id, p.nome
+                     FROM produto_variacoes v
+                     JOIN produtos p ON p.id = v.produto_id
+                     WHERE v.produto_id = $1
+                     LIMIT 1`,
+                    [produto_id]
                 );
+                if (info.rows.length === 0) throw new Error('Produto não encontrado.');
+                const v = info.rows[0];
 
-                if (estLoja.rows.length === 0 || toInt(estLoja.rows[0].quantidade_atual, 0) < qtd) {
-                    throw new Error('Estoque insuficiente na loja parceira!');
+                let valorVenda = 0;
+
+                if (pIdFinal) {
+                    const estLoja = await client.query(
+                        'SELECT id, quantidade_atual FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2',
+                        [pIdFinal, v.id]
+                    );
+
+                    if (estLoja.rows.length === 0 || toInt(estLoja.rows[0].quantidade_atual, 0) < qtd) {
+                        throw new Error(`Estoque insuficiente na loja parceira para ${v.nome}!`);
+                    }
+
+                    await client.query(
+                        `UPDATE consignacoes_estoque
+                         SET quantidade_atual = quantidade_atual - $1,
+                             quantidade_vendida = COALESCE(quantidade_vendida, 0) + $1
+                         WHERE id = $2`,
+                        [qtd, estLoja.rows[0].id]
+                    );
+
+                    valorVenda = money(parseMoeda(v.preco_repasse) * qtd);
+                } else {
+                    if (toInt(v.estoque_central, 0) < qtd) throw new Error(`Estoque central insuficiente para ${v.nome}!`);
+                    await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, v.id]);
+
+                    const valorManual = parseMoeda(valor_final_manual);
+                    valorVenda = valorManual > 0 ? money(valorManual) : money(parseMoeda(v.preco_venda) * qtd);
                 }
 
-                await client.query(
-                    `UPDATE consignacoes_estoque
-                     SET quantidade_atual = quantidade_atual - $1,
-                         quantidade_vendida = COALESCE(quantidade_vendida, 0) + $1
-                     WHERE id = $2`,
-                    [qtd, estLoja.rows[0].id]
+                valorTotalLote = money(valorTotalLote + valorVenda);
+
+                const venda = await client.query(
+                    `INSERT INTO vendas (parceiro_id, usuario_id, variacao_id, quantidade, valor_total, forma_pagamento, venda_lote_codigo)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)
+                     RETURNING id`,
+                    [pIdFinal || null, req.user.id, v.id, qtd, valorVenda, forma, codigo]
                 );
 
-                valorVenda = money(parseMoeda(v.preco_repasse) * qtd);
-            } else {
-                if (toInt(v.estoque_central, 0) < qtd) throw new Error('Estoque central insuficiente!');
-                await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id = $2', [qtd, v.id]);
-
-                const manual = valor_final_manual ?? valor_total_manual ?? valor_final;
-                const valorManual = parseMoeda(manual);
-                valorVenda = valorManual > 0 ? money(valorManual) : money(parseMoeda(v.preco_venda) * qtd);
+                await registrarMovimentacao(client, {
+                    produto_id: v.produto_id,
+                    variacao_id: v.id,
+                    parceiro_id: pIdFinal || null,
+                    usuario_id: req.user.id,
+                    tipo: 'VENDA',
+                    quantidade: qtd,
+                    estoque_origem: pIdFinal ? `PARCEIRO_${pIdFinal}` : 'CENTRAL',
+                    referencia_tipo: 'VENDA',
+                    referencia_id: venda.rows[0].id,
+                    observacao: `Venda de ${qtd} un. de ${v.nome}. Pagamento: ${forma}. Valor registrado: R$ ${valorVenda.toFixed(2)}`
+                });
             }
-
-            const venda = await client.query(
-                `INSERT INTO vendas (parceiro_id, usuario_id, variacao_id, quantidade, valor_total)
-                 VALUES ($1, $2, $3, $4, $5)
-                 RETURNING id`,
-                [pIdFinal || null, req.user.id, v.id, qtd, valorVenda]
-            );
-
-            await registrarMovimentacao(client, {
-                produto_id: v.produto_id,
-                variacao_id: v.id,
-                parceiro_id: pIdFinal || null,
-                usuario_id: req.user.id,
-                tipo: 'VENDA',
-                quantidade: qtd,
-                estoque_origem: pIdFinal ? `PARCEIRO_${pIdFinal}` : 'CENTRAL',
-                referencia_tipo: 'VENDA',
-                referencia_id: venda.rows[0].id,
-                observacao: `Venda de ${qtd} un. de ${v.nome}. Valor registrado: R$ ${valorVenda.toFixed(2)}`
-            });
         });
 
-        res.status(201).json({ mensagem: '✅ Venda realizada com sucesso!' });
+        res.status(201).json({ mensagem: '✅ Venda realizada com sucesso!', codigo, valor_total: valorTotalLote });
     } catch (e) {
-        console.error('❌ Erro venda:', e);
+        console.error('❌ Erro venda em lote:', e);
         res.status(400).json({ erro: e.message || 'Erro ao processar venda.' });
     }
 });
@@ -2981,18 +3033,30 @@ app.get('/api/vendas', autenticar, async (req, res) => {
 
         const query = `
             SELECT
-                v.id, v.parceiro_id, v.usuario_id, v.variacao_id,
-                v.quantidade, v.valor_total, v.status,
-                TO_CHAR(v.data_venda, 'DD/MM/YYYY HH24:MI') AS data_formatada,
-                p.nome AS produto_nome, p.imagem_url,
-                var.variacao,
-                COALESCE(parc.nome_loja, 'VENDA DIRETA') AS loja
+                COALESCE(v.venda_lote_codigo, 'V' || v.id) AS lote_codigo,
+                MIN(v.id) AS id,
+                v.parceiro_id,
+                MAX(v.forma_pagamento) AS forma_pagamento,
+                SUM(v.valor_total) AS valor_total,
+                SUM(v.quantidade) AS quantidade,
+                MAX(v.status) AS status,
+                TO_CHAR(MAX(v.data_venda), 'DD/MM/YYYY HH24:MI') AS data_formatada,
+                COALESCE(parc.nome_loja, 'VENDA DIRETA') AS loja,
+                JSON_AGG(JSON_BUILD_OBJECT(
+                    'id', v.id,
+                    'produto_nome', p.nome,
+                    'variacao', var.variacao,
+                    'imagem_url', p.imagem_url,
+                    'quantidade', v.quantidade,
+                    'valor_total', v.valor_total
+                ) ORDER BY v.id) AS itens
             FROM vendas v
             JOIN produto_variacoes var ON v.variacao_id = var.id
             JOIN produtos p ON var.produto_id = p.id
             LEFT JOIN parceiros parc ON v.parceiro_id = parc.id
             ${where}
-            ORDER BY v.id DESC
+            GROUP BY COALESCE(v.venda_lote_codigo, 'V' || v.id), v.parceiro_id, parc.nome_loja
+            ORDER BY MAX(v.data_venda) DESC, MIN(v.id) DESC
             LIMIT 100`;
 
         const result = await db.query(query, params);
@@ -3003,43 +3067,48 @@ app.get('/api/vendas', autenticar, async (req, res) => {
     }
 });
 
-app.delete('/api/vendas/:id', autenticar, async (req, res) => {
+app.delete('/api/vendas/:codigo', autenticar, async (req, res) => {
     try {
-        const { id } = req.params;
+        const { codigo } = req.params;
         await transacao(async (client) => {
-            const vRes = await client.query('SELECT * FROM vendas WHERE id = $1', [id]);
+            const vRes = await client.query(
+                `SELECT * FROM vendas WHERE COALESCE(venda_lote_codigo, 'V' || id) = $1`,
+                [codigo]
+            );
             if (vRes.rows.length === 0) throw new Error('Venda não encontrada.');
-            const venda = vRes.rows[0];
 
-            if (req.user.perfil === 'PARCEIRO' && Number(venda.parceiro_id) !== Number(req.user.parceiro_id)) {
-                throw new Error('Você só pode estornar vendas da sua loja.');
+            if (req.user.perfil === 'PARCEIRO') {
+                const pertence = vRes.rows.every(v => Number(v.parceiro_id) === Number(req.user.parceiro_id));
+                if (!pertence) throw new Error('Você só pode estornar vendas da sua loja.');
             }
 
-            if (venda.parceiro_id) {
-                await client.query(
-                    `UPDATE consignacoes_estoque
-                     SET quantidade_atual = quantidade_atual + $1,
-                         quantidade_vendida = GREATEST(COALESCE(quantidade_vendida, 0) - $1, 0)
-                     WHERE parceiro_id = $2 AND variacao_id = $3`,
-                    [venda.quantidade, venda.parceiro_id, venda.variacao_id]
-                );
-            } else {
-                await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', [venda.quantidade, venda.variacao_id]);
+            for (const venda of vRes.rows) {
+                if (venda.parceiro_id) {
+                    await client.query(
+                        `UPDATE consignacoes_estoque
+                         SET quantidade_atual = quantidade_atual + $1,
+                             quantidade_vendida = GREATEST(COALESCE(quantidade_vendida, 0) - $1, 0)
+                         WHERE parceiro_id = $2 AND variacao_id = $3`,
+                        [venda.quantidade, venda.parceiro_id, venda.variacao_id]
+                    );
+                } else {
+                    await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2', [venda.quantidade, venda.variacao_id]);
+                }
+
+                await client.query('DELETE FROM vendas WHERE id = $1', [venda.id]);
+
+                await registrarMovimentacao(client, {
+                    variacao_id: venda.variacao_id,
+                    parceiro_id: venda.parceiro_id || null,
+                    usuario_id: req.user.id,
+                    tipo: 'ESTORNO_VENDA',
+                    quantidade: venda.quantidade,
+                    estoque_destino: venda.parceiro_id ? `PARCEIRO_${venda.parceiro_id}` : 'CENTRAL',
+                    referencia_tipo: 'VENDA',
+                    referencia_id: venda.id,
+                    observacao: `Estorno de venda ID ${venda.id} (${codigo})`
+                });
             }
-
-            await client.query('DELETE FROM vendas WHERE id = $1', [id]);
-
-            await registrarMovimentacao(client, {
-                variacao_id: venda.variacao_id,
-                parceiro_id: venda.parceiro_id || null,
-                usuario_id: req.user.id,
-                tipo: 'ESTORNO_VENDA',
-                quantidade: venda.quantidade,
-                estoque_destino: venda.parceiro_id ? `PARCEIRO_${venda.parceiro_id}` : 'CENTRAL',
-                referencia_tipo: 'VENDA',
-                referencia_id: id,
-                observacao: `Estorno de venda ID ${id}`
-            });
         });
 
         res.json({ mensagem: '✅ Venda estornada!' });

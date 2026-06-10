@@ -202,8 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btnFiltrarFinanceiro').addEventListener('click', carregar);
     document.getElementById('btnAtualizar').addEventListener('click', carregar);
-    document.getElementById('btnGerarTodos').addEventListener('click', () => gerarFechamento(''));
-    document.getElementById('btnPdfGeral').addEventListener('click', gerarPDFGeral);
+    document.getElementById('btnGerarTodos').addEventListener('click', () => gerarFechamento('').catch(err => App.toast('error', err.message)));
+    document.getElementById('btnPdfGeral').addEventListener('click', () => gerarPDFGeral().catch(err => App.toast('error', err.message)));
 
     document.addEventListener('click', async (e) => {
         const gerarLoja = e.target.closest('[data-gerar-loja]')?.dataset.gerarLoja;
@@ -212,11 +212,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const pdfRepasse = e.target.closest('[data-pdf-repasse]')?.dataset.pdfRepasse;
         const statusId = e.target.closest('[data-status-repasse]')?.dataset.statusRepasse;
         const status = e.target.closest('[data-status-repasse]')?.dataset.status;
-        if (gerarLoja) return gerarFechamento(gerarLoja);
-        if (pdfLoja) return gerarPDFLoja(pdfLoja);
-        if (detalhe) return abrirDetalheRepasse(detalhe);
-        if (pdfRepasse) return gerarPDFRepasse(pdfRepasse);
-        if (statusId) return alterarStatus(statusId, status);
+        try {
+            if (gerarLoja) return await gerarFechamento(gerarLoja);
+            if (pdfLoja) return await gerarPDFLoja(pdfLoja);
+            if (detalhe) return await abrirDetalheRepasse(detalhe);
+            if (pdfRepasse) return await gerarPDFRepasse(pdfRepasse);
+            if (statusId) return await alterarStatus(statusId, status);
+        } catch (err) {
+            App.toast('error', err.message);
+        }
     });
 
     periodoEl.value = mesAtual();

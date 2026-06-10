@@ -178,6 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('statQtdEstoque').textContent = App.number(qtdTotal);
         document.getElementById('statValorEstoque').textContent = App.money(valorTotal);
 
+        const btnDevolverTudo = document.getElementById('btnDevolverTudoEstoque');
+        if (btnDevolverTudo) btnDevolverTudo.classList.toggle('hidden', !(App.isAdmin() && qtdTotal > 0));
+
         if (!estoqueAtual.length) {
             tabelaEstoque.innerHTML = '<tr><td colspan="7" class="empty-state">Selecione uma loja para ver o estoque ou nenhum item encontrado.</td></tr>';
             return;
@@ -332,6 +335,24 @@ document.addEventListener('DOMContentLoaded', () => {
             try { await App.api(`/consignacoes/${devolver}`, { method: 'DELETE' }); App.toast('success', 'Saldo devolvido.'); await carregarDadosLoja(); }
             catch (err) { App.toast('error', err.message); }
         }
+    });
+
+    document.getElementById('btnDevolverTudoEstoque')?.addEventListener('click', async () => {
+        const lojaId = parceiroDestino.value;
+        if (!lojaId) return App.toast('warning', 'Selecione uma loja.');
+        const nomeLoja = parceiros.find(p => String(p.id) === String(lojaId))?.nome_loja || 'esta loja';
+        const ok = await App.confirmDialog({
+            title: 'Devolver todo o estoque da loja?',
+            text: `Todo o saldo consignado de ${nomeLoja} (${App.number(estoqueAtual.reduce((s, i) => s + Number(i.quantidade_atual || 0), 0))} itens) voltará para o estoque central. Esta ação não pode ser desfeita item a item.`,
+            confirmText: 'Devolver tudo',
+            icon: 'warning'
+        });
+        if (!ok.isConfirmed) return;
+        try {
+            const resp = await App.api(`/consignacoes/parceiro/${lojaId}/tudo`, { method: 'DELETE' });
+            App.toast('success', resp.mensagem || 'Estoque devolvido.');
+            await carregarDadosLoja();
+        } catch (err) { App.toast('error', err.message); }
     });
 
     tabelaHistorico.addEventListener('click', async (e) => {
