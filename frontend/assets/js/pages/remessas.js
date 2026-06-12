@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${App.number(item.quantidade_vendida)}</td>
                 <td>${App.money(item.preco_repasse)}${Number(item.preco_repasse_padrao || item.preco_repasse) !== Number(item.preco_repasse || 0) ? `<br><small class="text-muted">padrão ${App.money(item.preco_repasse_padrao)}</small>` : ''}</td>
                 <td><strong>${App.money(item.valor_consignado_atual)}</strong></td>
-                <td>${App.isAdmin() ? `<div class="actions"><button class="icon-btn" data-ajustar="${item.consignacao_id}" title="Ajustar saldo"><i class="bx bx-edit"></i></button><button class="icon-btn" data-devolver="${item.consignacao_id}" title="Devolver saldo atual"><i class="bx bx-undo"></i></button></div>` : '<span class="text-muted">Somente consulta</span>'}</td>
+                <td>${App.isAdmin() ? `<div class="actions"><button class="icon-btn" data-ajustar="${item.consignacao_id}" title="Ajustar saldo"><i class="bx bx-edit"></i></button><button class="icon-btn" data-devolver-qtd="${item.consignacao_id}" title="Devolver quantidade específica"><i class="bx bx-undo"></i></button><button class="icon-btn" data-devolver="${item.consignacao_id}" title="Devolver todo o saldo deste produto"><i class="bx bx-chevrons-left"></i></button></div>` : '<span class="text-muted">Somente consulta</span>'}</td>
             </tr>`).join('');
     }
 
@@ -321,6 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tabelaEstoque.addEventListener('click', async (e) => {
         const ajustar = e.target.closest('[data-ajustar]')?.dataset.ajustar;
+        const devolverQtd = e.target.closest('[data-devolver-qtd]')?.dataset.devolverQtd;
         const devolver = e.target.closest('[data-devolver]')?.dataset.devolver;
         if (ajustar) {
             const atual = estoqueAtual.find(i => String(i.consignacao_id) === String(ajustar));
@@ -329,8 +330,32 @@ document.addEventListener('DOMContentLoaded', () => {
             try { await App.api(`/consignacoes/${ajustar}`, { method: 'PUT', body: JSON.stringify({ nova_quantidade: result.value }) }); App.toast('success', 'Quantidade ajustada.'); await carregarDadosLoja(); }
             catch (err) { App.toast('error', err.message); }
         }
+        if (devolverQtd) {
+            const atual = estoqueAtual.find(i => String(i.consignacao_id) === String(devolverQtd));
+            const max = Number(atual?.quantidade_atual || 0);
+            if (max <= 0) return App.toast('warning', 'Não há saldo para devolver.');
+            const result = await Swal.fire({
+                title: 'Devolver quantidade',
+                html: `<div style="text-align:left;margin-bottom:8px;"><b>${App.escapeHtml(atual?.produto_nome || '')}</b><br><small>${App.escapeHtml(atual?.variacao || '')}</small><br>Saldo atual: <strong>${App.number(max)}</strong></div>`,
+                input: 'number',
+                inputLabel: 'Quantas unidades devolver ao estoque central?',
+                inputValue: max,
+                inputAttributes: { min: 1, max: String(max), step: 1 },
+                showCancelButton: true,
+                confirmButtonText: 'Devolver'
+            });
+            if (!result.isConfirmed) return;
+            const qtdDevolver = Number(result.value);
+            if (!Number.isFinite(qtdDevolver) || qtdDevolver <= 0) return App.toast('warning', 'Informe uma quantidade válida.');
+            if (qtdDevolver > max) return App.toast('warning', 'Quantidade maior que o saldo atual.');
+            try {
+                await App.api(`/consignacoes/${devolverQtd}`, { method: 'PUT', body: JSON.stringify({ nova_quantidade: max - qtdDevolver }) });
+                App.toast('success', `${App.number(qtdDevolver)} unidade(s) devolvida(s) ao estoque central.`);
+                await carregarDadosLoja();
+            } catch (err) { App.toast('error', err.message); }
+        }
         if (devolver) {
-            const ok = await App.confirmDialog({ title: 'Devolver saldo atual?', text: 'A quantidade atual deste produto voltará para o estoque central. Para histórico por lote, prefira estornar pelo histórico de remessas.', confirmText: 'Confirmar' });
+            const ok = await App.confirmDialog({ title: 'Devolver todo o saldo deste produto?', text: 'Toda a quantidade atual deste produto voltará para o estoque central. Para histórico por lote, prefira estornar pelo histórico de remessas.', confirmText: 'Confirmar' });
             if (!ok.isConfirmed) return;
             try { await App.api(`/consignacoes/${devolver}`, { method: 'DELETE' }); App.toast('success', 'Saldo devolvido.'); await carregarDadosLoja(); }
             catch (err) { App.toast('error', err.message); }
