@@ -29,7 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
         repasses = await App.api(`/financeiro/v3/repasses?${qs.toString()}`);
         renderResumo();
         renderTabelaLojas();
+        renderProdutosVendidos();
         renderRepasses();
+    }
+
+    function formatPercent(valor) {
+        return `${Number(valor || 0).toFixed(1).replace('.', ',')}%`;
     }
 
     function renderResumo() {
@@ -38,6 +43,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('finLiquido').textContent = App.money(r.total_liquido || 0);
         document.getElementById('finComissao').textContent = App.money(r.total_margem || 0);
         document.getElementById('finPendente').textContent = App.money(r.total_pendente || 0);
+        document.getElementById('finFaturamento').textContent = App.money(r.total_vendido || 0);
+        document.getElementById('finGastos').textContent = App.money(r.total_gastos || 0);
+        document.getElementById('finLucroLiquido').textContent = App.money(r.total_lucro_liquido || 0);
+        document.getElementById('finMargemMedia').textContent = formatPercent(r.margem_lucro_media);
     }
 
     function statusBadge(st) {
@@ -69,6 +78,38 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="icon-btn" title="PDF da loja" data-pdf-loja="${l.parceiro_id}"><i class="bx bx-printer"></i></button>
                 </div></td>
             </tr>`).join('');
+    }
+
+    function renderProdutosVendidos() {
+        const tbody = document.getElementById('tabelaProdutosVendidos');
+        const tfoot = document.getElementById('rodapeProdutosVendidos');
+        const linhas = resumoAtual.produtos || [];
+        if (!linhas.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum produto vendido no período.</td></tr>';
+            tfoot.innerHTML = '';
+            return;
+        }
+        tbody.innerHTML = linhas.map(p => `
+            <tr>
+                <td><strong>${App.escapeHtml(p.produto_nome || '-')}</strong></td>
+                <td>${App.escapeHtml(p.variacao || '-')}</td>
+                <td>${App.escapeHtml(p.sku || '-')}</td>
+                <td>${App.number(p.quantidade_vendida || 0)}</td>
+                <td>${App.money(p.valor_faturado || 0)}</td>
+                <td>${App.money(p.valor_custo || 0)}</td>
+                <td><strong>${App.money(p.valor_lucro || 0)}</strong></td>
+                <td>${formatPercent(p.margem_lucro)}</td>
+            </tr>`).join('');
+
+        const r = resumoAtual.resumo || {};
+        tfoot.innerHTML = `
+            <tr style="font-weight:600;">
+                <td colspan="4">Totais do período</td>
+                <td>${App.money(r.total_vendido || 0)}</td>
+                <td>${App.money(r.total_gastos || 0)}</td>
+                <td>${App.money(r.total_lucro_liquido || 0)}</td>
+                <td>${formatPercent(r.margem_lucro_media)}</td>
+            </tr>`;
     }
 
     function renderRepasses() {
@@ -200,10 +241,51 @@ document.addEventListener('DOMContentLoaded', () => {
         doc.save(`${nome}.pdf`.replace(/[\s/\\]+/g, '_'));
     }
 
+    async function gerarPDFProdutos() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const r = resumoAtual.resumo || {};
+        const produtos = resumoAtual.produtos || [];
+
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text('PERSONALIZE Hub', 105, 16, { align: 'center' });
+        doc.setFontSize(12); doc.text('RELATÓRIO DETALHADO DE PRODUTOS VENDIDOS', 105, 25, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+        doc.text(`Mês referência: ${resumoAtual.periodo || '-'}`, 14, 38);
+        doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, 120, 38);
+
+        const startY = 48;
+        doc.autoTable({
+            startY,
+            head: [['Produto', 'Variação', 'SKU', 'Qtd', 'Faturado', 'Gasto', 'Lucro', 'Margem']],
+            body: produtos.map(p => [
+                p.produto_nome || '-',
+                p.variacao || '-',
+                p.sku || '-',
+                String(p.quantidade_vendida || 0),
+                App.money(p.valor_faturado || 0),
+                App.money(p.valor_custo || 0),
+                App.money(p.valor_lucro || 0),
+                formatPercent(p.margem_lucro)
+            ]),
+            foot: [['Totais', '', '', '', App.money(r.total_vendido || 0), App.money(r.total_gastos || 0), App.money(r.total_lucro_liquido || 0), formatPercent(r.margem_lucro_media)]],
+            theme: 'grid', styles: { fontSize: 8, overflow: 'linebreak' }, columnStyles: { 0: { cellWidth: 52 } },
+            footStyles: { fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [0, 0, 0] }
+        });
+
+        let y = (doc.lastAutoTable?.finalY || startY) + 10;
+        if (y > 260) { doc.addPage(); y = 30; }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+        const texto = 'Este relatório considera o faturamento (valor vendido), o gasto (custo de produção das peças vendidas) e o lucro líquido (faturamento menos gasto) de cada produto no período selecionado.';
+        doc.text(doc.splitTextToSize(texto, 182), 14, y);
+
+        doc.save(`relatorio_produtos_${resumoAtual.periodo}.pdf`.replace(/[\s/\\]+/g, '_'));
+    }
+
     document.getElementById('btnFiltrarFinanceiro').addEventListener('click', carregar);
     document.getElementById('btnAtualizar').addEventListener('click', carregar);
     document.getElementById('btnGerarTodos').addEventListener('click', () => gerarFechamento('').catch(err => App.toast('error', err.message)));
     document.getElementById('btnPdfGeral').addEventListener('click', () => gerarPDFGeral().catch(err => App.toast('error', err.message)));
+    document.getElementById('btnPdfProdutos').addEventListener('click', () => gerarPDFProdutos().catch(err => App.toast('error', err.message)));
 
     document.addEventListener('click', async (e) => {
         const gerarLoja = e.target.closest('[data-gerar-loja]')?.dataset.gerarLoja;

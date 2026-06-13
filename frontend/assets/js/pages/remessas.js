@@ -7,9 +7,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let lote = [];
     let estoqueAtual = [];
     let historicoRemessas = [];
+    let remessasReservadas = [];
     let produtoSelecionado = null;
 
     const parceiroDestino = document.getElementById('parceiroDestino');
+    const semLojaDefinida = document.getElementById('semLojaDefinida');
     const buscaProduto = document.getElementById('buscaProdutoRemessa');
     const sugestoes = document.getElementById('sugestoesProduto');
     const produtoBox = document.getElementById('produtoSelecionadoBox');
@@ -17,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabelaLote = document.getElementById('tabelaLote');
     const tabelaEstoque = document.getElementById('tabelaEstoque');
     const tabelaHistorico = document.getElementById('tabelaHistoricoRemessas');
+    const tabelaReservadas = document.getElementById('tabelaReservadas');
 
     function parseMoeda(valor, padrao = 0) {
         if (valor === undefined || valor === null || String(valor).trim() === '') return padrao;
@@ -98,10 +101,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderLote();
         await carregarDadosLoja();
+        await carregarReservadas();
     }
 
     async function carregarDadosLoja() {
         await Promise.all([carregarEstoque(), carregarHistoricoRemessas()]);
+    }
+
+    async function carregarReservadas() {
+        const card = document.getElementById('cardRemessasReservadas');
+        if (!App.isAdmin()) { remessasReservadas = []; card?.classList.add('hidden'); return; }
+        card?.classList.remove('hidden');
+        const resposta = await App.api('/remessas?sem_parceiro=1');
+        remessasReservadas = Array.isArray(resposta) ? resposta : (resposta.linhas || []);
+        renderReservadas();
+    }
+
+    function renderReservadas() {
+        if (!remessasReservadas.length) {
+            tabelaReservadas.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma remessa em estoque reservado.</td></tr>';
+            return;
+        }
+        tabelaReservadas.innerHTML = remessasReservadas.map(r => `
+            <tr>
+                <td><strong>${App.escapeHtml(r.codigo || `#${r.id}`)}</strong></td>
+                <td>${App.escapeHtml(r.data_formatada || '')}</td>
+                <td>${App.number(r.total_itens)}</td>
+                <td>${App.number(r.total_quantidade)} <small class="text-muted">/ est. ${App.number(r.total_estornado)}</small></td>
+                <td><strong>${App.money(r.valor_total)}</strong></td>
+                <td>${App.escapeHtml(r.observacao || '-')}</td>
+                <td><div class="actions">
+                    <button class="icon-btn" data-ver-reservada="${r.id}" title="Ver detalhes"><i class="bx bx-show"></i></button>
+                    <button class="icon-btn" data-atribuir-loja="${r.id}" title="Atribuir loja parceira"><i class="bx bx-store"></i></button>
+                    <button class="icon-btn" data-estornar-reservada="${r.id}" title="Estornar (devolver ao estoque central)"><i class="bx bx-undo"></i></button>
+                </div></td>
+            </tr>`).join('');
     }
 
     function renderSugestoes() {
@@ -130,8 +164,45 @@ document.addEventListener('DOMContentLoaded', () => {
         produtoBox.classList.remove('hidden');
         const precoPadrao = Number(produtoSelecionado.preco_repasse || 0);
         valorConsignacaoRemessa.value = formatarInputMoeda(precoPadrao);
+        renderProdutoBox();
+    }
+
+    function renderProdutoBox() {
+        if (!produtoSelecionado) return;
+        const precoPadrao = Number(produtoSelecionado.preco_repasse || 0);
         produtoBox.innerHTML = `${App.imageTag(produtoSelecionado.imagem_url)}<div><strong>${App.escapeHtml(produtoSelecionado.nome)}</strong><p class="text-muted">${App.escapeHtml(produtoSelecionado.variacao || '')} • Estoque central ${App.number(produtoSelecionado.estoque_central)} • Valor padrão ${App.money(precoPadrao)}</p><small class="text-muted">Você pode mudar o valor de consignação só para esta remessa antes de adicionar ao lote.</small></div>`;
     }
+
+    // Atualiza estoque central e estoque consignado em segundo plano, sem
+    // perder o que já foi preenchido (lote, observação, produto selecionado etc.)
+    async function atualizarDadosSilencioso() {
+        try {
+            if (App.isAdmin()) {
+                const lista = await App.api('/produtos');
+                for (const novo of lista) {
+                    const atual = produtos.find(p => String(p.id) === String(novo.id));
+                    if (atual) Object.assign(atual, novo);
+                    else produtos.push(novo);
+                }
+                if (produtoSelecionado) {
+                    const atualizado = produtos.find(p => String(p.id) === String(produtoSelecionado.id));
+                    if (atualizado) {
+                        produtoSelecionado.estoque_central = atualizado.estoque_central;
+                        renderProdutoBox();
+                    }
+                }
+            }
+            if (parceiroDestino.value) {
+                estoqueAtual = await App.api(`/consignacoes/${parceiroDestino.value}`);
+                renderEstoque();
+            }
+        } catch { /* atualização silenciosa: ignora falhas */ }
+    }
+
+    setInterval(atualizarDadosSilencioso, 20000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) atualizarDadosSilencioso(); });
+    window.addEventListener('focus', atualizarDadosSilencioso);
+    buscaProduto.addEventListener('focus', atualizarDadosSilencioso);
 
     function renderLote() {
         if (!lote.length) {
@@ -219,8 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td><div class="actions">
                     <button class="icon-btn" data-ver-remessa="${r.id}" title="Ver detalhes"><i class="bx bx-show"></i></button>
                     <button class="icon-btn" data-pdf-remessa="${r.id}" title="PDF da remessa"><i class="bx bx-printer"></i></button>
-                    ${String(r.status_assinatura || '').toUpperCase() !== 'ASSINADA' ? `<button class="icon-btn" data-assinar-remessa="${r.id}" title="Assinar recebimento"><i class="bx bx-pen"></i></button>` : ''}
-                    ${App.isAdmin() ? `<button class="icon-btn" data-estornar-remessa="${r.id}" title="Estornar remessa"><i class="bx bx-undo"></i></button>` : ''}
+                    ${String(r.status_assinatura || '').toUpperCase() !== 'ASSINADA' && String(r.status || '').toUpperCase() !== 'ESTORNADA' ? `<button class="icon-btn" data-assinar-remessa="${r.id}" title="Assinar recebimento"><i class="bx bx-pen"></i></button>` : ''}
+                    ${App.isAdmin() && String(r.status || '').toUpperCase() !== 'ESTORNADA' ? `<button class="icon-btn" data-estornar-remessa="${r.id}" title="Estornar remessa"><i class="bx bx-undo"></i></button>` : ''}
                 </div></td>
             </tr>`).join('');
     }
@@ -252,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btnAddLote').addEventListener('click', (e) => {
         e.preventDefault();
-        if (!parceiroDestino.value) return App.toast('warning', 'Selecione a loja antes de montar a remessa.');
+        if (!parceiroDestino.value && !semLojaDefinida?.checked) return App.toast('warning', 'Selecione a loja ou marque "Criar sem loja definida" antes de montar a remessa.');
         if (!produtoSelecionado) return App.toast('warning', 'Busque e selecione um produto.');
         const quantidade = Number(document.getElementById('qtdRemessa').value || 0);
         if (quantidade <= 0) return App.toast('warning', 'Informe uma quantidade válida.');
@@ -292,9 +363,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnAtualizarTudo').addEventListener('click', carregarBase);
 
     document.getElementById('btnEnviarLote').addEventListener('click', async () => {
-        if (!parceiroDestino.value) return App.toast('warning', 'Selecione uma loja.');
+        const semLoja = !!semLojaDefinida?.checked;
+        if (!parceiroDestino.value && !semLoja) return App.toast('warning', 'Selecione uma loja ou marque "Criar sem loja definida".');
         if (!lote.length) return App.toast('warning', 'Adicione produtos ao lote.');
-        const lojaId = parceiroDestino.value;
+        const lojaId = semLoja ? null : parceiroDestino.value;
         try {
             const resp = await App.api('/consignacoes/lote', {
                 method: 'POST',
@@ -308,10 +380,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const remessaId = resp.remessa?.id;
             lote = [];
             document.getElementById('observacaoRemessa').value = '';
+            if (semLojaDefinida) semLojaDefinida.checked = false;
             renderLote();
             await carregarBase();
-            parceiroDestino.value = lojaId;
-            await carregarDadosLoja();
+            if (lojaId) {
+                parceiroDestino.value = lojaId;
+                await carregarDadosLoja();
+            }
             if (remessaId) {
                 const ok = await Swal.fire({ title: 'Remessa criada', text: 'Deseja gerar o PDF desta remessa agora?', icon: 'success', showCancelButton: true, confirmButtonText: 'Gerar PDF', cancelButtonText: 'Depois' });
                 if (ok.isConfirmed) await gerarPDFRemessa(remessaId);
@@ -388,8 +463,37 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ver) return abrirDetalhesRemessa(ver);
         if (pdf) return gerarPDFRemessa(pdf);
         if (assinar) return abrirAssinaturaRemessa(assinar);
-        if (estornar) return estornarRemessa(estornar);
+        if (estornar) return estornarRemessa(estornar, carregarDadosLoja, historicoRemessas);
     });
+
+    tabelaReservadas?.addEventListener('click', async (e) => {
+        const ver = e.target.closest('[data-ver-reservada]')?.dataset.verReservada;
+        const atribuir = e.target.closest('[data-atribuir-loja]')?.dataset.atribuirLoja;
+        const estornar = e.target.closest('[data-estornar-reservada]')?.dataset.estornarReservada;
+        if (ver) return abrirDetalhesRemessa(ver);
+        if (atribuir) return atribuirLojaRemessa(atribuir);
+        if (estornar) return estornarRemessa(estornar, carregarReservadas, remessasReservadas);
+    });
+
+    async function atribuirLojaRemessa(id) {
+        const opcoes = parceiros.filter(p => String(p.status || '').toUpperCase() === 'ATIVO');
+        if (!opcoes.length) return App.toast('warning', 'Nenhuma loja ativa disponível.');
+        const { value: lojaId, isConfirmed } = await Swal.fire({
+            title: 'Atribuir loja parceira',
+            input: 'select',
+            inputOptions: Object.fromEntries(opcoes.map(p => [p.id, p.nome_loja])),
+            inputPlaceholder: 'Selecione a loja...',
+            showCancelButton: true,
+            confirmButtonText: 'Atribuir'
+        });
+        if (!isConfirmed || !lojaId) return;
+        try {
+            const resp = await App.api(`/remessas/${id}/parceiro`, { method: 'PUT', body: JSON.stringify({ parceiro_id: lojaId }) });
+            App.toast('success', resp.mensagem || 'Loja atribuída.');
+            await carregarReservadas();
+            if (String(parceiroDestino.value) === String(lojaId)) await carregarDadosLoja();
+        } catch (err) { App.toast('error', err.message); }
+    }
 
     async function abrirDetalhesRemessa(id) {
         try {
@@ -446,12 +550,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { App.toast('error', err.message); }
     }
 
-    async function estornarRemessa(id) {
-        const rem = historicoRemessas.find(r => String(r.id) === String(id));
+    async function estornarRemessa(id, recarregar = carregarDadosLoja, lista = historicoRemessas) {
+        const rem = lista.find(r => String(r.id) === String(id));
         if (String(rem?.status || '').toUpperCase() === 'ESTORNADA') return App.toast('warning', 'Essa remessa já foi estornada.');
         const motivo = await Swal.fire({
             title: 'Estornar remessa?',
-            text: 'O saldo disponível na loja voltará para o estoque central. Se parte já foi vendida, o estorno será parcial.',
+            text: 'O saldo desta remessa voltará para o estoque central. Se parte já foi vendida, o estorno será parcial.',
             input: 'textarea',
             inputLabel: 'Motivo/observação',
             inputValue: 'Estorno administrativo de remessa',
@@ -464,7 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const resp = await App.api(`/remessas/${id}/estornar`, { method: 'POST', body: JSON.stringify({ motivo: motivo.value }) });
             App.toast(resp.resultado?.parcial ? 'warning' : 'success', resp.mensagem || 'Remessa estornada.');
-            await carregarDadosLoja();
+            await recarregar();
         } catch (err) { App.toast('error', err.message); }
     }
 

@@ -268,6 +268,47 @@ async function migrarVendasLote() {
 migrarVendasLote();
 
 // =========================================================
+// V7.2 — Migração: remessas em stand-by (estoque reservado
+// antes da assinatura) e remessa sem loja definida
+// =========================================================
+async function migrarRemessasStandby() {
+    const ops = [
+        `ALTER TABLE remessas ALTER COLUMN parceiro_id DROP NOT NULL`
+    ];
+    for (const sql of ops) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V7.2:', e.message); }
+    }
+}
+migrarRemessasStandby();
+
+// =========================================================
+// V7.3 — Migração: cadastro de insumos para precificação
+// =========================================================
+async function migrarInsumos() {
+    const ops = [
+        `CREATE TABLE IF NOT EXISTS insumos (
+            id             SERIAL PRIMARY KEY,
+            nome           VARCHAR(150) NOT NULL,
+            categoria      VARCHAR(80),
+            unidade        VARCHAR(20) DEFAULT 'un',
+            custo_unitario NUMERIC(12,4) DEFAULT 0,
+            fornecedor     VARCHAR(150),
+            estoque_atual  NUMERIC(12,3) DEFAULT 0,
+            estoque_minimo NUMERIC(12,3) DEFAULT 0,
+            status         VARCHAR(20) DEFAULT 'ATIVO',
+            observacao     TEXT,
+            criado_em      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_insumos_nome ON insumos(nome)`
+    ];
+    for (const sql of ops) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V7.3:', e.message); }
+    }
+}
+migrarInsumos();
+
+// =========================================================
 // V6.8 — Migração: histórico e responsável no CRM
 // =========================================================
 async function migrarColunasV68() {
@@ -606,6 +647,26 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
         try { await client.query(`ROLLBACK TO SAVEPOINT ${sp}`); } catch (_) {}
         try { await client.query(`RELEASE SAVEPOINT ${sp}`); } catch (_) {}
         console.warn('⚠️ Falha ao salvar histórico de precificação. Produto será salvo normalmente:', err.message);
+    }
+}
+
+// Dá baixa no estoque dos insumos cadastrados usados na precificação do produto
+async function baixarEstoqueInsumos(client, itensPrecificacaoJson, usuarioId, produtoNome) {
+    let itens;
+    try { itens = JSON.parse(itensPrecificacaoJson || '{}'); } catch { return; }
+    const materiais = Array.isArray(itens?.materiais) ? itens.materiais : [];
+    for (const m of materiais) {
+        const insumoId = toInt(m?.insumo_id, 0);
+        const qtd = parseMoeda(m?.quantidade);
+        if (!insumoId || qtd <= 0) continue;
+        const r = await client.query(
+            `UPDATE insumos SET estoque_atual = estoque_atual - $1, atualizado_em = CURRENT_TIMESTAMP WHERE id = $2 RETURNING nome, estoque_atual, unidade`,
+            [qtd, insumoId]
+        );
+        if (r.rows.length) {
+            const ins = r.rows[0];
+            await registrarAuditoria(usuarioId, `Baixa de ${qtd} ${ins.unidade} de "${ins.nome}" usado na precificação do produto "${produtoNome}" (estoque restante: ${ins.estoque_atual})`);
+        }
     }
 }
 
@@ -1147,6 +1208,67 @@ app.delete('/api/maquinas/:id', autenticar, somenteAdmin, async (req, res) => {
 });
 
 // =========================================================
+// INSUMOS / MATERIAIS PARA PRECIFICAÇÃO
+// =========================================================
+
+app.get('/api/insumos', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const r = await db.query(`SELECT * FROM insumos ORDER BY status ASC, nome ASC, id DESC`);
+        res.json(r.rows);
+    } catch (e) {
+        console.error('❌ Erro insumos:', e);
+        res.status(500).json({ erro: 'Erro ao listar insumos: ' + e.message });
+    }
+});
+
+app.post('/api/insumos', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const body = req.body || {};
+        if (!body.nome) return res.status(400).json({ erro: 'Nome do insumo é obrigatório.' });
+        const r = await db.query(`
+            INSERT INTO insumos (nome, unidade, custo_unitario, estoque_atual, status, observacao)
+            VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+            [body.nome, body.unidade || 'un', parseMoeda(body.custo_unitario), parseMoeda(body.estoque_atual), body.status || 'ATIVO', body.observacao || null]
+        );
+        await registrarAuditoria(req.user.id, `Cadastrou insumo ${body.nome}`);
+        res.status(201).json(r.rows[0]);
+    } catch (e) {
+        console.error('❌ Erro cadastrar insumo:', e);
+        res.status(500).json({ erro: 'Erro ao cadastrar insumo: ' + e.message });
+    }
+});
+
+app.put('/api/insumos/:id', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const r = await db.query(`
+            UPDATE insumos SET
+                nome = COALESCE($1, nome), unidade = COALESCE($2, unidade),
+                custo_unitario = $3, estoque_atual = $4, status = COALESCE($5, status), observacao = $6,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = $7 RETURNING *`,
+            [body.nome || null, body.unidade || null, parseMoeda(body.custo_unitario), parseMoeda(body.estoque_atual), body.status || null, body.observacao || null, req.params.id]
+        );
+        if (r.rows.length === 0) return res.status(404).json({ erro: 'Insumo não encontrado.' });
+        await registrarAuditoria(req.user.id, `Editou insumo ID ${req.params.id}`);
+        res.json(r.rows[0]);
+    } catch (e) {
+        console.error('❌ Erro editar insumo:', e);
+        res.status(500).json({ erro: 'Erro ao editar insumo: ' + e.message });
+    }
+});
+
+app.delete('/api/insumos/:id', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        await db.query('DELETE FROM insumos WHERE id = $1', [req.params.id]);
+        await registrarAuditoria(req.user.id, `Excluiu insumo ID ${req.params.id}`);
+        res.json({ mensagem: 'Insumo excluído.' });
+    } catch (e) {
+        res.status(500).json({ erro: 'Erro ao excluir insumo: ' + e.message });
+    }
+});
+
+// =========================================================
 // PRODUTOS
 // =========================================================
 
@@ -1269,6 +1391,7 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imag
             );
 
             await salvarPrecificacaoProduto(client, produtoId, vNova.rows[0].id, req.body, req.user.id);
+            await baixarEstoqueInsumos(client, req.body.itens_precificacao_json, req.user.id, nome);
 
             if (imagensUrls.length) {
                 await salvarGaleriaProduto(client, produtoId, imagensUrls);
@@ -1462,6 +1585,34 @@ app.patch('/api/produtos/:id/visibilidade', autenticar, somenteAdmin, async (req
     } catch (e) {
         console.error('❌ Erro visibilidade produto:', e);
         res.status(500).json({ erro: 'Erro ao atualizar visibilidade: ' + e.message });
+    }
+});
+
+// Ajuste rápido de preço de venda, repasse e custo direto na lista de produtos
+app.patch('/api/produtos/:id/precos', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { preco_venda, preco_repasse, custo_producao } = req.body;
+        const result = await db.query(
+            `UPDATE produto_variacoes
+             SET preco_venda = COALESCE($1, preco_venda),
+                 preco_repasse = COALESCE($2, preco_repasse),
+                 custo_producao = COALESCE($3, custo_producao)
+             WHERE produto_id = $4
+             RETURNING preco_venda, preco_repasse, custo_producao`,
+            [
+                preco_venda !== undefined && preco_venda !== '' ? parseMoeda(preco_venda) : null,
+                preco_repasse !== undefined && preco_repasse !== '' ? parseMoeda(preco_repasse) : null,
+                custo_producao !== undefined && custo_producao !== '' ? parseMoeda(custo_producao) : null,
+                id
+            ]
+        );
+        if (!result.rows.length) return res.status(404).json({ erro: 'Produto não encontrado.' });
+        await registrarAuditoria(req.user.id, `Ajustou preços do produto ID ${id} (venda/repasse/custo)`);
+        res.json({ mensagem: '✅ Preços atualizados!', variacao: result.rows[0] });
+    } catch (e) {
+        console.error('❌ Erro ajuste rápido de preços:', e);
+        res.status(500).json({ erro: 'Erro ao ajustar preços: ' + e.message });
     }
 });
 
@@ -2321,7 +2472,10 @@ app.post('/api/solicitacoes-kanban/:tipo/:id/gerar-remessa', autenticar, somente
             if (!v.rows.length) throw new Error('Variação não encontrada.');
             if (Number(v.rows[0].estoque_central || 0) < qtd) throw new Error('Estoque central insuficiente para gerar remessa.');
             const codigo = gerarCodigo('REM');
-            const rem = await client.query(`INSERT INTO remessas (codigo, parceiro_id, usuario_id, status, observacao) VALUES ($1,$2,$3,'ENVIADA',$4) RETURNING *`, [codigo, row.parceiro_id, req.user.id, `Remessa gerada a partir da solicitação ${row.codigo || row.id}`]);
+            // Remessa automática já entrega o estoque direto na consignação do parceiro
+            // (sem etapa de assinatura), então marcamos como 'ASSINADA' para manter
+            // consistência com o fluxo de stand-by (lotes/estorno usam esse campo).
+            const rem = await client.query(`INSERT INTO remessas (codigo, parceiro_id, usuario_id, status, observacao, status_assinatura) VALUES ($1,$2,$3,'ENVIADA',$4,'ASSINADA') RETURNING *`, [codigo, row.parceiro_id, req.user.id, `Remessa gerada a partir da solicitação ${row.codigo || row.id}`]);
             const remessaId = rem.rows[0].id;
             const preco = Number(v.rows[0].preco_repasse || 0);
             await client.query('UPDATE produto_variacoes SET estoque_central = estoque_central - $1 WHERE id=$2', [qtd, row.variacao_id]);
@@ -2365,6 +2519,7 @@ app.get('/api/consignacoes/:parceiro_id', autenticar, async (req, res) => {
                 JOIN remessa_itens ri ON ri.remessa_id = r.id
                 WHERE r.parceiro_id = $1
                   AND COALESCE(r.status, '') <> 'ESTORNADA'
+                  AND r.status_assinatura = 'ASSINADA'
                 GROUP BY r.parceiro_id, ri.variacao_id
             )
             SELECT
@@ -2423,19 +2578,22 @@ async function processarConsignacoesLote(req, res) {
         const { parceiro_id, itens, observacao } = req.body;
         const parceiroId = toInt(parceiro_id, 0);
 
-        if (!parceiroId) return res.status(400).json({ erro: 'Selecione uma loja válida.' });
         if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Lista de produtos vazia.' });
 
         const resultado = await transacao(async (client) => {
-            const loja = await client.query('SELECT id, nome_loja FROM parceiros WHERE id = $1', [parceiroId]);
-            if (loja.rows.length === 0) throw new Error('Loja parceira não encontrada.');
+            let nomeLoja = null;
+            if (parceiroId) {
+                const loja = await client.query('SELECT id, nome_loja FROM parceiros WHERE id = $1', [parceiroId]);
+                if (loja.rows.length === 0) throw new Error('Loja parceira não encontrada.');
+                nomeLoja = loja.rows[0].nome_loja;
+            }
 
             const codigo = gerarCodigo('REM');
             const remessa = await client.query(
                 `INSERT INTO remessas (codigo, parceiro_id, usuario_id, status, observacao, status_assinatura)
                  VALUES ($1, $2, $3, 'ENVIADA', $4, 'PENDENTE')
                  RETURNING id, codigo`,
-                [codigo, parceiroId, req.user.id, observacao || null]
+                [codigo, parceiroId || null, req.user.id, observacao || null]
             );
 
             const remessaId = remessa.rows[0].id;
@@ -2490,29 +2648,8 @@ async function processarConsignacoesLote(req, res) {
                     [qtd, produto.variacao_id]
                 );
 
-                const ex = await client.query(
-                    'SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2',
-                    [parceiroId, produto.variacao_id]
-                );
-
-                if (ex.rows.length > 0) {
-                    await client.query(
-                        `UPDATE consignacoes_estoque
-                         SET quantidade_atual = quantidade_atual + $1,
-                             quantidade_enviada = COALESCE(quantidade_enviada, 0) + $1,
-                             data_ultimo_envio = CURRENT_TIMESTAMP
-                         WHERE id = $2`,
-                        [qtd, ex.rows[0].id]
-                    );
-                } else {
-                    await client.query(
-                        `INSERT INTO consignacoes_estoque
-                            (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual, quantidade_vendida)
-                         VALUES ($1, $2, $3, $3, 0)`,
-                        [parceiroId, produto.variacao_id, qtd]
-                    );
-                }
-
+                // Estoque sai do central e fica em "stand-by" (remessa_itens) até a
+                // assinatura do parceiro — só então entra em consignacoes_estoque.
                 await client.query(
                     `INSERT INTO remessa_itens (
                         remessa_id,
@@ -2556,15 +2693,17 @@ async function processarConsignacoesLote(req, res) {
                 await registrarMovimentacao(client, {
                     produto_id: produto.produto_id,
                     variacao_id: produto.variacao_id,
-                    parceiro_id: parceiroId,
+                    parceiro_id: parceiroId || null,
                     usuario_id: req.user.id,
                     tipo: 'REMESSA_ENVIADA',
                     quantidade: qtd,
                     estoque_origem: 'CENTRAL',
-                    estoque_destino: `PARCEIRO_${parceiroId}`,
+                    estoque_destino: 'STANDBY',
                     referencia_tipo: 'REMESSA',
                     referencia_id: remessaId,
-                    observacao: `Remessa ${codigo} enviada para ${loja.rows[0].nome_loja}. Valor consignação unit.: R$ ${precoConsignacao.toFixed(2)}`
+                    observacao: parceiroId
+                        ? `Remessa ${codigo} reservada para ${nomeLoja}, aguardando assinatura. Valor consignação unit.: R$ ${precoConsignacao.toFixed(2)}`
+                        : `Remessa ${codigo} reservada sem loja definida, aguardando atribuição. Valor consignação unit.: R$ ${precoConsignacao.toFixed(2)}`
                 });
 
                 itensRegistrados.push({
@@ -2580,8 +2719,15 @@ async function processarConsignacoesLote(req, res) {
             return { id: remessaId, codigo, itens: itensRegistrados };
         });
 
-        await registrarAuditoria(req.user.id, `Criou remessa ${resultado.codigo} para parceiro ID ${parceiroId}`);
-        res.status(201).json({ mensagem: '📦 Remessa em lote enviada!', remessa: resultado });
+        await registrarAuditoria(req.user.id, parceiroId
+            ? `Criou remessa ${resultado.codigo} (estoque reservado, aguardando assinatura) para parceiro ID ${parceiroId}`
+            : `Criou remessa ${resultado.codigo} (estoque reservado, sem loja definida)`);
+        res.status(201).json({
+            mensagem: parceiroId
+                ? '📦 Remessa criada! O estoque saiu do central e ficará reservado até o parceiro assinar o recebimento.'
+                : '📦 Remessa criada sem loja definida! O estoque saiu do central e ficará reservado até uma loja ser atribuída e assinar o recebimento.',
+            remessa: resultado
+        });
     } catch (e) {
         console.error('❌ Erro remessa lote:', e);
         res.status(400).json({ erro: e.message || 'Erro ao processar remessa.' });
@@ -2663,6 +2809,8 @@ app.get('/api/remessas', autenticar, async (req, res) => {
         if (filtroParceiro) {
             params.push(Number(filtroParceiro));
             where = `WHERE r.parceiro_id = $${params.length}`;
+        } else if (req.user.perfil !== 'PARCEIRO' && String(req.query.sem_parceiro || '') === '1') {
+            where = `WHERE r.parceiro_id IS NULL AND COALESCE(r.status, '') <> 'ESTORNADA'`;
         }
 
         const sql = `
@@ -2770,9 +2918,13 @@ app.post('/api/remessas/:id/assinar', autenticar, async (req, res) => {
         if (!nome_responsavel || !assinatura_base64) return res.status(400).json({ erro: 'Nome e assinatura são obrigatórios.' });
 
         await transacao(async (client) => {
-            const r = await client.query('SELECT id, parceiro_id FROM remessas WHERE id = $1', [id]);
+            const r = await client.query('SELECT id, codigo, parceiro_id, status, status_assinatura FROM remessas WHERE id = $1', [id]);
             if (r.rows.length === 0) throw new Error('Remessa não encontrada.');
-            if (!garantirParceiroPermitido(req, r.rows[0].parceiro_id)) throw new Error('Acesso negado para assinar esta remessa.');
+            const remessa = r.rows[0];
+            if (!garantirParceiroPermitido(req, remessa.parceiro_id)) throw new Error('Acesso negado para assinar esta remessa.');
+            if (String(remessa.status_assinatura || '').toUpperCase() === 'ASSINADA') throw new Error('Esta remessa já foi assinada.');
+            if (String(remessa.status || '').toUpperCase() === 'ESTORNADA') throw new Error('Esta remessa já foi estornada e não pode ser assinada.');
+            if (!remessa.parceiro_id) throw new Error('Defina a loja parceira desta remessa antes de assinar.');
 
             await client.query(
                 `INSERT INTO remessa_assinaturas
@@ -2780,7 +2932,7 @@ app.post('/api/remessas/:id/assinar', autenticar, async (req, res) => {
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
                 [
                     id,
-                    r.rows[0].parceiro_id,
+                    remessa.parceiro_id,
                     req.user.id,
                     nome_responsavel,
                     documento_responsavel || null,
@@ -2800,6 +2952,54 @@ app.post('/api/remessas/:id/assinar', autenticar, async (req, res) => {
                  WHERE id = $3`,
                 [nome_responsavel, documento_responsavel || null, id]
             );
+
+            // Assinado: o estoque sai do "stand-by" e entra no estoque consignado do parceiro.
+            const itens = await client.query(
+                'SELECT produto_id, variacao_id, quantidade, quantidade_estornada FROM remessa_itens WHERE remessa_id = $1',
+                [id]
+            );
+
+            for (const item of itens.rows) {
+                const saldo = toInt(item.quantidade, 0) - toInt(item.quantidade_estornada, 0);
+                if (saldo <= 0) continue;
+
+                const ex = await client.query(
+                    'SELECT id FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2',
+                    [remessa.parceiro_id, item.variacao_id]
+                );
+
+                if (ex.rows.length > 0) {
+                    await client.query(
+                        `UPDATE consignacoes_estoque
+                         SET quantidade_atual = quantidade_atual + $1,
+                             quantidade_enviada = COALESCE(quantidade_enviada, 0) + $1,
+                             data_ultimo_envio = CURRENT_TIMESTAMP
+                         WHERE id = $2`,
+                        [saldo, ex.rows[0].id]
+                    );
+                } else {
+                    await client.query(
+                        `INSERT INTO consignacoes_estoque
+                            (parceiro_id, variacao_id, quantidade_enviada, quantidade_atual, quantidade_vendida, data_ultimo_envio)
+                         VALUES ($1, $2, $3, $3, 0, CURRENT_TIMESTAMP)`,
+                        [remessa.parceiro_id, item.variacao_id, saldo]
+                    );
+                }
+
+                await registrarMovimentacao(client, {
+                    produto_id: item.produto_id,
+                    variacao_id: item.variacao_id,
+                    parceiro_id: remessa.parceiro_id,
+                    usuario_id: req.user.id,
+                    tipo: 'REMESSA_RECEBIDA',
+                    quantidade: saldo,
+                    estoque_origem: 'STANDBY',
+                    estoque_destino: `PARCEIRO_${remessa.parceiro_id}`,
+                    referencia_tipo: 'REMESSA',
+                    referencia_id: remessa.id,
+                    observacao: `Remessa ${remessa.codigo} assinada pelo parceiro — estoque liberado para consignação.`
+                });
+            }
         });
 
         await registrarAuditoria(req.user.id, `Assinou recebimento da remessa ID ${id}`);
@@ -2807,6 +3007,34 @@ app.post('/api/remessas/:id/assinar', autenticar, async (req, res) => {
     } catch (e) {
         console.error('❌ Erro assinatura remessa:', e);
         res.status(400).json({ erro: e.message || 'Erro ao assinar remessa.' });
+    }
+});
+
+// Atribui uma loja parceira a uma remessa criada "sem loja definida" (estoque em stand-by).
+app.put('/api/remessas/:id/parceiro', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const parceiroId = toInt(req.body.parceiro_id, 0);
+        if (!parceiroId) return res.status(400).json({ erro: 'Selecione uma loja válida.' });
+
+        await transacao(async (client) => {
+            const r = await client.query('SELECT id, parceiro_id, status, status_assinatura FROM remessas WHERE id = $1', [id]);
+            if (r.rows.length === 0) throw new Error('Remessa não encontrada.');
+            if (r.rows[0].parceiro_id) throw new Error('Esta remessa já possui uma loja definida.');
+            if (String(r.rows[0].status_assinatura || '').toUpperCase() === 'ASSINADA') throw new Error('Esta remessa já foi assinada.');
+            if (String(r.rows[0].status || '').toUpperCase() === 'ESTORNADA') throw new Error('Esta remessa já foi estornada e não pode receber uma loja.');
+
+            const loja = await client.query('SELECT id FROM parceiros WHERE id = $1', [parceiroId]);
+            if (loja.rows.length === 0) throw new Error('Loja parceira não encontrada.');
+
+            await client.query('UPDATE remessas SET parceiro_id = $1, atualizado_em = CURRENT_TIMESTAMP WHERE id = $2', [parceiroId, id]);
+        });
+
+        await registrarAuditoria(req.user.id, `Atribuiu a loja ID ${parceiroId} à remessa ID ${id}`);
+        res.json({ mensagem: '✅ Loja atribuída! Agora a remessa pode ser assinada pelo parceiro.' });
+    } catch (e) {
+        console.error('❌ Erro ao atribuir loja à remessa:', e);
+        res.status(400).json({ erro: e.message || 'Erro ao atribuir loja à remessa.' });
     }
 });
 
@@ -2823,6 +3051,7 @@ app.post('/api/remessas/:id/estornar', autenticar, somenteAdmin, async (req, res
             const itens = await client.query('SELECT * FROM remessa_itens WHERE remessa_id = $1 ORDER BY id ASC', [id]);
             let totalEstornadoAgora = 0;
             let valorEstornadoAgora = 0;
+            const assinada = String(remessa.status_assinatura || '').toUpperCase() === 'ASSINADA';
 
             for (const item of itens.rows) {
                 const quantidadeOriginal = toInt(item.quantidade || item.quantidade_enviada, 0);
@@ -2830,27 +3059,36 @@ app.post('/api/remessas/:id/estornar', autenticar, somenteAdmin, async (req, res
                 const saldoItem = quantidadeOriginal - quantidadeJaEstornada;
                 if (saldoItem <= 0) continue;
 
-                const estoqueLoja = await client.query(
-                    'SELECT id, quantidade_atual FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2',
-                    [remessa.parceiro_id, item.variacao_id]
-                );
+                let qtdEstornar;
 
-                if (estoqueLoja.rows.length === 0) continue;
-                const disponivelLoja = toInt(estoqueLoja.rows[0].quantidade_atual, 0);
-                const qtdEstornar = Math.min(saldoItem, disponivelLoja);
-                if (qtdEstornar <= 0) continue;
+                if (assinada) {
+                    // Estoque já está no parceiro (consignacoes_estoque) — devolve de lá para o central.
+                    const estoqueLoja = await client.query(
+                        'SELECT id, quantidade_atual FROM consignacoes_estoque WHERE parceiro_id = $1 AND variacao_id = $2',
+                        [remessa.parceiro_id, item.variacao_id]
+                    );
+
+                    if (estoqueLoja.rows.length === 0) continue;
+                    const disponivelLoja = toInt(estoqueLoja.rows[0].quantidade_atual, 0);
+                    qtdEstornar = Math.min(saldoItem, disponivelLoja);
+                    if (qtdEstornar <= 0) continue;
+
+                    await client.query(
+                        `UPDATE consignacoes_estoque
+                         SET quantidade_atual = quantidade_atual - $1
+                         WHERE id = $2`,
+                        [qtdEstornar, estoqueLoja.rows[0].id]
+                    );
+                } else {
+                    // Remessa ainda em stand-by: estoque nunca saiu para o parceiro,
+                    // volta direto para o central.
+                    qtdEstornar = saldoItem;
+                }
 
                 const preco = parseMoeda(item.preco_repasse_snapshot || item.preco_repasse_unitario || 0);
                 const novaQtdEstornada = quantidadeJaEstornada + qtdEstornar;
                 const valorTotalEstornado = money(novaQtdEstornada * preco);
                 const valorTotalSaldo = money((quantidadeOriginal - novaQtdEstornada) * preco);
-
-                await client.query(
-                    `UPDATE consignacoes_estoque
-                     SET quantidade_atual = quantidade_atual - $1
-                     WHERE id = $2`,
-                    [qtdEstornar, estoqueLoja.rows[0].id]
-                );
 
                 await client.query(
                     `UPDATE produto_variacoes
@@ -2878,7 +3116,7 @@ app.post('/api/remessas/:id/estornar', autenticar, somenteAdmin, async (req, res
                     usuario_id: req.user.id,
                     tipo: 'ESTORNO_REMESSA',
                     quantidade: qtdEstornar,
-                    estoque_origem: `PARCEIRO_${remessa.parceiro_id}`,
+                    estoque_origem: assinada ? `PARCEIRO_${remessa.parceiro_id}` : 'STANDBY',
                     estoque_destino: 'CENTRAL',
                     referencia_tipo: 'REMESSA',
                     referencia_id: remessa.id,
@@ -3310,7 +3548,8 @@ app.get('/api/financeiro/v3/resumo', autenticar, async (req, res) => {
         const lojas = await db.query(`
             WITH vendas_base AS (
                 SELECT v.id, v.parceiro_id, v.variacao_id, v.quantidade, v.valor_total,
-                       COALESCE(pv.preco_repasse, 0) AS preco_repasse
+                       COALESCE(pv.preco_repasse, 0) AS preco_repasse,
+                       COALESCE(pv.custo_producao, 0) AS custo_producao
                 FROM vendas v
                 LEFT JOIN produto_variacoes pv ON pv.id = v.variacao_id
                 WHERE v.data_venda >= $1::date
@@ -3326,6 +3565,7 @@ app.get('/api/financeiro/v3/resumo', autenticar, async (req, res) => {
                 COALESCE(SUM(vb.valor_total), 0) AS valor_total_vendido,
                 COALESCE(SUM(vb.quantidade * vb.preco_repasse), 0) AS valor_liquido_receber,
                 COALESCE(SUM(vb.valor_total), 0) - COALESCE(SUM(vb.quantidade * vb.preco_repasse), 0) AS valor_comissao_parceiro,
+                COALESCE(SUM(vb.quantidade * vb.custo_producao), 0) AS valor_custo_producao,
                 fr.status_pagamento AS status_fechamento
             FROM vendas_base vb
             LEFT JOIN parceiros parc ON parc.id = vb.parceiro_id
@@ -3359,12 +3599,59 @@ app.get('/api/financeiro/v3/resumo', autenticar, async (req, res) => {
             GROUP BY parc.id, parc.nome_loja, p.nome, pv.variacao, pv.preco_repasse
             ORDER BY nome_loja, produto_nome`, itensParams);
 
+        const produtosBruto = await db.query(`
+            SELECT
+                p.id AS produto_id,
+                p.nome AS produto_nome,
+                pv.id AS variacao_id,
+                pv.variacao,
+                pv.sku,
+                COALESCE(SUM(v.quantidade), 0) AS quantidade_vendida,
+                COALESCE(SUM(v.valor_total), 0) AS valor_faturado,
+                COALESCE(SUM(v.quantidade * COALESCE(pv.custo_producao, 0)), 0) AS valor_custo
+            FROM vendas v
+            LEFT JOIN produto_variacoes pv ON pv.id = v.variacao_id
+            LEFT JOIN produtos p ON p.id = pv.produto_id
+            WHERE v.data_venda >= $1::date
+              AND v.data_venda < $2::date
+              ${filtroItens}
+            GROUP BY p.id, p.nome, pv.id, pv.variacao, pv.sku
+            ORDER BY valor_faturado DESC`, itensParams);
+
+        const produtos = produtosBruto.rows.map(row => {
+            const faturado = Number(row.valor_faturado || 0);
+            const custo = Number(row.valor_custo || 0);
+            const lucro = faturado - custo;
+            return {
+                ...row,
+                valor_lucro: lucro,
+                margem_lucro: faturado > 0 ? (lucro / faturado) * 100 : 0
+            };
+        });
+
         const totalVendido = lojas.rows.reduce((soma, l) => soma + Number(l.valor_total_vendido || 0), 0);
         const totalLiquido = lojas.rows.reduce((soma, l) => soma + Number(l.valor_liquido_receber || 0), 0);
         const totalMargem = lojas.rows.reduce((soma, l) => soma + Number(l.valor_comissao_parceiro || 0), 0);
         const totalPendente = lojas.rows.filter(l => String(l.status_fechamento || '').toUpperCase() !== 'PAGO').reduce((soma, l) => soma + Number(l.valor_liquido_receber || 0), 0);
+        const totalGastos = lojas.rows.reduce((soma, l) => soma + Number(l.valor_custo_producao || 0), 0);
+        const totalLucroLiquido = totalVendido - totalGastos;
+        const margemLucroMedia = totalVendido > 0 ? (totalLucroLiquido / totalVendido) * 100 : 0;
 
-        res.json({ periodo: ref, resumo: { total_vendido: totalVendido, total_liquido: totalLiquido, total_margem: totalMargem, total_pendente: totalPendente }, lojas: lojas.rows, itens: itens.rows });
+        res.json({
+            periodo: ref,
+            resumo: {
+                total_vendido: totalVendido,
+                total_liquido: totalLiquido,
+                total_margem: totalMargem,
+                total_pendente: totalPendente,
+                total_gastos: totalGastos,
+                total_lucro_liquido: totalLucroLiquido,
+                margem_lucro_media: margemLucroMedia
+            },
+            lojas: lojas.rows,
+            itens: itens.rows,
+            produtos
+        });
     } catch (e) {
         console.error('❌ Erro financeiro v3 resumo:', e);
         res.status(500).json({ erro: 'Erro ao gerar resumo financeiro: ' + e.message });
@@ -3590,6 +3877,15 @@ app.get('/api/dashboard', autenticar, async (req, res) => {
              GROUP BY p.nome_loja
              ORDER BY total_produtos DESC`
         );
+        const estoqueConsignado = await db.query(
+            `SELECT COALESCE(SUM(c.quantidade_atual), 0) AS qtd_total_consignado
+             FROM consignacoes_estoque c
+             JOIN produto_variacoes v ON v.id = c.variacao_id
+             JOIN produtos p ON p.id = v.produto_id
+             WHERE COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN'
+               AND p.parceiro_id IS NULL
+               AND COALESCE(p.produto_global, true) = true`
+        );
         const eBaixo = await db.query(
             `SELECT p.nome, v.estoque_central, v.variacao
              FROM produto_variacoes v
@@ -3610,6 +3906,22 @@ app.get('/api/dashboard', autenticar, async (req, res) => {
              ORDER BY total_vendido DESC
              LIMIT 6`
         );
+        const parceirosAtivos = await db.query(
+            `SELECT COUNT(*) AS total FROM parceiros WHERE UPPER(status) = 'ATIVO'`
+        );
+        const remessasPendentes = await db.query(
+            `SELECT COUNT(*) AS total FROM remessas
+             WHERE COALESCE(UPPER(status_assinatura), 'PENDENTE') = 'PENDENTE'
+               AND UPPER(status) != 'ESTORNADA'`
+        );
+        const insumosBaixo = await db.query(
+            `SELECT nome, unidade, estoque_atual, estoque_minimo
+             FROM insumos
+             WHERE UPPER(COALESCE(status, 'ATIVO')) = 'ATIVO'
+               AND estoque_atual <= estoque_minimo
+             ORDER BY estoque_atual ASC
+             LIMIT 6`
+        );
 
         res.json({
             pedidos_mes: vMes.rows[0].total_pedidos,
@@ -3617,11 +3929,15 @@ app.get('/api/dashboard', autenticar, async (req, res) => {
             patrimonio: {
                 quantidade: estoquePatrimonio.rows[0].qtd_total_central,
                 valor: estoquePatrimonio.rows[0].valor_total_custo,
-                valor_venda: estoquePatrimonio.rows[0].valor_total_venda
+                valor_venda: estoquePatrimonio.rows[0].valor_total_venda,
+                quantidade_consignada: estoqueConsignado.rows[0].qtd_total_consignado
             },
             parceiros_estoque: estoquePorParceiro.rows,
             estoque_lista: eBaixo.rows,
-            ranking: rank.rows
+            ranking: rank.rows,
+            parceiros_ativos: parceirosAtivos.rows[0].total,
+            remessas_pendentes_assinatura: remessasPendentes.rows[0].total,
+            insumos_baixo: insumosBaixo.rows
         });
     } catch (e) {
         console.error('❌ Erro dashboard:', e);

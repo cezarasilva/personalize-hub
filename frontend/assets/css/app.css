@@ -936,6 +936,8 @@ tr:hover td { background: var(--surface-2); }
 .empty-state { text-align: center; color: var(--muted); padding: 32px !important; }
 .price-note { font-size: 12px; color: var(--muted); font-weight: 600; }
 .input-money { font-weight: 700; }
+.input-cell { width: 90px; padding: 6px 8px; font-size: 13px; }
+.input-cell:hover { border-color: var(--input-focus); }
 .readonly-box {
   width: 100%;
   padding: 11px 13px;

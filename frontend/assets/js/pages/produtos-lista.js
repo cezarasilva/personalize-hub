@@ -7,6 +7,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const busca = document.getElementById('buscaProduto');
     const erroBox = document.getElementById('erroProdutos');
 
+    function parseMoeda(valor, padrao = 0) {
+        if (valor === undefined || valor === null || String(valor).trim() === '') return padrao;
+        if (typeof valor === 'number') return Number.isFinite(valor) ? valor : padrao;
+        let s = String(valor).trim().replace(/[^0-9,.-]/g, '');
+        if (!s) return padrao;
+        const temVirgula = s.includes(',');
+        const temPonto = s.includes('.');
+        if (temVirgula && temPonto) {
+            if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.');
+            else s = s.replace(/,/g, '');
+        } else if (temVirgula) {
+            s = s.replace(',', '.');
+        } else if (temPonto && /^-?\d{1,3}(\.\d{3})+$/.test(s)) {
+            s = s.replace(/\./g, '');
+        }
+        const n = Number(s);
+        return Number.isFinite(n) ? n : padrao;
+    }
+
+    function formatarInputMoeda(valor) {
+        const n = parseMoeda(valor, 0);
+        return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function campoPreco(produtoId, campo, valor) {
+        return `<input type="text" inputmode="decimal" class="input-cell input-money"
+            data-ajuste-preco="${produtoId}" data-campo="${campo}"
+            value="${formatarInputMoeda(valor)}" title="Clique para editar e pressione Enter ou saia do campo para salvar">`;
+    }
+
+    function campoEstoque(produtoId, valor) {
+        return `<input type="number" inputmode="numeric" min="0" step="1" class="input-cell"
+            data-ajuste-estoque="${produtoId}"
+            value="${App.number(valor || 0).replace(/\./g, '')}" title="Clique para editar e pressione Enter ou saia do campo para salvar">`;
+    }
+
     function galeriaUrls(produto) {
         if (!produto) return [];
         let galeria = produto.galeria;
@@ -46,10 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </td>
                 <td>${App.escapeHtml(p.categoria || '-')}</td>
-                <td>${App.money(p.preco_venda)}</td>
-                <td>${App.money(p.preco_repasse)}</td>
-                <td>${App.money(p.custo_producao)}</td>
-                <td><strong>${App.number(p.estoque_central)}</strong></td>
+                <td>${campoPreco(p.id, 'preco_venda', p.preco_venda)}</td>
+                <td>${campoPreco(p.id, 'preco_repasse', p.preco_repasse)}</td>
+                <td>${campoPreco(p.id, 'custo_producao', p.custo_producao)}</td>
+                <td>${campoEstoque(p.id, p.estoque_central)}</td>
                 <td>${App.badgeStatus(p.status)}</td>
                 <td><div class="actions">${visBtn}<a class="icon-btn" href="produtos-cadastro.html?id=${p.id}" title="Editar"><i class="bx bx-edit"></i></a><button class="icon-btn" data-del="${p.id}" title="Excluir"><i class="bx bx-trash"></i></button></div></td>
             </tr>`;
@@ -98,6 +134,58 @@ document.addEventListener('DOMContentLoaded', () => {
             App.toast('success', 'Produto removido.');
             await carregar();
         } catch (err) { App.toast('error', err.message); }
+    });
+
+    async function salvarAjustePreco(input) {
+        const produtoId = input.dataset.ajustePreco;
+        const campo = input.dataset.campo;
+        const p = produtos.find(x => String(x.id) === String(produtoId));
+        if (!p) return;
+        const valorAtual = parseMoeda(p[campo], 0);
+        const novoValor = parseMoeda(input.value, valorAtual);
+        input.value = formatarInputMoeda(novoValor);
+        if (Math.round(novoValor * 100) === Math.round(valorAtual * 100)) return;
+        try {
+            await App.api(`/produtos/${produtoId}/precos`, { method: 'PATCH', body: JSON.stringify({ [campo]: novoValor }) });
+            p[campo] = novoValor;
+            App.toast('success', 'Valor atualizado.');
+        } catch (err) {
+            input.value = formatarInputMoeda(valorAtual);
+            App.toast('error', err.message);
+        }
+    }
+
+    async function salvarAjusteEstoque(input) {
+        const produtoId = input.dataset.ajusteEstoque;
+        const p = produtos.find(x => String(x.id) === String(produtoId));
+        if (!p) return;
+        const valorAtual = parseInt(p.estoque_central, 10) || 0;
+        let novoValor = parseInt(input.value, 10);
+        if (!Number.isFinite(novoValor) || novoValor < 0) novoValor = valorAtual;
+        input.value = novoValor;
+        if (novoValor === valorAtual) return;
+        try {
+            await App.api(`/produtos/estoque/${produtoId}`, { method: 'PATCH', body: JSON.stringify({ novo_estoque: novoValor }) });
+            p.estoque_central = novoValor;
+            App.toast('success', 'Estoque atualizado.');
+        } catch (err) {
+            input.value = valorAtual;
+            App.toast('error', err.message);
+        }
+    }
+
+    tabela.addEventListener('focusout', (e) => {
+        const precoInput = e.target.closest('[data-ajuste-preco]');
+        if (precoInput) return salvarAjustePreco(precoInput);
+        const estoqueInput = e.target.closest('[data-ajuste-estoque]');
+        if (estoqueInput) return salvarAjusteEstoque(estoqueInput);
+    });
+
+    tabela.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.target.closest('[data-ajuste-preco], [data-ajuste-estoque]')) {
+            e.preventDefault();
+            e.target.blur();
+        }
     });
 
     busca.addEventListener('input', () => render(filtrarLista()));

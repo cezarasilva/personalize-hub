@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let statusFluxo = 'ATIVO';
     let editandoId  = null;
     let maquinas    = [];
+    let insumos     = [];
 
     // editor rico
     let quillEditor = null;
@@ -263,6 +264,9 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div id="listaMateriaisPrec" class="prec-lista"></div>
             <div id="formAddMaterial" class="prec-add-form hidden">
+              <div class="form-group mb-2"><label>Insumo cadastrado</label>
+                <select id="novoMatInsumoId"><option value="">Personalizado (digite abaixo)...</option></select>
+              </div>
               <div class="prec-add-row">
                 <div class="form-group"><label>Material / insumo</label>
                   <input id="novoMatNome" placeholder="Ex: Filamento PLA, Papel adesivo...">
@@ -453,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderListaMaquinasPrec();
         renderListaMaoObraPrec();
         carregarMaquinas();
+        carregarInsumos();
         calcularPrecificacaoUniversal();
         preencherStep3Edicao();
     }
@@ -467,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const total = m.quantidade * m.custo_unitario;
             return `<div class="prec-item">
               <div class="prec-item-info">
-                <span class="prec-item-nome">${esc(m.nome)}</span>
+                <span class="prec-item-nome">${esc(m.nome)}${m.insumo_id ? ' <small class="text-muted">(estoque de insumos)</small>' : ''}</span>
                 <span class="prec-item-detalhe">${m.quantidade} ${esc(m.unidade)} × ${money(m.custo_unitario)}/un</span>
               </div>
               <span class="prec-item-total">${money(total)}</span>
@@ -616,6 +621,14 @@ document.addEventListener('DOMContentLoaded', () => {
             $('formAddMaterial')?.classList.toggle('hidden');
             $('novoMatNome')?.focus();
         });
+        $('novoMatInsumoId')?.addEventListener('change', () => {
+            const i = insumos.find(x => String(x.id) === String($('novoMatInsumoId')?.value));
+            if (i) {
+                if ($('novoMatNome'))    $('novoMatNome').value    = i.nome;
+                if ($('novoMatUnidade')) $('novoMatUnidade').value = i.unidade || 'un';
+                if ($('novoMatCusto'))   $('novoMatCusto').value   = i.custo_unitario || 0;
+            }
+        });
         $('btnCancelMaterial')?.addEventListener('click', () => {
             $('formAddMaterial')?.classList.add('hidden');
             _limparFormMat();
@@ -625,9 +638,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const qtd    = parseFloat($('novoMatQtd')?.value || '0') || 0;
             const custo  = parseFloat($('novoMatCusto')?.value || '0') || 0;
             const unidade = $('novoMatUnidade')?.value || 'un';
+            const insumoId = $('novoMatInsumoId')?.value ? parseInt($('novoMatInsumoId').value, 10) : null;
             if (!nome)  { App.toast('warning', 'Informe o nome do material.'); return; }
             if (qtd <= 0) { App.toast('warning', 'Informe a quantidade.'); return; }
-            precItens.materiais.push({ id: nextPrecId(), nome, quantidade: qtd, unidade, custo_unitario: custo });
+            precItens.materiais.push({ id: nextPrecId(), nome, quantidade: qtd, unidade, custo_unitario: custo, insumo_id: insumoId });
             renderListaMateriaisPrec();
             calcularPrecificacaoUniversal();
             $('formAddMaterial')?.classList.add('hidden');
@@ -687,9 +701,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function _limparFormMat() {
-        if ($('novoMatNome'))  $('novoMatNome').value  = '';
-        if ($('novoMatQtd'))   $('novoMatQtd').value   = '0';
-        if ($('novoMatCusto')) $('novoMatCusto').value = '0';
+        if ($('novoMatNome'))     $('novoMatNome').value     = '';
+        if ($('novoMatQtd'))      $('novoMatQtd').value      = '0';
+        if ($('novoMatCusto'))    $('novoMatCusto').value    = '0';
+        if ($('novoMatInsumoId')) $('novoMatInsumoId').value = '';
     }
     function _limparFormMaq() {
         if ($('novoMaqId'))    $('novoMaqId').value    = '';
@@ -711,6 +726,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const selNew = $('novoMaqId');
             if (selNew) selNew.innerHTML = '<option value="">Selecione a máquina...</option>' + opts;
         } catch { maquinas = []; }
+    }
+
+    async function carregarInsumos() {
+        try {
+            insumos = await App.api('/insumos');
+            const ativos = insumos.filter(i => String(i.status || 'ATIVO') !== 'INATIVO');
+            const opts = ativos.map(i => `<option value="${i.id}">${esc(i.nome)} • ${money(i.custo_unitario)}/${esc(i.unidade)} • estoque: ${App.number(i.estoque_atual)}</option>`).join('');
+            const selNew = $('novoMatInsumoId');
+            if (selNew) selNew.innerHTML = '<option value="">Personalizado (digite abaixo)...</option>' + opts;
+        } catch { insumos = []; }
     }
 
     // =========================================================

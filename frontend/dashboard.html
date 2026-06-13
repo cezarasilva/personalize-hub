@@ -29,8 +29,17 @@
                 <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-shopping-bag"></i></div><span>Vendas do mês</span><strong id="pedidosMes">0</strong></div>
                 <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-money-withdraw"></i></div><span>Receita/repasse do mês</span><strong id="receitaMes">R$ 0,00</strong></div>
                 <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-package"></i></div><span>Qtd. em estoque</span><strong id="qtdEstoque">0</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-transfer"></i></div><span>Qtd. consignada</span><strong id="qtdConsignado">0</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-layer"></i></div><span>Qtd. total geral</span><strong id="qtdTotalGeral">0</strong></div>
                 <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-buildings"></i></div><span>Custo do estoque</span><strong id="valorEstoque">R$ 0,00</strong></div>
                 <div class="stat-card dashboard-extra-stock"><div class="dashboard-metric-icon"><i class="bx bx-trending-up"></i></div><span>Estoque se vendido</span><strong id="valorEstoqueVenda">R$ 0,00</strong></div>
+            </section>
+
+            <section class="grid grid-4 mb-2">
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-trending-up"></i></div><span>Lucro potencial do estoque</span><strong id="lucroPotencial">R$ 0,00</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-receipt"></i></div><span>Ticket médio</span><strong id="ticketMedio">R$ 0,00</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-store"></i></div><span>Parceiros ativos</span><strong id="parceirosAtivos">0</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-pen"></i></div><span>Remessas pend. assinatura</span><strong id="remessasPendentes">0</strong></div>
             </section>
 
             <section class="chart-grid">
@@ -38,9 +47,10 @@
                 <div class="card chart-card"><div class="card-title"><span><i class="bx bx-buildings"></i> Novas parcerias</span></div><canvas id="graficoParcerias"></canvas></div>
             </section>
 
-            <section class="grid grid-3">
+            <section class="grid grid-4">
                 <div class="card"><div class="card-title"><span><i class="bx bx-store"></i> Estoque por loja</span></div><div id="estoqueParceiros"></div></div>
                 <div class="card"><div class="card-title"><span><i class="bx bx-error-circle"></i> Estoque baixo</span></div><div id="estoqueBaixo"></div></div>
+                <div class="card"><div class="card-title"><span><i class="bx bx-box"></i> Insumos com estoque baixo</span></div><div id="insumosBaixo"></div></div>
                 <div class="card"><div class="card-title"><span><i class="bx bx-trophy"></i> Mais vendidos</span></div><div id="rankingProdutos"></div></div>
             </section>
         </main>

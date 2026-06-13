@@ -45,12 +45,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('pedidosMes').textContent = App.number(dados.pedidos_mes);
         document.getElementById('receitaMes').textContent = App.money(dados.receita_mes);
         document.getElementById('qtdEstoque').textContent = App.number(dados.patrimonio?.quantidade);
+        document.getElementById('qtdConsignado').textContent = App.number(dados.patrimonio?.quantidade_consignada);
+        document.getElementById('qtdTotalGeral').textContent = App.number(Number(dados.patrimonio?.quantidade || 0) + Number(dados.patrimonio?.quantidade_consignada || 0));
         document.getElementById('valorEstoque').textContent = App.money(dados.patrimonio?.valor);
         const elVendaEstoque = document.getElementById('valorEstoqueVenda');
         if (elVendaEstoque) elVendaEstoque.textContent = App.money(dados.patrimonio?.valor_venda);
 
+        const custoEstoque = Number(dados.patrimonio?.valor || 0);
+        const valorVendaEstoque = Number(dados.patrimonio?.valor_venda || 0);
+        document.getElementById('lucroPotencial').textContent = App.money(valorVendaEstoque - custoEstoque);
+
+        const pedidosMes = Number(dados.pedidos_mes || 0);
+        const receitaMes = Number(dados.receita_mes || 0);
+        document.getElementById('ticketMedio').textContent = App.money(pedidosMes > 0 ? receitaMes / pedidosMes : 0);
+
+        document.getElementById('parceirosAtivos').textContent = App.number(dados.parceiros_ativos);
+        document.getElementById('remessasPendentes').textContent = App.number(dados.remessas_pendentes_assinatura);
+
         list('estoqueParceiros', dados.parceiros_estoque, (p) => `<div class="preview-box mt-2"><strong>${App.escapeHtml(p.nome_loja)}</strong><span class="text-muted">${App.number(p.total_produtos)} peças</span></div>`);
         list('estoqueBaixo', dados.estoque_lista, (p) => `<div class="preview-box mt-2"><strong>${App.escapeHtml(p.nome)}</strong><span class="text-danger">${App.escapeHtml(p.variacao)} • ${App.number(p.estoque_central)} un.</span></div>`);
+        list('insumosBaixo', dados.insumos_baixo, (i) => `<div class="preview-box mt-2"><strong>${App.escapeHtml(i.nome)}</strong><span class="text-danger">${App.number(i.estoque_atual)} / mín. ${App.number(i.estoque_minimo)} ${App.escapeHtml(i.unidade || '')}</span></div>`);
         list('rankingProdutos', dados.ranking, (p) => `<div class="preview-box mt-2"><strong>${App.escapeHtml(p.nome)}</strong><span class="text-success">${App.number(p.total_vendido)} vendido(s)</span></div>`);
 
         const crescimento = await App.api('/dashboard/crescimento');

@@ -174,9 +174,10 @@ window.App = (() => {
         const nome = user().nome || 'Usuário';
         const adminLinks = [
             ['dashboard', 'dashboard.html', 'bxs-dashboard', 'Dashboard'],
-            ['produtos-grupo', '#', 'bxs-package', 'Produtos'],
+            ['produtos-grupo', '#', 'bxs-package', 'Estoque'],
             ['produtos-lista', 'produtos-lista.html', 'bx-list-ul', 'Lista de Produtos'],
             ['produtos-cadastro', 'produtos-cadastro.html', 'bx-plus-circle', 'Cadastrar Produto'],
+            ['produtos-insumos', 'produtos-insumos.html', 'bx-box', 'Cadastro de Insumos'],
             ['catalogo-admin', 'catalogo.html?loja=personalize', 'bx-store-alt', 'Catálogo Admin'],
             ['meu-catalogo', 'meu-catalogo.html', 'bx-slider-alt', 'Config. Catálogo'],
             ['catalogo-pedidos', 'catalogo-pedidos.html', 'bx-message-square-dots', 'Leads / Pedidos'],

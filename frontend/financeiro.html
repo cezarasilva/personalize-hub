@@ -53,6 +53,34 @@
             </section>
 
             <section class="card">
+                <div class="card-title">Lucratividade do mês</div>
+                <div class="grid grid-4">
+                    <div class="stat-card"><span>Faturamento</span><strong id="finFaturamento">R$ 0,00</strong></div>
+                    <div class="stat-card"><span>Gastos (custo de produção)</span><strong id="finGastos">R$ 0,00</strong></div>
+                    <div class="stat-card"><span>Lucro líquido</span><strong id="finLucroLiquido">R$ 0,00</strong></div>
+                    <div class="stat-card"><span>Margem de lucro média</span><strong id="finMargemMedia">0%</strong></div>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <span>Relatório detalhado de produtos vendidos (mês selecionado)</span>
+                    <button class="btn btn-dark" id="btnPdfProdutos">PDF do relatório</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Produto</th><th>Variação</th><th>SKU</th><th>Qtd vendida</th><th>Faturado</th><th>Gasto</th><th>Lucro</th><th>Margem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaProdutosVendidos"></tbody>
+                        <tfoot id="rodapeProdutosVendidos"></tfoot>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card">
                 <div class="card-title">Resumo por loja</div>
                 <div class="table-container">
                     <table>

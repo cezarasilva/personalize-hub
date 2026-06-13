@@ -46,6 +46,9 @@
 
             <section class="card" id="novaRemessaCard">
                 <div class="card-title">Nova remessa em lote</div>
+                <div class="form-group mb-2">
+                    <label style="display:inline-flex;align-items:center;gap:6px;font-weight:600;"><input type="checkbox" id="semLojaDefinida" style="width:auto;"> Criar sem loja definida (estoque sai do central e fica reservado)</label>
+                </div>
                 <div class="form-grid-4">
                     <div class="form-group search-wrap">
                         <label for="buscaProdutoRemessa">Produto</label>
@@ -80,6 +83,16 @@
                     </table>
                 </div>
                 <button class="btn btn-success w-full mt-3" id="btnEnviarLote">Confirmar envio da remessa</button>
+            </section>
+
+            <section class="card hidden" id="cardRemessasReservadas">
+                <div class="card-title">Remessas em estoque reservado (sem loja definida)</div>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>Código</th><th>Data</th><th>Itens</th><th>Qtd</th><th>Valor</th><th>Observação</th><th>Ações</th></tr></thead>
+                        <tbody id="tabelaReservadas"></tbody>
+                    </table>
+                </div>
             </section>
 
             <section class="card">
