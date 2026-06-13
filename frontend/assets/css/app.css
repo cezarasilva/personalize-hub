@@ -995,6 +995,107 @@ tr:hover td { background: var(--surface-2); }
   font-size: 26px;
   margin-bottom: 12px;
 }
+.dashboard-metric-icon.icon-success { background: var(--success-soft); color: var(--success); }
+.dashboard-metric-icon.icon-warning { background: var(--warning-soft); color: var(--warning); }
+.dashboard-metric-icon.icon-danger  { background: var(--danger-soft);  color: var(--danger); }
+.dashboard-metric-icon.icon-muted   { background: var(--surface-2);    color: var(--muted); }
+
+.dashboard-updated {
+  font-size: 12px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.dashboard-updated .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(52,211,153,.5);
+  animation: dash-pulse 2s infinite;
+}
+@keyframes dash-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(52,211,153,.45); }
+  70%  { box-shadow: 0 0 0 6px rgba(52,211,153,0); }
+  100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+}
+
+/* ============================================================
+   DASHBOARD — SEÇÕES E VARIANTES DE KPI
+   ============================================================ */
+.dashboard-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 28px 0 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--muted);
+}
+.dashboard-section-title:first-of-type { margin-top: 0; }
+.dashboard-section-title i { font-size: 16px; color: var(--primary); }
+.dashboard-section-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.stat-card.accent-success::before { background: linear-gradient(90deg, var(--success), rgba(var(--primary-rgb),0)); }
+.stat-card.accent-warning::before { background: linear-gradient(90deg, var(--warning), rgba(var(--primary-rgb),0)); }
+.stat-card.accent-danger::before  { background: linear-gradient(90deg, var(--danger),  rgba(var(--primary-rgb),0)); }
+.stat-card.accent-muted::before   { background: linear-gradient(90deg, var(--muted),   rgba(var(--primary-rgb),0)); }
+
+.stat-card.stat-highlight {
+  background: linear-gradient(150deg, var(--success-soft), var(--surface) 65%);
+  border-color: rgba(52,211,153,.28);
+}
+
+/* ============================================================
+   DASHBOARD — LISTAS OPERACIONAIS
+   ============================================================ */
+.dash-list { display: flex; flex-direction: column; gap: 8px; }
+.dash-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: background .2s, transform .15s;
+}
+.dash-list-row:hover { background: var(--border); transform: translateX(2px); }
+.dash-list-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  flex-shrink: 0;
+  background: rgba(var(--primary-rgb),.12);
+  color: var(--primary);
+}
+.dash-list-icon.icon-success { background: var(--success-soft); color: var(--success); }
+.dash-list-icon.icon-warning { background: var(--warning-soft); color: var(--warning); }
+.dash-list-icon.icon-danger  { background: var(--danger-soft);  color: var(--danger); }
+.dash-list-icon.icon-rank-1  { background: #fef3c7; color: #b45309; }
+.dash-list-icon.icon-rank-2  { background: #e2e8f0; color: #475569; }
+.dash-list-icon.icon-rank-3  { background: #fee2e2; color: #b91c1c; }
+.dash-list-body { flex: 1; min-width: 0; }
+.dash-list-body strong { display: block; font-size: 13.5px; color: var(--text); line-height: 1.3; }
+.dash-list-body small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.dash-list-value { font-weight: 800; font-size: 13.5px; white-space: nowrap; color: var(--text); }
+.dash-list-value small { font-weight: 600; color: var(--muted); margin-left: 2px; }
+.dash-list-value.text-danger  { color: var(--danger); }
+.dash-list-value.text-success { color: var(--success); }
 
 /* ============================================================
    CROP DE IMAGEM

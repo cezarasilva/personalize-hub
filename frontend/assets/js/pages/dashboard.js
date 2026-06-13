@@ -9,7 +9,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             el.innerHTML = '<p class="empty-state">Sem dados para mostrar.</p>';
             return;
         }
-        el.innerHTML = rows.map(render).join('');
+        el.innerHTML = rows.map((row, idx) => render(row, idx)).join('');
+    }
+
+    function rankIcon(idx) {
+        const cls = idx === 0 ? 'icon-rank-1' : idx === 1 ? 'icon-rank-2' : idx === 2 ? 'icon-rank-3' : 'icon-success';
+        return `<div class="dash-list-icon ${cls}">${idx + 1}º</div>`;
     }
 
     function makeLineChart(canvasId, labels, data, label) {
@@ -62,10 +67,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('parceirosAtivos').textContent = App.number(dados.parceiros_ativos);
         document.getElementById('remessasPendentes').textContent = App.number(dados.remessas_pendentes_assinatura);
 
-        list('estoqueParceiros', dados.parceiros_estoque, (p) => `<div class="preview-box mt-2"><strong>${App.escapeHtml(p.nome_loja)}</strong><span class="text-muted">${App.number(p.total_produtos)} peças</span></div>`);
-        list('estoqueBaixo', dados.estoque_lista, (p) => `<div class="preview-box mt-2"><strong>${App.escapeHtml(p.nome)}</strong><span class="text-danger">${App.escapeHtml(p.variacao)} • ${App.number(p.estoque_central)} un.</span></div>`);
-        list('insumosBaixo', dados.insumos_baixo, (i) => `<div class="preview-box mt-2"><strong>${App.escapeHtml(i.nome)}</strong><span class="text-danger">${App.number(i.estoque_atual)} / mín. ${App.number(i.estoque_minimo)} ${App.escapeHtml(i.unidade || '')}</span></div>`);
-        list('rankingProdutos', dados.ranking, (p) => `<div class="preview-box mt-2"><strong>${App.escapeHtml(p.nome)}</strong><span class="text-success">${App.number(p.total_vendido)} vendido(s)</span></div>`);
+        list('estoqueParceiros', dados.parceiros_estoque, (p) => `
+            <div class="dash-list-row">
+                <div class="dash-list-icon"><i class="bx bx-store"></i></div>
+                <div class="dash-list-body"><strong>${App.escapeHtml(p.nome_loja)}</strong></div>
+                <div class="dash-list-value">${App.number(p.total_produtos)} <small>peças</small></div>
+            </div>`);
+
+        list('estoqueBaixo', dados.estoque_lista, (p) => `
+            <div class="dash-list-row">
+                <div class="dash-list-icon icon-danger"><i class="bx bx-error"></i></div>
+                <div class="dash-list-body"><strong>${App.escapeHtml(p.nome)}</strong><small>${App.escapeHtml(p.variacao || '')}</small></div>
+                <div class="dash-list-value text-danger">${App.number(p.estoque_central)} un.</div>
+            </div>`);
+
+        list('insumosBaixo', dados.insumos_baixo, (i) => `
+            <div class="dash-list-row">
+                <div class="dash-list-icon icon-danger"><i class="bx bx-box"></i></div>
+                <div class="dash-list-body"><strong>${App.escapeHtml(i.nome)}</strong><small>mínimo: ${App.number(i.estoque_minimo)} ${App.escapeHtml(i.unidade || '')}</small></div>
+                <div class="dash-list-value text-danger">${App.number(i.estoque_atual)} ${App.escapeHtml(i.unidade || '')}</div>
+            </div>`);
+
+        list('rankingProdutos', dados.ranking, (p, idx) => `
+            <div class="dash-list-row">
+                ${rankIcon(idx)}
+                <div class="dash-list-body"><strong>${App.escapeHtml(p.nome)}</strong></div>
+                <div class="dash-list-value text-success">${App.number(p.total_vendido)} vendido(s)</div>
+            </div>`);
+
+        const elAtualizado = document.getElementById('dashboardAtualizado');
+        if (elAtualizado) elAtualizado.textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
         const crescimento = await App.api('/dashboard/crescimento');
         makeLineChart(
