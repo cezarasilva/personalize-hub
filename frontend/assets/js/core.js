@@ -527,5 +527,51 @@ window.App = (() => {
         el.className = `msg text-${type}`;
     }
 
+    // ---- Tabelas responsivas (cards no mobile) ----
+    // Preenche data-label="<texto do th>" em cada <td>, lendo o <thead> da
+    // própria tabela. Funciona em tabelas já presentes no HTML e também em
+    // tabelas geradas dinamicamente (innerHTML), via MutationObserver.
+    function _aplicarLabelsTabela(table) {
+        const headers = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim());
+        if (!headers.length) return;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        const aplicar = () => {
+            tbody.querySelectorAll('tr').forEach(tr => {
+                [...tr.children].forEach((td, i) => {
+                    if (td.tagName !== 'TD' || td.hasAttribute('colspan')) return;
+                    if (headers[i]) td.setAttribute('data-label', headers[i]);
+                });
+            });
+        };
+        aplicar();
+        new MutationObserver(aplicar).observe(tbody, { childList: true, subtree: true });
+    }
+
+    function _processarTabela(table) {
+        if (table.dataset.respTable) return;
+        table.dataset.respTable = '1';
+        _aplicarLabelsTabela(table);
+    }
+
+    function _setupResponsiveTables() {
+        document.querySelectorAll('table').forEach(_processarTabela);
+        new MutationObserver(mutations => {
+            for (const m of mutations) {
+                m.addedNodes.forEach(node => {
+                    if (node.nodeType !== 1) return;
+                    if (node.tagName === 'TABLE') _processarTabela(node);
+                    node.querySelectorAll?.('table').forEach(_processarTabela);
+                });
+            }
+        }).observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _setupResponsiveTables);
+    } else {
+        _setupResponsiveTables();
+    }
+
     return { API_BASE, token, user, isAdmin, isParceiro, setUser, logout, requireAuth, requireAdmin, protectPage, api, money, number, formDataToObject, imageTag, escapeHtml, badgeStatus, toast, confirmDialog, icon, renderSidebar, bindPasswordToggle, imageToDataURL, setMsg };
 })();

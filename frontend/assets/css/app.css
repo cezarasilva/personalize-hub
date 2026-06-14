@@ -2297,6 +2297,140 @@ tr:hover td { background: var(--surface-2); }
   .catalogo-upload-row { grid-template-columns: 1fr !important; }
 }
 
+/* ============================================================
+   TABELAS RESPONSIVAS -> CARDS (MOBILE)
+   Cada <tr> passa a ser um cartão. Os <td> exibem um rótulo
+   (data-label, preenchido automaticamente por core.js a partir
+   do texto do <th> correspondente) acima ou ao lado do valor.
+   A primeira coluna funciona como título do cartão.
+   ============================================================ */
+@media (max-width: 768px) {
+  .table-container, .responsive-table, .table-wrap {
+    overflow-x: visible;
+    border: none;
+    border-radius: 0;
+  }
+  .table-container table,
+  .responsive-table table,
+  .table-wrap table {
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .table-container thead,
+  .responsive-table thead,
+  .table-wrap thead {
+    display: none;
+  }
+  .table-container tbody,
+  .responsive-table tbody,
+  .table-wrap tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .table-container tbody tr,
+  .responsive-table tbody tr,
+  .table-wrap tbody tr {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px 14px;
+  }
+  .table-container tbody tr:hover td,
+  .responsive-table tbody tr:hover td,
+  .table-wrap tbody tr:hover td {
+    background: transparent;
+  }
+  .table-container tbody td,
+  .responsive-table tbody td,
+  .table-wrap tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    font-size: 13px;
+  }
+  .table-container tbody td:last-child,
+  .responsive-table tbody td:last-child,
+  .table-wrap tbody td:last-child {
+    border-bottom: none;
+  }
+  /* Rótulo (nome da coluna), à esquerda */
+  .table-container tbody td[data-label]::before,
+  .responsive-table tbody td[data-label]::before,
+  .table-wrap tbody td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    text-align: left;
+  }
+  /* Primeira coluna = título do cartão (sem rótulo, destaque) */
+  .table-container tbody td:first-child,
+  .responsive-table tbody td:first-child,
+  .table-wrap tbody td:first-child {
+    font-size: 14.5px;
+    font-weight: 700;
+    text-align: left;
+    justify-content: flex-start;
+  }
+  .table-container tbody td:first-child::before,
+  .responsive-table tbody td:first-child::before,
+  .table-wrap tbody td:first-child::before {
+    content: none;
+  }
+  .table-container tbody td:first-child .product-cell,
+  .responsive-table tbody td:first-child .product-cell,
+  .table-wrap tbody td:first-child .product-cell {
+    width: 100%;
+  }
+  /* Célula de ações: ocupa a linha inteira, botões centralizados */
+  .table-container tbody td:has(.actions, .table-actions),
+  .responsive-table tbody td:has(.actions, .table-actions),
+  .table-wrap tbody td:has(.actions, .table-actions) {
+    justify-content: center;
+    padding-top: 12px;
+  }
+  .table-container tbody td:has(.actions, .table-actions)::before,
+  .responsive-table tbody td:has(.actions, .table-actions)::before,
+  .table-wrap tbody td:has(.actions, .table-actions)::before {
+    content: none;
+  }
+  .table-container tbody td .actions,
+  .table-container tbody td .table-actions,
+  .responsive-table tbody td .actions,
+  .responsive-table tbody td .table-actions,
+  .table-wrap tbody td .actions,
+  .table-wrap tbody td .table-actions {
+    justify-content: center;
+    width: 100%;
+  }
+  /* Linha de "estado vazio" (colspan) -> cartão simples sem rótulo */
+  .table-container tbody tr:has(td[colspan]),
+  .responsive-table tbody tr:has(td[colspan]),
+  .table-wrap tbody tr:has(td[colspan]) {
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+  .table-container tbody td[colspan],
+  .responsive-table tbody td[colspan],
+  .table-wrap tbody td[colspan] {
+    display: block;
+    text-align: center;
+    border-bottom: none;
+    padding: 24px 0;
+  }
+}
+
 @media (max-width: 480px) {
   .main { padding: 16px 13px 90px; }
   .btn { min-height: 44px; padding: 10px 12px; font-size: 13px; }
