@@ -1226,9 +1226,9 @@ app.post('/api/insumos', autenticar, somenteAdmin, async (req, res) => {
         const body = req.body || {};
         if (!body.nome) return res.status(400).json({ erro: 'Nome do insumo é obrigatório.' });
         const r = await db.query(`
-            INSERT INTO insumos (nome, unidade, custo_unitario, estoque_atual, status, observacao)
-            VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-            [body.nome, body.unidade || 'un', parseMoeda(body.custo_unitario), parseMoeda(body.estoque_atual), body.status || 'ATIVO', body.observacao || null]
+            INSERT INTO insumos (nome, unidade, custo_unitario, estoque_atual, estoque_minimo, status, observacao)
+            VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+            [body.nome, body.unidade || 'un', parseMoeda(body.custo_unitario), parseMoeda(body.estoque_atual), parseMoeda(body.estoque_minimo ?? 0), body.status || 'ATIVO', body.observacao || null]
         );
         await registrarAuditoria(req.user.id, `Cadastrou insumo ${body.nome}`);
         res.status(201).json(r.rows[0]);
@@ -1244,10 +1244,11 @@ app.put('/api/insumos/:id', autenticar, somenteAdmin, async (req, res) => {
         const r = await db.query(`
             UPDATE insumos SET
                 nome = COALESCE($1, nome), unidade = COALESCE($2, unidade),
-                custo_unitario = $3, estoque_atual = $4, status = COALESCE($5, status), observacao = $6,
+                custo_unitario = $3, estoque_atual = $4, estoque_minimo = $5,
+                status = COALESCE($6, status), observacao = $7,
                 atualizado_em = CURRENT_TIMESTAMP
-            WHERE id = $7 RETURNING *`,
-            [body.nome || null, body.unidade || null, parseMoeda(body.custo_unitario), parseMoeda(body.estoque_atual), body.status || null, body.observacao || null, req.params.id]
+            WHERE id = $8 RETURNING *`,
+            [body.nome || null, body.unidade || null, parseMoeda(body.custo_unitario), parseMoeda(body.estoque_atual), parseMoeda(body.estoque_minimo ?? 0), body.status || null, body.observacao || null, req.params.id]
         );
         if (r.rows.length === 0) return res.status(404).json({ erro: 'Insumo não encontrado.' });
         await registrarAuditoria(req.user.id, `Editou insumo ID ${req.params.id}`);
@@ -3294,11 +3295,18 @@ app.get('/api/vendas', autenticar, async (req, res) => {
             LEFT JOIN parceiros parc ON v.parceiro_id = parc.id
             ${where}
             GROUP BY COALESCE(v.venda_lote_codigo, 'V' || v.id), v.parceiro_id, parc.nome_loja
-            ORDER BY MAX(v.data_venda) DESC, MIN(v.id) DESC
-            LIMIT 100`;
+            ORDER BY MAX(v.data_venda) DESC, MIN(v.id) DESC`;
 
-        const result = await db.query(query, params);
-        res.json(result.rows);
+        const paginar  = req.query.page !== undefined;
+        const page     = Math.max(1, toInt(req.query.page, 1));
+        const limit    = Math.min(200, Math.max(1, toInt(req.query.limit, 20)));
+        const sqlFinal = paginar ? query + ` LIMIT ${limit} OFFSET ${(page - 1) * limit}` : query + ' LIMIT 100';
+
+        const result = await db.query(sqlFinal, params);
+        if (!paginar) return res.json(result.rows);
+        const ctQ = `SELECT COUNT(DISTINCT COALESCE(v.venda_lote_codigo,'V'||v.id)) AS total FROM vendas v ${where}`;
+        const ct  = await db.query(ctQ, params);
+        res.json({ rows: result.rows, total: Number(ct.rows[0].total), page, limit });
     } catch (e) {
         console.error('❌ Erro buscar vendas:', e);
         res.status(500).json({ erro: 'Erro ao buscar extrato.' });
@@ -3922,10 +3930,46 @@ app.get('/api/dashboard', autenticar, async (req, res) => {
              ORDER BY estoque_atual ASC
              LIMIT 6`
         );
+        const vMesAnterior = await db.query(
+            `SELECT COUNT(*) AS total_pedidos, COALESCE(SUM(valor_total), 0) AS receita_total
+             FROM vendas
+             WHERE EXTRACT(MONTH FROM data_venda) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
+               AND EXTRACT(YEAR  FROM data_venda) = EXTRACT(YEAR  FROM CURRENT_DATE - INTERVAL '1 month')`
+        );
+        const lojasSemVendas = await db.query(
+            `SELECT p.nome_loja, COALESCE(SUM(c.quantidade_atual), 0) AS qtd_consignada
+             FROM parceiros p
+             JOIN consignacoes_estoque c ON p.id = c.parceiro_id
+             WHERE c.quantidade_atual > 0
+               AND p.id NOT IN (
+                   SELECT DISTINCT parceiro_id FROM vendas
+                   WHERE data_venda >= CURRENT_DATE - INTERVAL '45 days'
+                     AND parceiro_id IS NOT NULL
+               )
+             GROUP BY p.id, p.nome_loja
+             HAVING SUM(c.quantidade_atual) > 0
+             ORDER BY qtd_consignada DESC
+             LIMIT 5`
+        );
+        const remessasPendList = await db.query(
+            `SELECT r.id, r.codigo, p.nome_loja,
+                    TO_CHAR(r.data_envio, 'DD/MM/YYYY') AS data_envio,
+                    EXTRACT(DAY FROM NOW() - r.data_envio)::int AS dias_pendente
+             FROM remessas r
+             JOIN parceiros p ON p.id = r.parceiro_id
+             WHERE COALESCE(UPPER(r.status_assinatura), 'PENDENTE') = 'PENDENTE'
+               AND UPPER(r.status) != 'ESTORNADA'
+             ORDER BY r.data_envio ASC
+             LIMIT 5`
+        );
 
         res.json({
             pedidos_mes: vMes.rows[0].total_pedidos,
             receita_mes: vMes.rows[0].receita_total,
+            mes_anterior: {
+                pedidos: vMesAnterior.rows[0].total_pedidos,
+                receita: vMesAnterior.rows[0].receita_total
+            },
             patrimonio: {
                 quantidade: estoquePatrimonio.rows[0].qtd_total_central,
                 valor: estoquePatrimonio.rows[0].valor_total_custo,
@@ -3937,7 +3981,9 @@ app.get('/api/dashboard', autenticar, async (req, res) => {
             ranking: rank.rows,
             parceiros_ativos: parceirosAtivos.rows[0].total,
             remessas_pendentes_assinatura: remessasPendentes.rows[0].total,
-            insumos_baixo: insumosBaixo.rows
+            insumos_baixo: insumosBaixo.rows,
+            lojas_paradas: lojasSemVendas.rows,
+            remessas_pend_lista: remessasPendList.rows
         });
     } catch (e) {
         console.error('❌ Erro dashboard:', e);
@@ -5531,6 +5577,170 @@ app.get('/api/ping', async (req, res) => {
         res.status(200).send('Pong! Render e Supabase estão acordados. 🚀');
     } catch (e) {
         res.status(500).send('Erro ao acordar o banco.');
+    }
+});
+
+// ============================================================
+// BUSCA GLOBAL
+// ============================================================
+app.get('/api/busca', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const q = String(req.query.q || '').trim();
+        if (q.length < 2) return res.json({ produtos: [], parceiros: [], remessas: [] });
+        const like = `%${q}%`;
+        const [produtos, parceiros, remessas] = await Promise.all([
+            db.query(
+                `SELECT p.id, p.nome, p.categoria, v.sku, v.variacao, v.estoque_central, p.imagem_url
+                 FROM produtos p JOIN produto_variacoes v ON v.produto_id = p.id
+                 WHERE p.nome ILIKE $1 OR p.categoria ILIKE $1 OR v.sku ILIKE $1
+                 ORDER BY p.nome LIMIT 8`,
+                [like]
+            ),
+            db.query(
+                `SELECT id, nome_loja, responsavel, status FROM parceiros
+                 WHERE nome_loja ILIKE $1 OR responsavel ILIKE $1 LIMIT 6`,
+                [like]
+            ),
+            db.query(
+                `SELECT r.id, r.codigo, r.status, r.status_assinatura,
+                        TO_CHAR(r.criado_em,'DD/MM/YYYY') AS data_formatada,
+                        p.nome_loja
+                 FROM remessas r
+                 LEFT JOIN parceiros p ON p.id = r.parceiro_id
+                 WHERE r.codigo ILIKE $1
+                 ORDER BY r.criado_em DESC LIMIT 6`,
+                [like]
+            )
+        ]);
+        res.json({ produtos: produtos.rows, parceiros: parceiros.rows, remessas: remessas.rows });
+    } catch (e) {
+        console.error('❌ Erro busca:', e);
+        res.status(500).json({ erro: 'Erro na busca: ' + e.message });
+    }
+});
+
+// ============================================================
+// FLUXO DE CAIXA
+// ============================================================
+app.get('/api/financeiro/fluxo-caixa', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const mes = toInt(req.query.mes, new Date().getMonth() + 1);
+        const ano = toInt(req.query.ano, new Date().getFullYear());
+        const semanas = await db.query(
+            `SELECT
+                CEIL(EXTRACT(DAY FROM v.data_venda) / 7.0)::int AS semana,
+                COALESCE(SUM(v.valor_total), 0)                   AS entradas,
+                COALESCE(SUM(pv.custo_producao * v.quantidade), 0) AS saidas
+             FROM vendas v
+             JOIN produto_variacoes pv ON pv.id = v.variacao_id
+             WHERE EXTRACT(MONTH FROM v.data_venda) = $1
+               AND EXTRACT(YEAR  FROM v.data_venda) = $2
+             GROUP BY semana ORDER BY semana`,
+            [mes, ano]
+        );
+        const totais = await db.query(
+            `SELECT
+                COALESCE(SUM(v.valor_total), 0)                   AS total_entradas,
+                COALESCE(SUM(pv.custo_producao * v.quantidade), 0) AS total_saidas
+             FROM vendas v
+             JOIN produto_variacoes pv ON pv.id = v.variacao_id
+             WHERE EXTRACT(MONTH FROM v.data_venda) = $1
+               AND EXTRACT(YEAR  FROM v.data_venda) = $2`,
+            [mes, ano]
+        );
+        const t = totais.rows[0];
+        res.json({
+            mes, ano,
+            semanas: semanas.rows,
+            total_entradas: money(t.total_entradas),
+            total_saidas:   money(t.total_saidas),
+            lucro_liquido:  money(t.total_entradas - t.total_saidas)
+        });
+    } catch (e) {
+        console.error('❌ Erro fluxo de caixa:', e);
+        res.status(500).json({ erro: 'Erro no fluxo de caixa: ' + e.message });
+    }
+});
+
+// ============================================================
+// HISTÓRICO DE MOVIMENTAÇÃO DE ESTOQUE POR PRODUTO
+// ============================================================
+app.get('/api/estoque/historico/:produtoId', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const { produtoId } = req.params;
+        const [produto, enviadas, vendidas] = await Promise.all([
+            db.query(
+                `SELECT p.id, p.nome, p.categoria, v.variacao, v.estoque_central, v.sku
+                 FROM produtos p JOIN produto_variacoes v ON v.produto_id = p.id
+                 WHERE p.id = $1 LIMIT 1`,
+                [produtoId]
+            ),
+            db.query(
+                `SELECT ri.quantidade, r.criado_em AS data,
+                        COALESCE(parc.nome_loja, 'Reservado') AS destino,
+                        r.codigo, 'REMESSA' AS tipo
+                 FROM remessa_itens ri
+                 JOIN remessas r ON r.id = ri.remessa_id
+                 LEFT JOIN parceiros parc ON parc.id = r.parceiro_id
+                 WHERE ri.produto_id = $1
+                 ORDER BY r.criado_em DESC LIMIT 50`,
+                [produtoId]
+            ),
+            db.query(
+                `SELECT v.quantidade, v.data_venda AS data,
+                        COALESCE(parc.nome_loja, 'Venda direta') AS destino,
+                        COALESCE(v.venda_lote_codigo,'V'||v.id) AS codigo, 'VENDA' AS tipo
+                 FROM vendas v
+                 JOIN produto_variacoes pv ON pv.id = v.variacao_id
+                 LEFT JOIN parceiros parc ON parc.id = v.parceiro_id
+                 WHERE pv.produto_id = $1
+                 ORDER BY v.data_venda DESC LIMIT 50`,
+                [produtoId]
+            )
+        ]);
+        const movimentos = [
+            ...enviadas.rows,
+            ...vendidas.rows
+        ].sort((a, b) => new Date(b.data) - new Date(a.data));
+        res.json({ produto: produto.rows[0] || null, movimentos });
+    } catch (e) {
+        console.error('❌ Erro histórico estoque:', e);
+        res.status(500).json({ erro: 'Erro no histórico: ' + e.message });
+    }
+});
+
+// ============================================================
+// PERFORMANCE POR LOJA
+// ============================================================
+app.get('/api/parceiros/performance', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const meses = toInt(req.query.meses, 3);
+        const rows = await db.query(
+            `SELECT
+                parc.id AS parceiro_id,
+                parc.nome_loja,
+                COUNT(DISTINCT v.venda_lote_codigo)               AS total_vendas,
+                COALESCE(SUM(v.valor_total), 0)                   AS receita_total,
+                COALESCE(SUM(v.quantidade), 0)                    AS pecas_vendidas,
+                COALESCE(
+                    SUM(v.valor_total) / NULLIF(COUNT(DISTINCT v.venda_lote_codigo),0),
+                    0
+                )                                                  AS ticket_medio,
+                COALESCE(SUM(c.quantidade_atual), 0)              AS estoque_atual,
+                MAX(v.data_venda)                                  AS ultima_venda
+             FROM parceiros parc
+             LEFT JOIN vendas v ON v.parceiro_id = parc.id
+                 AND v.data_venda >= CURRENT_DATE - ($1 || ' months')::INTERVAL
+             LEFT JOIN consignacoes_estoque c ON c.parceiro_id = parc.id
+             WHERE UPPER(parc.status) = 'ATIVO'
+             GROUP BY parc.id, parc.nome_loja
+             ORDER BY receita_total DESC`,
+            [String(meses)]
+        );
+        res.json(rows.rows);
+    } catch (e) {
+        console.error('❌ Erro performance parceiros:', e);
+        res.status(500).json({ erro: 'Erro na performance: ' + e.message });
     }
 });
 

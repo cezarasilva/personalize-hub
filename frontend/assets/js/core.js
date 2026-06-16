@@ -190,6 +190,11 @@ window.App = (() => {
             ['vendas', 'vendas.html', 'bx-cart-add', 'Vendas'],
             ['financeiro', 'financeiro.html', 'bx-credit-card', 'Financeiro'],
             ['movimentacoes', 'movimentacoes.html', 'bx-transfer', 'Movimentações'],
+            ['relatorios-grupo', '#', 'bx-bar-chart-alt-2', 'Relatórios'],
+            ['relatorios-fluxo', 'fluxo-caixa.html', 'bx-trending-up', 'Fluxo de Caixa'],
+            ['relatorios-historico', 'historico-estoque.html', 'bx-history', 'Histórico de Estoque'],
+            ['relatorios-performance', 'performance-lojas.html', 'bx-buildings', 'Performance por Loja'],
+            ['busca', 'busca.html', 'bx-search', 'Busca Global'],
             ['auditoria', 'auditoria.html', 'bx-shield-quarter', 'Auditoria']
         ];
         const parceiroLinks = [
@@ -218,11 +223,11 @@ window.App = (() => {
             let i = 0;
             while (i < links.length) {
                 const [key, href, iconName, label] = links[i];
-                if (key === 'produtos-grupo') {
-                    // Coleta itens do submenu (chaves que começam com 'produtos-' exceto o grupo)
+                if (key.endsWith('-grupo')) {
+                    const prefix = key.slice(0, key.length - '-grupo'.length) + '-';
                     const subItems = [];
                     let j = i + 1;
-                    while (j < links.length && links[j][0].startsWith('produtos-')) {
+                    while (j < links.length && links[j][0].startsWith(prefix)) {
                         const [sk, shref, si, sl] = links[j];
                         const sCls = `submenu-link${sk === active ? ' ativo' : ''}`;
                         subItems.push(`<a href="${shref}" class="${sCls}" data-label="${escapeHtml(sl)}">${icon(si)}<span>${escapeHtml(sl)}</span></a>`);
@@ -265,6 +270,10 @@ window.App = (() => {
                     </button>
                 </div>
             </div>
+            <div class="sidebar-search">
+                <i class="bx bx-search sidebar-search-icon"></i>
+                <input type="search" id="sidebarSearchInput" class="sidebar-search-input" placeholder="Buscar..." autocomplete="off">
+            </div>
             <nav class="sidebar-links" id="menuLinks">
                 ${linksHtml}
             </nav>
@@ -300,6 +309,14 @@ window.App = (() => {
                     <i class="bx bx-chevron-up sidebar-config-arrow"></i>
                 </button>
             </div>`;
+
+        // Busca rápida na sidebar — redireciona para busca.html
+        document.getElementById('sidebarSearchInput')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const q = e.target.value.trim();
+                if (q) window.location.href = `busca.html?q=${encodeURIComponent(q)}`;
+            }
+        });
 
         // Toggle recolher/expandir (desktop)
         document.getElementById('btnSidebarToggle')?.addEventListener('click', () => {
@@ -571,6 +588,10 @@ window.App = (() => {
         document.addEventListener('DOMContentLoaded', _setupResponsiveTables);
     } else {
         _setupResponsiveTables();
+    }
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
     return { API_BASE, token, user, isAdmin, isParceiro, setUser, logout, requireAuth, requireAdmin, protectPage, api, money, number, formDataToObject, imageTag, escapeHtml, badgeStatus, toast, confirmDialog, icon, renderSidebar, bindPasswordToggle, imageToDataURL, setMsg };

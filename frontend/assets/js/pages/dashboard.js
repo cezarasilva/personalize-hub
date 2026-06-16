@@ -17,6 +17,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `<div class="dash-list-icon ${cls}">${idx + 1}º</div>`;
     }
 
+    function compareBadge(elementId, current, previous) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const cur = Number(current || 0);
+        const prev = Number(previous || 0);
+        if (prev === 0) return;
+        const pct = ((cur - prev) / prev) * 100;
+        const flat = Math.abs(pct) < 0.5;
+        const up = pct > 0;
+        el.className = 'stat-badge ' + (flat ? 'flat' : up ? 'up' : 'down');
+        const icon = flat ? '→' : up ? '↑' : '↓';
+        el.textContent = `${icon} ${Math.abs(pct).toFixed(1)}% vs. mês anterior`;
+    }
+
     function makeLineChart(canvasId, labels, data, label) {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return;
@@ -66,6 +80,30 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('parceirosAtivos').textContent = App.number(dados.parceiros_ativos);
         document.getElementById('remessasPendentes').textContent = App.number(dados.remessas_pendentes_assinatura);
+
+        compareBadge('badgeVendas', dados.pedidos_mes, dados.mes_anterior?.pedidos);
+        compareBadge('badgeReceita', dados.receita_mes, dados.mes_anterior?.receita);
+
+        list('lojasSemVendas', dados.lojas_paradas, (l) => `
+            <div class="dash-list-row">
+                <div class="dash-list-icon icon-warning"><i class="bx bx-store-off"></i></div>
+                <div class="dash-list-body"><strong>${App.escapeHtml(l.nome_loja)}</strong><small>sem vendas há +45 dias</small></div>
+                <div class="dash-list-value text-warning">${App.number(l.qtd_consignada)} <small>consig.</small></div>
+            </div>`);
+
+        list('remessasSemAssinatura', dados.remessas_pend_lista, (r) => {
+            const dias = Number(r.dias_pendente || 0);
+            const urgente = dias >= 7;
+            return `
+            <div class="dash-list-row">
+                <div class="dash-list-icon ${urgente ? 'icon-danger' : 'icon-warning'}"><i class="bx bx-pen"></i></div>
+                <div class="dash-list-body">
+                    <strong>${App.escapeHtml(r.codigo)}</strong>
+                    <small>${App.escapeHtml(r.nome_loja)} · ${r.data_envio}</small>
+                </div>
+                <div class="dash-list-value ${urgente ? 'text-danger' : 'text-warning'}">${dias}d</div>
+            </div>`;
+        });
 
         list('estoqueParceiros', dados.parceiros_estoque, (p) => `
             <div class="dash-list-row">

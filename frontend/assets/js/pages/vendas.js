@@ -453,6 +453,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btnPdfVendas').addEventListener('click', gerarPDF);
 
+    document.getElementById('btnExportarVendas')?.addEventListener('click', () => {
+        if (!window.XLSX) { App.toast('warning', 'XLSX não carregado.'); return; }
+        const rows = [['Data','Código','Produto','Variação','Qtd.','Valor Total','Parceiro / Loja']];
+        document.querySelectorAll('#tabelaVendas tr[data-venda], #tabelaVendas tr').forEach(tr => {
+            const tds = [...tr.querySelectorAll('td')];
+            if (tds.length >= 4) rows.push(tds.map(td => td.textContent.trim()));
+        });
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Vendas');
+        XLSX.writeFile(wb, 'vendas.xlsx');
+    });
+
     (async function iniciar() {
         try {
             await carregarParceiros();

@@ -573,6 +573,15 @@ document.addEventListener('DOMContentLoaded', () => {
         setEl('resLucro',         lucro);
 
         _precCalc = { totalMat, totalMaq, totalMo, totalOut, totalPerd, custoTotal, custoUnit, pAdjUnit, pLote, lucro, qtd };
+
+        // Auto-sugestão: preenche preco_venda se ainda não foi definido pelo usuário
+        if (pAdjUnit > 0 && moedaNum('preco_venda') === 0) {
+            setVal('preco_venda', pAdjUnit);
+            setVal('custo_producao', custoUnit);
+        }
+        if (custoUnit > 0 && moedaNum('custo_producao') === 0) {
+            setVal('custo_producao', custoUnit);
+        }
     }
 
     // --- Eventos do passo 3 ---

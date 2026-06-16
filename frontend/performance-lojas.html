@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance por Loja - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body class="admin-dark">
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-buildings"></i> Performance por Loja</h1>
+                    <p>Ranking de vendas, receita e estoque consignado por parceiro.</p>
+                </div>
+                <div class="actions">
+                    <select id="selMeses" class="input" style="width:160px">
+                        <option value="1">Último mês</option>
+                        <option value="3" selected>Últimos 3 meses</option>
+                        <option value="6">Últimos 6 meses</option>
+                        <option value="12">Último ano</option>
+                    </select>
+                    <button class="btn btn-primary" id="btnAtualizar"><i class="bx bx-refresh"></i> Atualizar</button>
+                    <button class="btn btn-success" id="btnExportar"><i class="bx bx-export"></i> Excel</button>
+                </div>
+            </header>
+
+            <section class="card">
+                <div class="card-title"><span><i class="bx bx-trophy"></i> Ranking de Lojas</span></div>
+                <div class="table-responsive">
+                    <table class="table" id="tabelaPerformance">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Loja / Parceiro</th>
+                                <th>Vendas</th>
+                                <th>Peças vendidas</th>
+                                <th>Receita total</th>
+                                <th>Ticket médio</th>
+                                <th>Estoque atual</th>
+                                <th>Última venda</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyPerformance">
+                            <tr><td colspan="8" class="empty-state">Carregando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/performance-lojas.js"></script>
+</body>
+</html>

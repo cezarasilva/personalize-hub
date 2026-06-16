@@ -15,7 +15,10 @@
     <main class="main">
         <header class="page-header">
             <div class="page-title"><h1> Lista de Produtos</h1><p>Consulte, edite, ative/inative e acompanhe estoque, preço e fotos.</p></div>
-            <div class="page-actions"><a href="produtos-cadastro.html" class="btn btn-primary"> Cadastrar produto</a></div>
+            <div class="page-actions">
+                <button class="btn btn-success" id="btnExportarProdutos"><i class="bx bx-export"></i> Excel</button>
+                <a href="produtos-cadastro.html" class="btn btn-primary"> Cadastrar produto</a>
+            </div>
         </header>
         <section class="card">
             <div class="card-title product-list-header">
@@ -27,6 +30,7 @@
         </section>
     </main>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="assets/js/core.js"></script>
 <script src="assets/js/pages/produtos-lista.js"></script>
 </body>

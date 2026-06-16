@@ -465,6 +465,36 @@
 }
 .ph-modal-msg.error   { color: var(--danger); }
 .ph-modal-msg.success { color: var(--success); }
+.sidebar-search {
+  position: relative;
+  margin: 8px 12px 2px;
+  flex-shrink: 0;
+}
+.sidebar-search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 16px;
+  pointer-events: none;
+}
+.sidebar-search-input {
+  width: 100%;
+  padding: 7px 10px 7px 32px;
+  border-radius: 8px;
+  border: 1px solid var(--sidebar-border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color .2s;
+  box-sizing: border-box;
+}
+.sidebar-search-input:focus { border-color: var(--primary); }
+.sidebar-search-input::placeholder { color: var(--muted); }
+.sidebar.collapsed .sidebar-search { display: none; }
+
 .sidebar-links {
   display: flex;
   flex-direction: column;
@@ -999,6 +1029,38 @@ tr:hover td { background: var(--surface-2); }
 .dashboard-metric-icon.icon-warning { background: var(--warning-soft); color: var(--warning); }
 .dashboard-metric-icon.icon-danger  { background: var(--danger-soft);  color: var(--danger); }
 .dashboard-metric-icon.icon-muted   { background: var(--surface-2);    color: var(--muted); }
+
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.row-muted td { opacity: .55; }
+
+.stat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-top: 6px;
+  letter-spacing: .01em;
+}
+.stat-badge.up   { background: var(--success-soft); color: var(--success); }
+.stat-badge.down { background: var(--danger-soft);  color: var(--danger);  }
+.stat-badge.flat { background: var(--surface-2);    color: var(--muted);   }
 
 .dashboard-updated {
   font-size: 12px;

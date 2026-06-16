@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Admin - PERSONALIZE Hub</title>
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="assets/css/base.css">
     <link rel="stylesheet" href="assets/css/app.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -28,8 +29,8 @@
 
             <h3 class="dashboard-section-title"><i class="bx bx-calendar-check"></i> Desempenho do mês</h3>
             <section class="grid grid-4 mb-2">
-                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-shopping-bag"></i></div><span>Vendas do mês</span><strong id="pedidosMes">0</strong></div>
-                <div class="stat-card accent-success"><div class="dashboard-metric-icon icon-success"><i class="bx bx-wallet"></i></div><span>Receita/repasse do mês</span><strong id="receitaMes">R$ 0,00</strong></div>
+                <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-shopping-bag"></i></div><span>Vendas do mês</span><strong id="pedidosMes">0</strong><small class="stat-badge" id="badgeVendas"></small></div>
+                <div class="stat-card accent-success"><div class="dashboard-metric-icon icon-success"><i class="bx bx-wallet"></i></div><span>Receita/repasse do mês</span><strong id="receitaMes">R$ 0,00</strong><small class="stat-badge" id="badgeReceita"></small></div>
                 <div class="stat-card accent-success"><div class="dashboard-metric-icon icon-success"><i class="bx bx-receipt"></i></div><span>Ticket médio</span><strong id="ticketMedio">R$ 0,00</strong></div>
                 <div class="stat-card"><div class="dashboard-metric-icon"><i class="bx bx-store-alt"></i></div><span>Parceiros ativos</span><strong id="parceirosAtivos">0</strong></div>
             </section>
@@ -53,6 +54,12 @@
             <section class="chart-grid">
                 <div class="card chart-card"><div class="card-title"><span><i class="bx bx-line-chart"></i> Crescimento em vendas</span></div><canvas id="graficoCrescimentoVendas"></canvas></div>
                 <div class="card chart-card"><div class="card-title"><span><i class="bx bx-buildings"></i> Novas parcerias</span></div><canvas id="graficoParcerias"></canvas></div>
+            </section>
+
+            <h3 class="dashboard-section-title"><i class="bx bx-alarm-exclamation"></i> Alertas de consignação</h3>
+            <section class="grid grid-2 mb-2">
+                <div class="card"><div class="card-title"><span><i class="bx bx-store-off"></i> Lojas sem vendas há 45 dias</span></div><div id="lojasSemVendas" class="dash-list"></div></div>
+                <div class="card"><div class="card-title"><span><i class="bx bx-pen"></i> Remessas aguardando assinatura</span></div><div id="remessasSemAssinatura" class="dash-list"></div></div>
             </section>
 
             <h3 class="dashboard-section-title"><i class="bx bx-list-ul"></i> Visão operacional</h3>

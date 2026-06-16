@@ -190,5 +190,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     busca.addEventListener('input', () => render(filtrarLista()));
 
+    document.getElementById('btnExportarProdutos')?.addEventListener('click', () => {
+        if (!window.XLSX) { App.toast('warning', 'XLSX não carregado.'); return; }
+        const lista = filtrarLista ? filtrarLista() : produtos;
+        const rows = [['Nome','Variação','SKU','Categoria','Preço Venda','Repasse','Custo','Estoque','Status']];
+        lista.forEach(p => {
+            rows.push([p.nome, p.variacao || '', p.sku || '', p.categoria || '',
+                Number(p.preco_venda || 0), Number(p.preco_repasse || 0),
+                Number(p.custo_producao || 0), Number(p.estoque_central || 0), p.status || '']);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Produtos');
+        XLSX.writeFile(wb, 'produtos.xlsx');
+    });
+
     carregar();
 });

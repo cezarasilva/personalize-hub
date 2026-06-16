@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histórico de Estoque - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body class="admin-dark">
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-history"></i> Histórico de Estoque</h1>
+                    <p>Movimentações de entrada e saída por produto.</p>
+                </div>
+            </header>
+
+            <section class="card mb-2">
+                <div class="card-title"><span><i class="bx bx-search"></i> Selecionar produto</span></div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:1">
+                        <label>Produto</label>
+                        <select id="selectProduto" class="input">
+                            <option value="">— selecione —</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;align-items:flex-end">
+                        <button class="btn btn-primary" id="btnBuscarHistorico"><i class="bx bx-history"></i> Ver histórico</button>
+                    </div>
+                </div>
+            </section>
+
+            <div id="resultadoHistorico" style="display:none">
+                <div class="grid grid-3 mb-2" id="kpisHistorico"></div>
+                <section class="card">
+                    <div class="card-title">
+                        <span><i class="bx bx-list-ul"></i> Movimentações</span>
+                        <button class="btn btn-sm btn-success" id="btnExportarHistorico"><i class="bx bx-export"></i> Exportar Excel</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table" id="tabelaHistorico">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Descrição</th>
+                                    <th>Qtd.</th>
+                                    <th>Parceiro / Loja</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyHistorico"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/historico-estoque.js"></script>
+</body>
+</html>

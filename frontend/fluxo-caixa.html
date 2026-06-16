@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fluxo de Caixa - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body class="admin-dark">
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-trending-up"></i> Fluxo de Caixa</h1>
+                    <p>Entradas e saídas agrupadas por semana do mês.</p>
+                </div>
+                <div class="actions">
+                    <div class="form-row" style="gap:8px;margin:0">
+                        <select id="selMes" class="input" style="width:140px">
+                            <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+                            <option value="3">Março</option><option value="4">Abril</option>
+                            <option value="5">Maio</option><option value="6">Junho</option>
+                            <option value="7">Julho</option><option value="8">Agosto</option>
+                            <option value="9">Setembro</option><option value="10">Outubro</option>
+                            <option value="11">Novembro</option><option value="12">Dezembro</option>
+                        </select>
+                        <select id="selAno" class="input" style="width:100px"></select>
+                        <button class="btn btn-primary" id="btnCarregarFluxo"><i class="bx bx-refresh"></i> Carregar</button>
+                        <button class="btn btn-success" id="btnExportarFluxo"><i class="bx bx-export"></i> Excel</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="grid grid-3 mb-2" id="kpisFluxo">
+                <div class="stat-card accent-success"><div class="dashboard-metric-icon icon-success"><i class="bx bx-up-arrow-alt"></i></div><span>Total Entradas</span><strong id="totalEntradas">R$ 0,00</strong></div>
+                <div class="stat-card accent-danger"><div class="dashboard-metric-icon icon-danger"><i class="bx bx-down-arrow-alt"></i></div><span>Total Saídas</span><strong id="totalSaidas">R$ 0,00</strong></div>
+                <div class="stat-card stat-highlight accent-success"><div class="dashboard-metric-icon icon-success"><i class="bx bx-wallet"></i></div><span>Lucro Líquido</span><strong id="lucroLiquido">R$ 0,00</strong></div>
+            </div>
+
+            <section class="card mb-2">
+                <div class="card-title"><span><i class="bx bx-bar-chart-alt-2"></i> Evolução semanal</span></div>
+                <div style="height:280px"><canvas id="graficoFluxo"></canvas></div>
+            </section>
+
+            <section class="card">
+                <div class="card-title"><span><i class="bx bx-list-ul"></i> Detalhes por semana</span></div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr><th>Semana</th><th>Entradas</th><th>Saídas</th><th>Saldo</th></tr>
+                        </thead>
+                        <tbody id="tbodyFluxo"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/fluxo-caixa.js"></script>
+</body>
+</html>

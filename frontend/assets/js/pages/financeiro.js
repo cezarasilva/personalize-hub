@@ -283,6 +283,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btnFiltrarFinanceiro').addEventListener('click', carregar);
     document.getElementById('btnAtualizar').addEventListener('click', carregar);
+
+    document.getElementById('btnExportarFinanceiro')?.addEventListener('click', () => {
+        if (!window.XLSX) { App.toast('warning', 'XLSX não carregado.'); return; }
+        const rows = [['Loja','Total Vendas','Repasse','Status']];
+        document.querySelectorAll('#tabelaFinanceiro tr').forEach(tr => {
+            const tds = [...tr.querySelectorAll('td')];
+            if (tds.length) rows.push(tds.map(td => td.textContent.trim()));
+        });
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Financeiro');
+        XLSX.writeFile(wb, 'financeiro.xlsx');
+    });
     document.getElementById('btnGerarTodos').addEventListener('click', () => gerarFechamento('').catch(err => App.toast('error', err.message)));
     document.getElementById('btnPdfGeral').addEventListener('click', () => gerarPDFGeral().catch(err => App.toast('error', err.message)));
     document.getElementById('btnPdfProdutos').addEventListener('click', () => gerarPDFProdutos().catch(err => App.toast('error', err.message)));

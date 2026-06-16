@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Busca Global - PERSONALIZE Hub</title>
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/assets/js/theme.js"></script>
+</head>
+<body class="admin-dark">
+    <div class="layout">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main">
+            <header class="page-header">
+                <div class="page-title">
+                    <h1><i class="bx bx-search"></i> Busca Global</h1>
+                    <p>Pesquise produtos, parceiros e remessas de uma vez.</p>
+                </div>
+            </header>
+
+            <section class="card mb-2">
+                <div class="form-row">
+                    <div class="form-group" style="flex:1">
+                        <input type="search" id="campoBusca" class="input" placeholder="Digite nome, código, loja..." autocomplete="off">
+                    </div>
+                    <div style="display:flex;align-items:flex-end">
+                        <button class="btn btn-primary" id="btnBuscar"><i class="bx bx-search"></i> Buscar</button>
+                    </div>
+                </div>
+            </section>
+
+            <div id="resultadosBusca" style="display:none">
+                <div class="grid grid-3">
+                    <section class="card">
+                        <div class="card-title"><span><i class="bx bx-package"></i> Produtos <span id="cntProdutos" class="badge-count"></span></span></div>
+                        <div id="listaProdutos" class="dash-list"></div>
+                    </section>
+                    <section class="card">
+                        <div class="card-title"><span><i class="bx bx-buildings"></i> Parceiros <span id="cntParceiros" class="badge-count"></span></span></div>
+                        <div id="listaParceiros" class="dash-list"></div>
+                    </section>
+                    <section class="card">
+                        <div class="card-title"><span><i class="bx bx-box"></i> Remessas <span id="cntRemessas" class="badge-count"></span></span></div>
+                        <div id="listaRemessas" class="dash-list"></div>
+                    </section>
+                </div>
+            </div>
+
+            <div id="estadoVazio" class="empty-state" style="margin-top:60px">
+                <i class="bx bx-search" style="font-size:48px;color:var(--muted)"></i>
+                <p>Digite um termo acima para pesquisar.</p>
+            </div>
+        </main>
+    </div>
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/pages/busca.js"></script>
+</body>
+</html>
