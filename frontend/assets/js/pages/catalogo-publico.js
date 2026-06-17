@@ -11,7 +11,10 @@
         return data;
     };
 
+    const PAGE_SIZE = 12;
     let produtos = [];
+    let produtosFiltrados = [];
+    let paginaAtual = 1;
     let loja = {};
     let slug = '';
     let carrinho = [];
@@ -147,53 +150,75 @@
         }
     }
 
+    function cardHtml(p) {
+        const gallery = renderGallery(p);
+        return `
+        <article class="cat-card">
+            <div class="cat-card-media">
+                ${gallery}
+                <div class="cat-card-badges">
+                    ${p.produto_destaque ? '<span class="cat-badge-star"><i class="bx bxs-star"></i> Destaque</span>' : ''}
+                </div>
+            </div>
+            <div class="cat-card-body">
+                <h3 class="cat-card-name">${esc(p.nome)}</h3>
+                <p class="cat-card-desc">${esc(p.descricao || '')}</p>
+                <div class="cat-card-bottom">
+                    <span class="cat-card-price">${money(p.preco_publico)}</span>
+                    <div class="cat-card-btns">
+                        <a class="cat-btn-more" href="produto-detalhe.html?loja=${esc(slug)}&id=${p.id}&vid=${p.variacao_id}">Ver mais</a>
+                        <button class="cat-btn-add" onclick="adicionarItem(${p.id}, ${p.variacao_id})">
+                            <i class="bx bx-cart-add"></i> Adicionar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </article>`;
+    }
+
+    function atualizarVerMais() {
+        const wrap = document.getElementById('verMaisWrap');
+        if (wrap) wrap.style.display = produtosFiltrados.length > paginaAtual * PAGE_SIZE ? '' : 'none';
+    }
+
     function renderProdutos() {
         const termoInline  = (document.getElementById('catSearchInline')?.value || '').toLowerCase();
         const termoFloat   = (document.getElementById('floatingSearchInput')?.value || '').toLowerCase();
         const termo = termoInline || termoFloat;
         const grid  = document.getElementById('catalogoGrid');
         const count = document.getElementById('catCount');
-        const filtrados = produtos.filter(p => {
+
+        produtosFiltrados = produtos.filter(p => {
             const busca = `${p.nome} ${p.descricao} ${p.categoria}`.toLowerCase().includes(termo);
             const catOk = categoriaAtiva === 'TODOS' || categoriaProduto(p) === categoriaAtiva;
             return busca && catOk;
         });
-        if (count) count.textContent = filtrados.length
-            ? `${filtrados.length} produto${filtrados.length !== 1 ? 's' : ''}`
+        paginaAtual = 1;
+
+        if (count) count.textContent = produtosFiltrados.length
+            ? `${produtosFiltrados.length} produto${produtosFiltrados.length !== 1 ? 's' : ''}`
             : '';
-        if (!filtrados.length) {
+        if (!produtosFiltrados.length) {
             grid.innerHTML = `
-                <div style="grid-column:1/-1; text-align:center; padding:48px 20px; color:var(--muted);">
+                <div style="column-span:all; text-align:center; padding:48px 20px; color:var(--muted);">
                     <i class='bx bx-search-alt' style="font-size:44px; display:block; margin-bottom:12px; opacity:.4;"></i>
                     <p style="font-weight:600;">Nenhum produto encontrado.</p>
                 </div>`;
+            atualizarVerMais();
             return;
         }
-        grid.innerHTML = filtrados.map(p => {
-            const gallery = renderGallery(p);
-            return `
-            <article class="cat-card">
-                <div class="cat-card-media">
-                    ${gallery}
-                    <div class="cat-card-badges">
-                        ${p.produto_destaque ? '<span class="cat-badge-star"><i class="bx bxs-star"></i> Destaque</span>' : ''}
-                    </div>
-                </div>
-                <div class="cat-card-body">
-                    <h3 class="cat-card-name">${esc(p.nome)}</h3>
-                    <p class="cat-card-desc">${esc(p.descricao || '')}</p>
-                    <div class="cat-card-bottom">
-                        <span class="cat-card-price">${money(p.preco_publico)}</span>
-                        <div class="cat-card-btns">
-                            <a class="cat-btn-more" href="produto-detalhe.html?loja=${esc(slug)}&id=${p.id}&vid=${p.variacao_id}">Ver mais</a>
-                            <button class="cat-btn-add" onclick="adicionarItem(${p.id}, ${p.variacao_id})">
-                                <i class="bx bx-cart-add"></i> Adicionar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </article>`;
-        }).join('');
+        grid.innerHTML = produtosFiltrados.slice(0, PAGE_SIZE).map(cardHtml).join('');
+        atualizarVerMais();
+    }
+
+    function carregarMais() {
+        const grid = document.getElementById('catalogoGrid');
+        if (!grid) return;
+        paginaAtual++;
+        const inicio = (paginaAtual - 1) * PAGE_SIZE;
+        const novos = produtosFiltrados.slice(inicio, paginaAtual * PAGE_SIZE);
+        grid.insertAdjacentHTML('beforeend', novos.map(cardHtml).join(''));
+        atualizarVerMais();
     }
 
     window.adicionarItem = (produtoId, variacaoId) => {
@@ -429,6 +454,25 @@
             });
         }
     }
+
+    // Topbar: transparente → sólido ao rolar
+    const topbar = document.getElementById('catalogoTopbar');
+    window.addEventListener('scroll', () => {
+        topbar?.classList.toggle('scrolled', window.scrollY > 10);
+    }, { passive: true });
+
+    // Touch: tap no card abre overlay; tap fora fecha
+    document.getElementById('catalogoGrid')?.addEventListener('click', (e) => {
+        const card = e.target.closest('.cat-card');
+        if (!card) return;
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        const isOpen = card.classList.contains('touch-open');
+        document.querySelectorAll('.cat-card.touch-open').forEach(c => c.classList.remove('touch-open'));
+        if (!isOpen) card.classList.add('touch-open');
+    });
+
+    // Ver mais
+    document.getElementById('btnVerMais')?.addEventListener('click', carregarMais);
 
     document.getElementById('floatingSearchIcon').addEventListener('click', (e) => {
         e.preventDefault();

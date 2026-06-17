@@ -1,9 +1,5 @@
-const CACHE = 'ph-v1';
+const CACHE = 'ph-v2';
 const SHELL = [
-    '/assets/css/base.css',
-    '/assets/css/app.css',
-    '/assets/js/core.js',
-    '/assets/js/theme.js',
     '/dashboard.html',
     '/index.html'
 ];
@@ -23,8 +19,19 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-    // Deixa requisições de API sempre ir para a rede
     if (e.request.url.includes('/api/')) return;
+
+    // CSS e JS: sempre rede (evita layout antigo em cache)
+    const url = new URL(e.request.url);
+    const isAsset = url.pathname.startsWith('/assets/');
+    if (isAsset) {
+        e.respondWith(
+            fetch(e.request).catch(() => caches.match(e.request))
+        );
+        return;
+    }
+
+    // HTML e resto: cache-first
     e.respondWith(
         caches.match(e.request).then(cached => cached || fetch(e.request))
     );
