@@ -32,13 +32,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let maquinas    = [];
     let insumos     = [];
 
-    // Múltiplas variações/tamanhos com tabela de preço por quantidade
-    let multiVariacaoAtiva  = false;
-    let variacoesMultiplas  = []; // { id, variacaoId, variacao, sku, preco_venda, precosQtd: [{id, quantidade, preco}] }
+    // Variações deste produto (cada uma com sua própria precificação e tabela de preço por quantidade)
+    let variacoesMultiplas  = []; // { id, variacaoId, variacao, sku, preco_venda, precosQtd: [{id, quantidade, preco}], precItens, quantidadeProduzida }
+    let variacaoModalId       = null;  // id da variação aberta no modal de edição
+    let _variacaoModalEraNova = false; // true se foi criada agora (cancelar = descartar)
     let _varMultId = 0;
     function nextVarMultId() { return ++_varMultId; }
     let _faixaId = 0;
     function nextFaixaId() { return ++_faixaId; }
+    let _precItemId = 0;
+    function nextPrecId() { return ++_precItemId; }
 
     // editor rico
     let quillEditor = null;
@@ -92,8 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function validarPasso(p) {
         if (p === 1 && !tipoAtivo) { App.toast('warning', 'Selecione o tipo de oferta.'); return false; }
         if (p === 2) {
-            if (!$('nome')?.value.trim())    { App.toast('warning', 'Informe o nome do produto.'); return false; }
-            if (!multiVariacaoAtiva && !$('variacao')?.value.trim()) { App.toast('warning', 'Informe a variação.'); return false; }
+            if (!$('nome')?.value.trim()) { App.toast('warning', 'Informe o nome do produto.'); return false; }
+            if (!variacoesMultiplas.length) { App.toast('warning', 'Adicione ao menos uma variação ("+ Adicionar variação").'); return false; }
         }
         return true;
     }
@@ -147,39 +150,146 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================
-    // PASSO 3 — PRECIFICAÇÃO UNIVERSAL V6.6
+    // PASSO 2 — CATEGORIA (dropdown com "+ Adicionar categoria")
     // =========================================================
-
-    // Estado dos itens de precificação (persiste durante a sessão do wizard)
-    let precItens = { materiais: [], maquinas: [], mao_obra: [] };
-    let _precItemId = 0;
-    function nextPrecId() { return ++_precItemId; }
-
-    // Resultado calculado (referenciado no submit)
-    let _precCalc = {};
-
-    function blocoVariacoesMultiplas() {
-        return `
-        <div class="prec-bloco" id="blocoVariacoesMultiplas">
-          <div class="prec-bloco-header">
-            <span><i class="bx bx-shape-square"></i> Tamanhos / variações deste produto</span>
-            <button type="button" class="btn btn-small" id="btnAddVariacaoMultipla"><i class="bx bx-plus"></i> Adicionar tamanho</button>
-          </div>
-          <div id="listaVariacoesMultiplas"></div>
-        </div>`;
+    async function carregarCategorias(selecionada) {
+        const sel = $('categoria');
+        if (!sel) return;
+        let cats = [];
+        try { cats = await App.api('/produtos/categorias'); } catch { cats = []; }
+        sel.innerHTML = '<option value="">+ Adicionar categoria</option>' +
+            cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+        if (selecionada) {
+            if (!cats.includes(selecionada)) {
+                sel.insertAdjacentHTML('beforeend', `<option value="${esc(selecionada)}">${esc(selecionada)}</option>`);
+            }
+            sel.value = selecionada;
+        }
     }
 
+    $('categoria')?.addEventListener('change', async () => {
+        const sel = $('categoria');
+        if (!sel || sel.value !== '') return; // categoria existente selecionada, nada a fazer
+        const { value: nova } = await Swal.fire({
+            title: 'Nova categoria',
+            input: 'text',
+            inputPlaceholder: 'Ex.: Canecas',
+            showCancelButton: true,
+            confirmButtonText: 'Adicionar',
+            cancelButtonText: 'Cancelar',
+        });
+        const cat = (nova || '').trim();
+        if (cat) {
+            sel.insertAdjacentHTML('beforeend', `<option value="${esc(cat)}">${esc(cat)}</option>`);
+            sel.value = cat;
+        } else {
+            sel.value = '';
+        }
+    });
+
+    // =========================================================
+    // PASSO 2 — VARIAÇÕES (dropdown "+ Adicionar variação" + modal + resumo em chips)
+    // =========================================================
+    function novaVariacaoMultipla() {
+        return { id: nextVarMultId(), variacaoId: null, variacao: '', sku: '', preco_venda: 0, precosQtd: [], quantidadeProduzida: 1, precItens: { materiais: [], maquinas: [], mao_obra: [] } };
+    }
+
+    function renderVariacaoSelectOptions() {
+        const sel = $('variacaoSelect');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">+ Adicionar variação</option>' +
+            variacoesMultiplas.map(v => `<option value="${v.id}">${esc(v.variacao || '(sem nome)')}</option>`).join('');
+        sel.value = '';
+    }
+
+    function renderVariacoesResumo() {
+        const el = $('variacoesResumo');
+        if (!el) return;
+        if (!variacoesMultiplas.length) { el.innerHTML = ''; return; }
+        el.innerHTML = variacoesMultiplas.map(v => {
+            const calc = calcularCustoVariacao(v);
+            return `<span class="variacao-chip" data-id="${v.id}">
+                ${esc(v.variacao || '(sem nome)')}
+                <small>${money(calc.pAdjUnit)}</small>
+                <button type="button" class="icon-btn" data-remove="${v.id}" title="Remover variação"><i class="bx bx-x"></i></button>
+            </span>`;
+        }).join('');
+        el.querySelectorAll('.variacao-chip').forEach(chip => {
+            chip.addEventListener('click', (e) => {
+                if (e.target.closest('[data-remove]')) return;
+                abrirModalVariacao(Number(chip.dataset.id));
+            });
+        });
+        el.querySelectorAll('[data-remove]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const id = Number(btn.dataset.remove);
+                const r = await App.confirmDialog({ title: 'Remover esta variação?', text: 'Os dados de precificação dela serão perdidos.' });
+                if (!r.isConfirmed) return;
+                variacoesMultiplas = variacoesMultiplas.filter(v => v.id !== id);
+                renderVariacaoSelectOptions();
+                renderVariacoesResumo();
+            });
+        });
+    }
+
+    $('variacaoSelect')?.addEventListener('change', () => {
+        const sel = $('variacaoSelect');
+        const val = sel?.value;
+        abrirModalVariacao(val ? Number(val) : null);
+    });
+
+    function abrirModalVariacao(id) {
+        if (id) {
+            variacaoModalId = id;
+            _variacaoModalEraNova = false;
+        } else {
+            const nova = novaVariacaoMultipla();
+            variacoesMultiplas.push(nova);
+            variacaoModalId = nova.id;
+            _variacaoModalEraNova = true;
+        }
+        if ($('modalVariacaoTitulo')) $('modalVariacaoTitulo').textContent = _variacaoModalEraNova ? 'Nova variação' : 'Editar variação';
+        if ($('btnRemoverVariacaoModal')) $('btnRemoverVariacaoModal').style.display = _variacaoModalEraNova ? 'none' : '';
+        carregarMaquinas();
+        carregarInsumos();
+        renderVariacaoModalBody();
+        $('modalVariacao')?.classList.remove('hidden');
+        $('modalVariacao')?.setAttribute('aria-hidden', 'false');
+    }
+
+    function fecharModalVariacao({ cancelado = false } = {}) {
+        if (cancelado && _variacaoModalEraNova) {
+            variacoesMultiplas = variacoesMultiplas.filter(v => v.id !== variacaoModalId);
+        }
+        variacaoModalId = null;
+        _variacaoModalEraNova = false;
+        $('modalVariacao')?.classList.add('hidden');
+        $('modalVariacao')?.setAttribute('aria-hidden', 'true');
+        renderVariacaoSelectOptions();
+        renderVariacoesResumo();
+    }
+
+    $('btnFecharModalVariacao')?.addEventListener('click', () => fecharModalVariacao({ cancelado: true }));
+    $('btnCancelarVariacaoModal')?.addEventListener('click', () => fecharModalVariacao({ cancelado: true }));
+    $('btnSalvarVariacaoModal')?.addEventListener('click', () => {
+        const v = variacoesMultiplas.find(x => x.id === variacaoModalId);
+        if (!v || !v.variacao.trim()) { App.toast('warning', 'Informe o nome da variação.'); return; }
+        fecharModalVariacao({ cancelado: false });
+    });
+    $('btnRemoverVariacaoModal')?.addEventListener('click', async () => {
+        const r = await App.confirmDialog({ title: 'Remover esta variação?', text: 'Os dados de precificação dela serão perdidos.' });
+        if (!r.isConfirmed) return;
+        variacoesMultiplas = variacoesMultiplas.filter(v => v.id !== variacaoModalId);
+        fecharModalVariacao({ cancelado: false });
+    });
+
+    // =========================================================
+    // PASSO 3 — PRECIFICAÇÃO UNIVERSAL (custos/margem compartilhados)
+    // =========================================================
     function templateUniversal() {
-        const comEstoque = tipoAtivo === 'PRODUTO_PROPRIO' || tipoAtivo === 'REVENDA';
         return `
-        ${multiVariacaoAtiva ? blocoVariacoesMultiplas() : `
-        <div class="form-grid">
-          <div class="form-group"><label>Variação *</label><input id="variacao2" name="variacao_p3" placeholder="Cor, tamanho, versão..."></div>
-          <div class="form-group"><label>SKU</label><input id="sku2" name="sku_p3"></div>
-          ${comEstoque ? `<div class="form-group"><label>Estoque central</label><input id="estoque" name="estoque" type="number" min="0" value="0"></div>` : ''}
-        </div>`}
         <div class="form-grid mt-2">
-          ${!multiVariacaoAtiva ? `<div class="form-group"><label>Quantidade produzida</label><input id="quantidade_produzida" name="quantidade_produzida" type="number" step="1" min="1" value="1"></div>` : ''}
           <div class="form-group"><label>Unidade</label>
             <select id="unidade_precificacao" name="unidade_precificacao">
               <option>UNIDADE</option><option>KIT</option><option>CARTELA</option><option>PAR</option><option>LOTE</option>
@@ -275,109 +385,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="prec-universal">
           <div class="prec-universal-header">
             <span><i class="bx bx-calculator"></i> Precificação detalhada</span>
-            <small class="text-muted">${multiVariacaoAtiva ? 'Materiais, máquinas e mão de obra agora são definidos por tamanho/variação acima. Aqui ficam só os custos e a margem compartilhados.' : 'Materiais, máquinas, mão de obra e margem'}</small>
+            <small class="text-muted">Materiais, máquinas e mão de obra são definidos por variação (passo 2 → "+ Adicionar variação"). Aqui ficam só os custos e a margem compartilhados entre as variações.</small>
           </div>
-
-          ${!multiVariacaoAtiva ? `
-          <!-- Materiais / Insumos -->
-          <div class="prec-bloco">
-            <div class="prec-bloco-header">
-              <span><i class="bx bx-package"></i> Materiais / Insumos</span>
-              <button type="button" class="btn btn-small" id="btnAddMaterial"><i class="bx bx-plus"></i> Adicionar</button>
-            </div>
-            <div id="listaMateriaisPrec" class="prec-lista"></div>
-            <div id="formAddMaterial" class="prec-add-form hidden">
-              <div class="form-group mb-2"><label>Insumo cadastrado</label>
-                <select id="novoMatInsumoId"><option value="">Personalizado (digite abaixo)...</option></select>
-              </div>
-              <div class="prec-add-row">
-                <div class="form-group"><label>Material / insumo</label>
-                  <input id="novoMatNome" placeholder="Ex: Filamento PLA, Papel adesivo...">
-                </div>
-                <div class="form-group"><label>Quantidade</label>
-                  <input id="novoMatQtd" type="number" step="0.001" min="0" value="0">
-                </div>
-                <div class="form-group"><label>Unidade</label>
-                  <select id="novoMatUnidade">
-                    <option value="un">un</option><option value="g">g</option><option value="kg">kg</option>
-                    <option value="ml">ml</option><option value="L">L</option><option value="folha">folha</option>
-                    <option value="m²">m²</option><option value="m">m</option>
-                  </select>
-                </div>
-                <div class="form-group"><label>Custo / unidade (R$)</label>
-                  <input id="novoMatCusto" type="number" step="0.0001" min="0" value="0">
-                </div>
-                <div class="form-group prec-add-actions">
-                  <label>&nbsp;</label>
-                  <button type="button" class="btn btn-primary btn-small" id="btnConfirmMaterial"><i class="bx bx-check"></i></button>
-                  <button type="button" class="btn btn-light btn-small" id="btnCancelMaterial"><i class="bx bx-x"></i></button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Máquinas / Recursos -->
-          <div class="prec-bloco">
-            <div class="prec-bloco-header">
-              <span><i class="bx bx-cog"></i> Máquinas / Recursos</span>
-              <button type="button" class="btn btn-small" id="btnAddMaquina"><i class="bx bx-plus"></i> Adicionar</button>
-            </div>
-            <div id="listaMaquinasPrec" class="prec-lista"></div>
-            <div id="formAddMaquina" class="prec-add-form hidden">
-              <div class="prec-add-row">
-                <div class="form-group"><label>Máquina</label>
-                  <select id="novoMaqId"><option value="">Selecione a máquina...</option></select>
-                </div>
-                <div class="form-group"><label>Tempo</label>
-                  <input id="novoMaqTempo" type="number" step="0.01" min="0" value="0">
-                </div>
-                <div class="form-group"><label>Unidade</label>
-                  <select id="novoMaqUnidade"><option value="h">hora</option><option value="min">minuto</option></select>
-                </div>
-                <div class="form-group"><label>Custo/h (R$)</label>
-                  <input id="novoMaqCusto" type="number" step="0.0001" min="0" value="0" placeholder="automático">
-                </div>
-                <div class="form-group prec-add-actions">
-                  <label>&nbsp;</label>
-                  <button type="button" class="btn btn-primary btn-small" id="btnConfirmMaquina"><i class="bx bx-check"></i></button>
-                  <button type="button" class="btn btn-light btn-small" id="btnCancelMaquina"><i class="bx bx-x"></i></button>
-                </div>
-              </div>
-              <div class="form-group mt-2"><label>Observação</label>
-                <input id="novoMaqObs" placeholder="Ex: impressão com suporte, laminação fosca...">
-              </div>
-            </div>
-          </div>
-
-          <!-- Mão de obra -->
-          <div class="prec-bloco">
-            <div class="prec-bloco-header">
-              <span><i class="bx bx-user"></i> Mão de obra</span>
-              <button type="button" class="btn btn-small" id="btnAddMaoObra"><i class="bx bx-plus"></i> Adicionar</button>
-            </div>
-            <div id="listaMaoObraPrec" class="prec-lista"></div>
-            <div id="formAddMaoObra" class="prec-add-form hidden">
-              <div class="prec-add-row">
-                <div class="form-group"><label>Descrição</label>
-                  <input id="novoMoDesc" placeholder="Ex: Limpeza, acabamento, design...">
-                </div>
-                <div class="form-group"><label>Tempo</label>
-                  <input id="novoMoTempo" type="number" step="0.01" min="0" value="0">
-                </div>
-                <div class="form-group"><label>Unidade</label>
-                  <select id="novoMoUnidade"><option value="h">hora</option><option value="min">minuto</option></select>
-                </div>
-                <div class="form-group"><label>Valor/hora (R$)</label>
-                  <input id="novoMoValor" type="number" step="0.01" min="0" value="0">
-                </div>
-                <div class="form-group prec-add-actions">
-                  <label>&nbsp;</label>
-                  <button type="button" class="btn btn-primary btn-small" id="btnConfirmMaoObra"><i class="bx bx-check"></i></button>
-                  <button type="button" class="btn btn-light btn-small" id="btnCancelMaoObra"><i class="bx bx-x"></i></button>
-                </div>
-              </div>
-            </div>
-          </div>` : ''}
 
           <!-- Outros custos -->
           <div class="prec-bloco">
@@ -431,44 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
               </div>
             </div>
           </div>
-
-          ${!multiVariacaoAtiva ? `
-          <!-- Resultado -->
-          <div class="prec-bloco">
-            <div class="pricing-result-v3">
-              <div class="prec-r-row prec-r-mat"><small>Materiais</small><strong id="resMateriais">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-maq"><small>Máquinas</small><strong id="resMaquinas">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-mo"><small>Mão de obra</small><strong id="resMaoObra">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-out"><small>Outros</small><strong id="resOutros">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-perd"><small>Perdas</small><strong id="resPerdas">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-total"><small>Custo total</small><strong id="resCustoTotal">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-unit"><small>Custo unitário</small><strong id="resCustoUnitario">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-sug"><small>Preço sugerido</small><strong id="resPrecoSugerido">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-lote"><small>Preço lote</small><strong id="resPrecoLote">R$ 0,00</strong></div>
-              <div class="prec-r-row prec-r-lucro"><small>Lucro unit. est.</small><strong id="resLucro">R$ 0,00</strong></div>
-            </div>
-            <button type="button" class="btn btn-light mt-2" id="btnAplicarPreco">
-              <i class="bx bx-transfer-alt"></i> Aplicar valores calculados
-            </button>
-          </div>` : ''}
-        </div>
-
-        ${!multiVariacaoAtiva ? `
-        <!-- Valores finais -->
-        <div class="mt-3">
-          <h3>Valores finais</h3>
-          <div class="form-grid">
-            <div class="form-group"><label>Custo de produção</label>
-              <input id="custo_producao" name="custo_producao" type="number" step="0.01" min="0" value="0">
-            </div>
-            <div class="form-group"><label>Valor de repasse / consignação</label>
-              <input id="preco_repasse" name="preco_repasse" type="number" step="0.01" min="0" value="0">
-            </div>
-            <div class="form-group"><label>Preço de venda final</label>
-              <input id="preco_venda" name="preco_venda" type="number" step="0.01" min="0" value="0">
-            </div>
-          </div>
-        </div>` : ''}`;
+        </div>`;
     }
 
     function renderStep3() {
@@ -478,23 +450,14 @@ document.addEventListener('DOMContentLoaded', () => {
         content.innerHTML = templateUniversal();
         if ($('precificado')) $('precificado').value = 'true';
         bindStep3Events();
-        renderListaMateriaisPrec();
-        renderListaMaquinasPrec();
-        renderListaMaoObraPrec();
-        if (multiVariacaoAtiva) {
-            renderListaVariacoesMultiplas();
-            $('btnAddVariacaoMultipla')?.addEventListener('click', () => {
-                variacoesMultiplas.push(novaVariacaoMultipla());
-                renderListaVariacoesMultiplas();
-            });
-        }
-        carregarMaquinas();
-        carregarInsumos();
-        calcularPrecificacaoUniversal();
         preencherStep3Edicao();
     }
 
-    // --- Renderização das listas de itens ---
+    // Recalcula o conteúdo do modal de variação se ele estiver aberto
+    // (chamado quando custos/margem compartilhados mudam).
+    function recalcularModalAberto() {
+        if (variacaoModalId) renderVariacaoModalBody();
+    }
 
     function badgePendenteInsumo(insumoId) {
         if (!insumoId) return '';
@@ -503,64 +466,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return ' <span class="badge badge-yellow" style="font-size:10px">Pendente de compra</span>';
     }
 
-    function renderListaMateriaisPrec() {
-        const el = $('listaMateriaisPrec');
-        if (!el) return;
-        if (!precItens.materiais.length) { el.innerHTML = ''; return; }
-        el.innerHTML = precItens.materiais.map(m => {
-            const total = m.quantidade * m.custo_unitario;
-            return `<div class="prec-item">
-              <div class="prec-item-info">
-                <span class="prec-item-nome">${esc(m.nome)}${m.insumo_id ? ' <small class="text-muted">(estoque de insumos)</small>' : ''}${badgePendenteInsumo(m.insumo_id)}</span>
-                <span class="prec-item-detalhe">${m.quantidade} ${esc(m.unidade)} × ${money(m.custo_unitario)}/un</span>
-              </div>
-              <span class="prec-item-total">${money(total)}</span>
-              <button type="button" class="btn btn-small btn-danger" onclick="removerPrecItem('materiais',${m.id})"><i class="bx bx-trash"></i></button>
-            </div>`;
-        }).join('');
-    }
-
-    function renderListaMaquinasPrec() {
-        const el = $('listaMaquinasPrec');
-        if (!el) return;
-        if (!precItens.maquinas.length) { el.innerHTML = ''; return; }
-        el.innerHTML = precItens.maquinas.map(m => {
-            const horas = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
-            const total = horas * m.custo_hora;
-            return `<div class="prec-item">
-              <div class="prec-item-info">
-                <span class="prec-item-nome">${esc(m.nome)}</span>
-                <span class="prec-item-detalhe">${m.tempo} ${m.unidade_tempo === 'h' ? 'h' : 'min'} × ${money(m.custo_hora)}/h${m.observacao ? ' · ' + esc(m.observacao) : ''}</span>
-              </div>
-              <span class="prec-item-total">${money(total)}</span>
-              <button type="button" class="btn btn-small btn-danger" onclick="removerPrecItem('maquinas',${m.id})"><i class="bx bx-trash"></i></button>
-            </div>`;
-        }).join('');
-    }
-
-    function renderListaMaoObraPrec() {
-        const el = $('listaMaoObraPrec');
-        if (!el) return;
-        if (!precItens.mao_obra.length) { el.innerHTML = ''; return; }
-        el.innerHTML = precItens.mao_obra.map(m => {
-            const horas = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
-            const total = horas * m.valor_hora;
-            return `<div class="prec-item">
-              <div class="prec-item-info">
-                <span class="prec-item-nome">${esc(m.descricao)}</span>
-                <span class="prec-item-detalhe">${m.tempo} ${m.unidade_tempo === 'h' ? 'h' : 'min'} × ${money(m.valor_hora)}/h</span>
-              </div>
-              <span class="prec-item-total">${money(total)}</span>
-              <button type="button" class="btn btn-small btn-danger" onclick="removerPrecItem('mao_obra',${m.id})"><i class="bx bx-trash"></i></button>
-            </div>`;
-        }).join('');
-    }
-
     // Calcula o custo desta variação a partir dos SEUS PRÓPRIOS materiais/
     // máquinas/mão de obra, somado aos custos compartilhados (embalagem,
     // entrega, taxas, perdas, margem, canal) configurados no bloco global.
     function calcularCustoVariacao(v) {
-        const qtd = Math.max(1, toInt(v.quantidadeProduzida, 1));
+        const qtd = Math.max(1, parseInt(v.quantidadeProduzida, 10) || 1);
         const totalMat = v.precItens.materiais.reduce((s, m) => s + m.quantidade * m.custo_unitario, 0);
         const totalMaq = v.precItens.maquinas.reduce((s, m) => {
             const h = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
@@ -586,7 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { totalMat, totalMaq, totalMo, totalOut, totalPerd, custoTotal, custoUnit, pAdjUnit, qtd };
     }
 
-    function renderVarItemList(itens, fmtFn, removerFn) {
+    function renderVarItemList(itens, fmtFn) {
         if (!itens.length) return '';
         return itens.map(fmtFn).join('');
     }
@@ -602,161 +512,151 @@ document.addEventListener('DOMContentLoaded', () => {
                 .map(m => `<option value="${m.id}">${esc(m.nome)}${m.modelo ? ' - ' + esc(m.modelo) : ''} • ${money(m.custo_total_hora)}/h</option>`).join('');
     }
 
-    function renderListaVariacoesMultiplas() {
-        const el = $('listaVariacoesMultiplas');
-        if (!el) return;
-        if (!variacoesMultiplas.length) {
-            el.innerHTML = '<p class="text-muted" style="font-size:12px;margin:6px 0">Nenhum tamanho/variação adicionado ainda.</p>';
-            return;
-        }
-        el.innerHTML = variacoesMultiplas.map(v => {
-            const calc = calcularCustoVariacao(v);
-            return `
-            <div class="prec-add-form" style="margin-bottom:14px;border:1px solid var(--border)">
-              <div class="prec-add-row">
-                <div class="form-group"><label>Nome do tamanho/variação</label>
-                  <input value="${esc(v.variacao)}" placeholder="Ex: 10x15" oninput="window._varMultSetNome(${v.id}, this.value)">
-                </div>
-                <div class="form-group"><label>SKU</label>
-                  <input value="${esc(v.sku || '')}" oninput="window._varMultSetSku(${v.id}, this.value)">
-                </div>
-                <div class="form-group"><label>Qtd. produzida (base do custo)</label>
-                  <input type="number" min="1" value="${v.quantidadeProduzida || 1}" oninput="window._varMultSetQtdProduzida(${v.id}, this.value)">
-                </div>
-                <div class="form-group prec-add-actions"><label>&nbsp;</label>
-                  <button type="button" class="btn btn-small btn-danger" onclick="window._varMultRemover(${v.id})" title="Remover tamanho"><i class="bx bx-trash"></i></button>
-                </div>
-              </div>
+    // Renderiza o conteúdo do modal de variação para a variação atualmente aberta (variacaoModalId)
+    function renderVariacaoModalBody() {
+        const body = $('modalVariacaoBody');
+        if (!body) return;
+        const v = variacoesMultiplas.find(x => x.id === variacaoModalId);
+        if (!v) { body.innerHTML = ''; return; }
+        const calc = calcularCustoVariacao(v);
+        body.innerHTML = `
+          <div class="prec-add-row">
+            <div class="form-group"><label>Nome do tamanho/variação *</label>
+              <input value="${esc(v.variacao)}" placeholder="Ex: 10x15" oninput="window._varMultSetNome(${v.id}, this.value)">
+            </div>
+            <div class="form-group"><label>SKU</label>
+              <input value="${esc(v.sku || '')}" oninput="window._varMultSetSku(${v.id}, this.value)">
+            </div>
+            <div class="form-group"><label>Qtd. produzida (base do custo)</label>
+              <input type="number" min="1" value="${v.quantidadeProduzida || 1}" oninput="window._varMultSetQtdProduzida(${v.id}, this.value)">
+            </div>
+          </div>
 
-              <div class="prec-bloco" style="margin-top:10px">
-                <div class="prec-bloco-header"><span><i class="bx bx-package"></i> Materiais/insumos deste tamanho</span></div>
-                <div class="prec-lista">${renderVarItemList(v.precItens.materiais, m => {
-                    const total = m.quantidade * m.custo_unitario;
-                    return `<div class="prec-item">
-                      <div class="prec-item-info">
-                        <span class="prec-item-nome">${esc(m.nome)}${badgePendenteInsumo(m.insumo_id)}</span>
-                        <span class="prec-item-detalhe">${m.quantidade} ${esc(m.unidade)} × ${money(m.custo_unitario)}/un</span>
-                      </div>
-                      <span class="prec-item-total">${money(total)}</span>
-                      <button type="button" class="btn btn-small btn-danger" onclick="window._varMatRemover(${v.id},${m.id})"><i class="bx bx-trash"></i></button>
-                    </div>`;
-                })}</div>
-                <div class="prec-add-row" style="margin-top:6px">
-                  <div class="form-group"><label>Insumo</label><select id="selMatIns_${v.id}">${opcoesInsumosHtml()}</select></div>
-                  <div class="form-group"><label>Nome (se personalizado)</label><input id="selMatNome_${v.id}" placeholder="Ex: Filamento PLA"></div>
-                  <div class="form-group"><label>Qtd.</label><input id="selMatQtd_${v.id}" type="number" step="0.001" min="0" value="0"></div>
-                  <div class="form-group"><label>Unidade</label>
-                    <select id="selMatUn_${v.id}">
-                      <option value="un">un</option><option value="g">g</option><option value="kg">kg</option>
-                      <option value="ml">ml</option><option value="L">L</option><option value="folha">folha</option>
-                      <option value="m²">m²</option><option value="m">m</option>
-                    </select>
+          <div class="prec-bloco" style="margin-top:10px">
+            <div class="prec-bloco-header"><span><i class="bx bx-package"></i> Materiais/insumos deste tamanho</span></div>
+            <div class="prec-lista">${renderVarItemList(v.precItens.materiais, m => {
+                const total = m.quantidade * m.custo_unitario;
+                return `<div class="prec-item">
+                  <div class="prec-item-info">
+                    <span class="prec-item-nome">${esc(m.nome)}${badgePendenteInsumo(m.insumo_id)}</span>
+                    <span class="prec-item-detalhe">${m.quantidade} ${esc(m.unidade)} × ${money(m.custo_unitario)}/un</span>
                   </div>
-                  <div class="form-group"><label>Custo/un (R$)</label><input id="selMatCusto_${v.id}" type="number" step="0.0001" min="0" value="0"></div>
-                  <div class="form-group prec-add-actions"><label>&nbsp;</label>
-                    <button type="button" class="btn btn-primary btn-small" onclick="window._varMatAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
-                  </div>
-                </div>
+                  <span class="prec-item-total">${money(total)}</span>
+                  <button type="button" class="btn btn-small btn-danger" onclick="window._varMatRemover(${v.id},${m.id})"><i class="bx bx-trash"></i></button>
+                </div>`;
+            })}</div>
+            <div class="prec-add-row" style="margin-top:6px">
+              <div class="form-group"><label>Insumo</label><select id="selMatIns_${v.id}">${opcoesInsumosHtml()}</select></div>
+              <div class="form-group"><label>Nome (se personalizado)</label><input id="selMatNome_${v.id}" placeholder="Ex: Filamento PLA"></div>
+              <div class="form-group"><label>Qtd.</label><input id="selMatQtd_${v.id}" type="number" step="0.001" min="0" value="0"></div>
+              <div class="form-group"><label>Unidade</label>
+                <select id="selMatUn_${v.id}">
+                  <option value="un">un</option><option value="g">g</option><option value="kg">kg</option>
+                  <option value="ml">ml</option><option value="L">L</option><option value="folha">folha</option>
+                  <option value="m²">m²</option><option value="m">m</option>
+                </select>
               </div>
+              <div class="form-group"><label>Custo/un (R$)</label><input id="selMatCusto_${v.id}" type="number" step="0.0001" min="0" value="0"></div>
+              <div class="form-group prec-add-actions"><label>&nbsp;</label>
+                <button type="button" class="btn btn-primary btn-small" onclick="window._varMatAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
+              </div>
+            </div>
+          </div>
 
-              <div class="prec-bloco" style="margin-top:10px">
-                <div class="prec-bloco-header"><span><i class="bx bx-cog"></i> Máquinas/recursos deste tamanho</span></div>
-                <div class="prec-lista">${renderVarItemList(v.precItens.maquinas, m => {
-                    const h = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
-                    const total = h * m.custo_hora;
-                    return `<div class="prec-item">
-                      <div class="prec-item-info">
-                        <span class="prec-item-nome">${esc(m.nome)}</span>
-                        <span class="prec-item-detalhe">${m.tempo} ${m.unidade_tempo === 'h' ? 'h' : 'min'} × ${money(m.custo_hora)}/h</span>
-                      </div>
-                      <span class="prec-item-total">${money(total)}</span>
-                      <button type="button" class="btn btn-small btn-danger" onclick="window._varMaqRemover(${v.id},${m.id})"><i class="bx bx-trash"></i></button>
-                    </div>`;
-                })}</div>
-                <div class="prec-add-row" style="margin-top:6px">
-                  <div class="form-group"><label>Máquina</label><select id="selMaqId_${v.id}">${opcoesMaquinasHtml()}</select></div>
-                  <div class="form-group"><label>Tempo</label><input id="selMaqTempo_${v.id}" type="number" step="0.01" min="0" value="0"></div>
-                  <div class="form-group"><label>Unidade</label>
-                    <select id="selMaqUn_${v.id}"><option value="h">hora</option><option value="min">minuto</option></select>
+          <div class="prec-bloco" style="margin-top:10px">
+            <div class="prec-bloco-header"><span><i class="bx bx-cog"></i> Máquinas/recursos deste tamanho</span></div>
+            <div class="prec-lista">${renderVarItemList(v.precItens.maquinas, m => {
+                const h = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
+                const total = h * m.custo_hora;
+                return `<div class="prec-item">
+                  <div class="prec-item-info">
+                    <span class="prec-item-nome">${esc(m.nome)}</span>
+                    <span class="prec-item-detalhe">${m.tempo} ${m.unidade_tempo === 'h' ? 'h' : 'min'} × ${money(m.custo_hora)}/h</span>
                   </div>
-                  <div class="form-group"><label>Custo/h (R$)</label><input id="selMaqCusto_${v.id}" type="number" step="0.0001" min="0" value="0" placeholder="automático"></div>
-                  <div class="form-group prec-add-actions"><label>&nbsp;</label>
-                    <button type="button" class="btn btn-primary btn-small" onclick="window._varMaqAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
-                  </div>
-                </div>
+                  <span class="prec-item-total">${money(total)}</span>
+                  <button type="button" class="btn btn-small btn-danger" onclick="window._varMaqRemover(${v.id},${m.id})"><i class="bx bx-trash"></i></button>
+                </div>`;
+            })}</div>
+            <div class="prec-add-row" style="margin-top:6px">
+              <div class="form-group"><label>Máquina</label><select id="selMaqId_${v.id}">${opcoesMaquinasHtml()}</select></div>
+              <div class="form-group"><label>Tempo</label><input id="selMaqTempo_${v.id}" type="number" step="0.01" min="0" value="0"></div>
+              <div class="form-group"><label>Unidade</label>
+                <select id="selMaqUn_${v.id}"><option value="h">hora</option><option value="min">minuto</option></select>
               </div>
+              <div class="form-group"><label>Custo/h (R$)</label><input id="selMaqCusto_${v.id}" type="number" step="0.0001" min="0" value="0" placeholder="automático"></div>
+              <div class="form-group prec-add-actions"><label>&nbsp;</label>
+                <button type="button" class="btn btn-primary btn-small" onclick="window._varMaqAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
+              </div>
+            </div>
+          </div>
 
-              <div class="prec-bloco" style="margin-top:10px">
-                <div class="prec-bloco-header"><span><i class="bx bx-user"></i> Mão de obra deste tamanho</span></div>
-                <div class="prec-lista">${renderVarItemList(v.precItens.mao_obra, m => {
-                    const h = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
-                    const total = h * m.valor_hora;
-                    return `<div class="prec-item">
-                      <div class="prec-item-info">
-                        <span class="prec-item-nome">${esc(m.descricao)}</span>
-                        <span class="prec-item-detalhe">${m.tempo} ${m.unidade_tempo === 'h' ? 'h' : 'min'} × ${money(m.valor_hora)}/h</span>
-                      </div>
-                      <span class="prec-item-total">${money(total)}</span>
-                      <button type="button" class="btn btn-small btn-danger" onclick="window._varMoRemover(${v.id},${m.id})"><i class="bx bx-trash"></i></button>
-                    </div>`;
-                })}</div>
-                <div class="prec-add-row" style="margin-top:6px">
-                  <div class="form-group"><label>Descrição</label><input id="selMoDesc_${v.id}" placeholder="Ex: Acabamento"></div>
-                  <div class="form-group"><label>Tempo</label><input id="selMoTempo_${v.id}" type="number" step="0.01" min="0" value="0"></div>
-                  <div class="form-group"><label>Unidade</label>
-                    <select id="selMoUn_${v.id}"><option value="h">hora</option><option value="min">minuto</option></select>
+          <div class="prec-bloco" style="margin-top:10px">
+            <div class="prec-bloco-header"><span><i class="bx bx-user"></i> Mão de obra deste tamanho</span></div>
+            <div class="prec-lista">${renderVarItemList(v.precItens.mao_obra, m => {
+                const h = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
+                const total = h * m.valor_hora;
+                return `<div class="prec-item">
+                  <div class="prec-item-info">
+                    <span class="prec-item-nome">${esc(m.descricao)}</span>
+                    <span class="prec-item-detalhe">${m.tempo} ${m.unidade_tempo === 'h' ? 'h' : 'min'} × ${money(m.valor_hora)}/h</span>
                   </div>
-                  <div class="form-group"><label>Valor/h (R$)</label><input id="selMoValor_${v.id}" type="number" step="0.01" min="0" value="0"></div>
-                  <div class="form-group prec-add-actions"><label>&nbsp;</label>
-                    <button type="button" class="btn btn-primary btn-small" onclick="window._varMoAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
+                  <span class="prec-item-total">${money(total)}</span>
+                  <button type="button" class="btn btn-small btn-danger" onclick="window._varMoRemover(${v.id},${m.id})"><i class="bx bx-trash"></i></button>
+                </div>`;
+            })}</div>
+            <div class="prec-add-row" style="margin-top:6px">
+              <div class="form-group"><label>Descrição</label><input id="selMoDesc_${v.id}" placeholder="Ex: Acabamento"></div>
+              <div class="form-group"><label>Tempo</label><input id="selMoTempo_${v.id}" type="number" step="0.01" min="0" value="0"></div>
+              <div class="form-group"><label>Unidade</label>
+                <select id="selMoUn_${v.id}"><option value="h">hora</option><option value="min">minuto</option></select>
+              </div>
+              <div class="form-group"><label>Valor/h (R$)</label><input id="selMoValor_${v.id}" type="number" step="0.01" min="0" value="0"></div>
+              <div class="form-group prec-add-actions"><label>&nbsp;</label>
+                <button type="button" class="btn btn-primary btn-small" onclick="window._varMoAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="prec-r-row prec-r-unit" style="margin-top:10px">
+            <small>Custo unit. desta variação (c/ custos e margem compartilhados)</small><strong>${money(calc.custoUnit)}</strong>
+          </div>
+          <div class="prec-r-row prec-r-sug" style="margin-top:4px">
+            <small>Preço sugerido</small><strong>${money(calc.pAdjUnit)}</strong>
+          </div>
+
+          <label style="font-size:12px;font-weight:700;color:var(--text-2);display:block;margin:14px 0 6px">
+            <i class="bx bx-spreadsheet"></i> Tabela de preço por quantidade
+          </label>
+          <div class="prec-lista">
+            ${v.precosQtd.map(f => {
+                const margem = calc.custoUnit > 0 ? ((f.preco - calc.custoUnit) / calc.custoUnit * 100) : null;
+                return `<div class="prec-item">
+                  <div class="prec-item-info">
+                    <span class="prec-item-nome">${f.quantidade} un.</span>
+                    <span class="prec-item-detalhe">
+                      <input type="number" step="0.01" min="0" value="${f.preco}" style="width:90px;display:inline-block"
+                             oninput="window._faixaSetPreco(${v.id},${f.id}, this.value)"> /un
+                      ${calc.custoUnit > 0 ? ` · custo ${money(calc.custoUnit)} · margem ${margem.toFixed(0)}%` : ''}
+                    </span>
                   </div>
-                </div>
-              </div>
-
-              <div class="prec-r-row prec-r-unit" style="margin-top:10px">
-                <small>Custo unit. deste tamanho (c/ custos e margem compartilhados)</small><strong>${money(calc.custoUnit)}</strong>
-              </div>
-
-              <label style="font-size:12px;font-weight:700;color:var(--text-2);display:block;margin:10px 0 6px">
-                <i class="bx bx-spreadsheet"></i> Tabela de preço por quantidade
-              </label>
-              <div class="prec-lista">
-                ${v.precosQtd.map(f => {
-                    const margem = calc.custoUnit > 0 ? ((f.preco - calc.custoUnit) / calc.custoUnit * 100) : null;
-                    return `<div class="prec-item">
-                      <div class="prec-item-info">
-                        <span class="prec-item-nome">${f.quantidade} un.</span>
-                        <span class="prec-item-detalhe">
-                          <input type="number" step="0.01" min="0" value="${f.preco}" style="width:90px;display:inline-block"
-                                 oninput="window._faixaSetPreco(${v.id},${f.id}, this.value)"> /un
-                          ${calc.custoUnit > 0 ? ` · custo ${money(calc.custoUnit)} · margem ${margem.toFixed(0)}%` : ''}
-                        </span>
-                      </div>
-                      <button type="button" class="btn btn-small btn-danger" onclick="window._faixaRemover(${v.id},${f.id})"><i class="bx bx-trash"></i></button>
-                    </div>`;
-                }).join('')}
-              </div>
-              <div class="prec-add-row" style="margin-top:8px">
-                <div class="form-group"><label>Quantidade</label><input type="number" min="1" id="novaFaixaQtd_${v.id}" value="1"></div>
-                <div class="form-group"><label>Preço unit. (R$)</label><input type="number" step="0.01" min="0" id="novaFaixaPreco_${v.id}" value="0"></div>
-                <div class="form-group prec-add-actions"><label>&nbsp;</label>
-                  <button type="button" class="btn btn-primary btn-small" onclick="window._faixaAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
-                </div>
-              </div>
-            </div>`;
-        }).join('');
+                  <button type="button" class="btn btn-small btn-danger" onclick="window._faixaRemover(${v.id},${f.id})"><i class="bx bx-trash"></i></button>
+                </div>`;
+            }).join('')}
+          </div>
+          <div class="prec-add-row" style="margin-top:8px">
+            <div class="form-group"><label>Quantidade</label><input type="number" min="1" id="novaFaixaQtd_${v.id}" value="1"></div>
+            <div class="form-group"><label>Preço unit. (R$)</label><input type="number" step="0.01" min="0" id="novaFaixaPreco_${v.id}" value="0"></div>
+            <div class="form-group prec-add-actions"><label>&nbsp;</label>
+              <button type="button" class="btn btn-primary btn-small" onclick="window._faixaAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
+            </div>
+          </div>`;
     }
 
     window._varMultSetNome = (id, val) => { const v = variacoesMultiplas.find(x => x.id === id); if (v) v.variacao = val; };
     window._varMultSetSku  = (id, val) => { const v = variacoesMultiplas.find(x => x.id === id); if (v) v.sku = val; };
-    window._varMultSetPreco = (id, val) => { const v = variacoesMultiplas.find(x => x.id === id); if (v) v.preco_venda = parseFloat(val) || 0; };
     window._varMultSetQtdProduzida = (id, val) => {
         const v = variacoesMultiplas.find(x => x.id === id);
-        if (v) { v.quantidadeProduzida = parseInt(val, 10) || 1; renderListaVariacoesMultiplas(); }
-    };
-    window._varMultRemover = (id) => {
-        variacoesMultiplas = variacoesMultiplas.filter(x => x.id !== id);
-        renderListaVariacoesMultiplas();
+        if (v) { v.quantidadeProduzida = parseInt(val, 10) || 1; renderVariacaoModalBody(); }
     };
 
     // --- Materiais/máquinas/mão de obra POR VARIAÇÃO ---
@@ -772,13 +672,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!nome) { App.toast('warning', 'Informe o material ou selecione um insumo.'); return; }
         if (qtd <= 0) { App.toast('warning', 'Informe a quantidade.'); return; }
         v.precItens.materiais.push({ id: nextPrecId(), nome, quantidade: qtd, unidade, custo_unitario: custo, insumo_id: insumoId });
-        renderListaVariacoesMultiplas();
+        renderVariacaoModalBody();
     };
     window._varMatRemover = (vid, mid) => {
         const v = variacoesMultiplas.find(x => x.id === vid);
         if (!v) return;
         v.precItens.materiais = v.precItens.materiais.filter(m => m.id !== mid);
-        renderListaVariacoesMultiplas();
+        renderVariacaoModalBody();
     };
 
     window._varMaqAdicionar = (vid) => {
@@ -792,13 +692,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const unidade_tempo = $(`selMaqUn_${vid}`)?.value || 'h';
         const custo_hora = parseFloat($(`selMaqCusto_${vid}`)?.value || '0') || (m?.custo_total_hora || 0);
         v.precItens.maquinas.push({ id: nextPrecId(), maquina_id: m?.id || null, nome: m?.nome || 'Máquina', tempo, unidade_tempo, custo_hora });
-        renderListaVariacoesMultiplas();
+        renderVariacaoModalBody();
     };
     window._varMaqRemover = (vid, mid) => {
         const v = variacoesMultiplas.find(x => x.id === vid);
         if (!v) return;
         v.precItens.maquinas = v.precItens.maquinas.filter(m => m.id !== mid);
-        renderListaVariacoesMultiplas();
+        renderVariacaoModalBody();
     };
 
     window._varMoAdicionar = (vid) => {
@@ -811,13 +711,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!desc) { App.toast('warning', 'Informe a descrição da atividade.'); return; }
         if (tempo <= 0) { App.toast('warning', 'Informe o tempo.'); return; }
         v.precItens.mao_obra.push({ id: nextPrecId(), descricao: desc, tempo, unidade_tempo, valor_hora: valorH });
-        renderListaVariacoesMultiplas();
+        renderVariacaoModalBody();
     };
     window._varMoRemover = (vid, mid) => {
         const v = variacoesMultiplas.find(x => x.id === vid);
         if (!v) return;
         v.precItens.mao_obra = v.precItens.mao_obra.filter(m => m.id !== mid);
-        renderListaVariacoesMultiplas();
+        renderVariacaoModalBody();
     };
 
     window._faixaSetPreco = (vid, fid, val) => {
@@ -829,7 +729,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const v = variacoesMultiplas.find(x => x.id === vid);
         if (!v) return;
         v.precosQtd = v.precosQtd.filter(x => x.id !== fid);
-        renderListaVariacoesMultiplas();
+        renderVariacaoModalBody();
     };
     window._faixaAdicionar = (vid) => {
         const v = variacoesMultiplas.find(x => x.id === vid);
@@ -840,78 +740,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (v.precosQtd.some(f => f.quantidade === qtd)) { App.toast('warning', 'Já existe uma faixa para essa quantidade.'); return; }
         v.precosQtd.push({ id: nextFaixaId(), quantidade: qtd, preco });
         v.precosQtd.sort((a, b) => a.quantidade - b.quantidade);
-        renderListaVariacoesMultiplas();
+        renderVariacaoModalBody();
     };
-
-    window.removerPrecItem = (tipo, id) => {
-        precItens[tipo] = precItens[tipo].filter(i => i.id !== id);
-        if (tipo === 'materiais')  renderListaMateriaisPrec();
-        if (tipo === 'maquinas')   renderListaMaquinasPrec();
-        if (tipo === 'mao_obra')   renderListaMaoObraPrec();
-        calcularPrecificacaoUniversal();
-    };
-
-    // --- Cálculo universal em tempo real ---
-
-    function calcularPrecificacaoUniversal() {
-        const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        const setEl = (id, v) => { const el = $(id); if (el) el.textContent = fmt(v); };
-
-        const qtd    = Math.max(1, moedaNum('quantidade_produzida'));
-        const totalMat = precItens.materiais.reduce((s, m) => s + m.quantidade * m.custo_unitario, 0);
-        const totalMaq = precItens.maquinas.reduce((s, m) => {
-            const h = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
-            return s + h * m.custo_hora;
-        }, 0);
-        const totalMo  = precItens.mao_obra.reduce((s, m) => {
-            const h = m.unidade_tempo === 'h' ? m.tempo : m.tempo / 60;
-            return s + h * m.valor_hora;
-        }, 0);
-        const embala   = moedaNum('custo_embalagem');
-        const entrega  = moedaNum('custo_entrega');
-        const taxas    = moedaNum('custo_taxas');
-        const extra    = moedaNum('custo_extra');
-        const totalOut = embala + entrega + taxas + extra;
-        const perdas   = moedaNum('custo_perdas');
-        const perdasTipo = $('perdas_tipo')?.value || 'VALOR';
-        const subTotal = totalMat + totalMaq + totalMo + totalOut;
-        const totalPerd = perdasTipo === 'PERCENTUAL' ? subTotal * (perdas / 100) : perdas;
-        const custoTotal = subTotal + totalPerd;
-        const custoUnit  = custoTotal / qtd;
-        const marg    = moedaNum('margem_percentual');
-        const taxaP   = moedaNum('taxa_canal_percentual');
-        const taxaF   = moedaNum('taxa_canal_fixa');
-        const pSugUnit  = custoUnit * (1 + marg / 100);
-        const divisor   = (1 - taxaP / 100) || 1;
-        const pAdjUnit  = (pSugUnit + taxaF / qtd) / divisor;
-        const pLote     = pAdjUnit * qtd;
-        const lucro     = pAdjUnit - custoUnit;
-
-        setEl('resMateriais',     totalMat);
-        setEl('resMaquinas',      totalMaq);
-        setEl('resMaoObra',       totalMo);
-        setEl('resOutros',        totalOut);
-        setEl('resPerdas',        totalPerd);
-        setEl('resCustoTotal',    custoTotal);
-        setEl('resCustoUnitario', custoUnit);
-        setEl('resPrecoSugerido', pAdjUnit);
-        setEl('resPrecoLote',     pLote);
-        setEl('resLucro',         lucro);
-
-        _precCalc = { totalMat, totalMaq, totalMo, totalOut, totalPerd, custoTotal, custoUnit, pAdjUnit, pLote, lucro, qtd };
-
-        // Atualiza a margem exibida na tabela de preço por quantidade (se ativa)
-        if (multiVariacaoAtiva) renderListaVariacoesMultiplas();
-
-        // Auto-sugestão: preenche preco_venda se ainda não foi definido pelo usuário
-        if (pAdjUnit > 0 && moedaNum('preco_venda') === 0) {
-            setVal('preco_venda', pAdjUnit);
-            setVal('custo_producao', custoUnit);
-        }
-        if (custoUnit > 0 && moedaNum('custo_producao') === 0) {
-            setVal('custo_producao', custoUnit);
-        }
-    }
 
     // --- Eventos do passo 3 ---
 
@@ -921,160 +751,33 @@ document.addEventListener('DOMContentLoaded', () => {
             $(id)?.addEventListener('input', () => {
                 const compra  = moedaNum('preco_compra');
                 const margem  = moedaNum('margem_revenda');
-                if (compra > 0) {
-                    setVal('custo_producao', compra);
-                    setVal('preco_venda', compra * (1 + margem / 100));
-                }
+                if (compra > 0) recalcularModalAberto();
             });
         });
 
         // Serviço / Projeto: auto-calcular por hora
         ['horas_estimadas','valor_hora'].forEach(id => {
-            $(id)?.addEventListener('input', () => {
-                if ($('tipo_cobranca')?.value === 'HORA') {
-                    const h  = moedaNum('horas_estimadas');
-                    const vh = moedaNum('valor_hora');
-                    if (h > 0 && vh > 0) setVal('preco_venda', h * vh);
-                }
-            });
+            $(id)?.addEventListener('input', recalcularModalAberto);
         });
 
-        // Campos que disparam recálculo universal
+        // Campos compartilhados que afetam o custo de cada variação
         ['custo_embalagem','custo_entrega','custo_taxas','custo_extra',
          'custo_perdas','perdas_tipo','margem_percentual',
-         'taxa_canal_percentual','taxa_canal_fixa','quantidade_produzida'].forEach(id => {
-            $(id)?.addEventListener('input',  calcularPrecificacaoUniversal);
-            $(id)?.addEventListener('change', calcularPrecificacaoUniversal);
+         'taxa_canal_percentual','taxa_canal_fixa'].forEach(id => {
+            $(id)?.addEventListener('input',  recalcularModalAberto);
+            $(id)?.addEventListener('change', recalcularModalAberto);
         });
-
-        // Aplicar valores calculados
-        $('btnAplicarPreco')?.addEventListener('click', () => {
-            if (_precCalc.custoUnit > 0) setVal('custo_producao', _precCalc.custoUnit);
-            if (_precCalc.pAdjUnit  > 0) setVal('preco_venda',    _precCalc.pAdjUnit);
-            App.toast('success', 'Valores aplicados!');
-        });
-
-        // === MATERIAIS ===
-        $('btnAddMaterial')?.addEventListener('click', () => {
-            $('formAddMaterial')?.classList.toggle('hidden');
-            $('novoMatNome')?.focus();
-        });
-        $('novoMatInsumoId')?.addEventListener('change', () => {
-            const i = insumos.find(x => String(x.id) === String($('novoMatInsumoId')?.value));
-            if (i) {
-                if ($('novoMatNome'))    $('novoMatNome').value    = i.nome;
-                if ($('novoMatUnidade')) $('novoMatUnidade').value = i.unidade || 'un';
-                if ($('novoMatCusto'))   $('novoMatCusto').value   = i.custo_unitario || 0;
-            }
-        });
-        $('btnCancelMaterial')?.addEventListener('click', () => {
-            $('formAddMaterial')?.classList.add('hidden');
-            _limparFormMat();
-        });
-        $('btnConfirmMaterial')?.addEventListener('click', () => {
-            const nome   = $('novoMatNome')?.value.trim();
-            const qtd    = parseFloat($('novoMatQtd')?.value || '0') || 0;
-            const custo  = parseFloat($('novoMatCusto')?.value || '0') || 0;
-            const unidade = $('novoMatUnidade')?.value || 'un';
-            const insumoId = $('novoMatInsumoId')?.value ? parseInt($('novoMatInsumoId').value, 10) : null;
-            if (!nome)  { App.toast('warning', 'Informe o nome do material.'); return; }
-            if (qtd <= 0) { App.toast('warning', 'Informe a quantidade.'); return; }
-            precItens.materiais.push({ id: nextPrecId(), nome, quantidade: qtd, unidade, custo_unitario: custo, insumo_id: insumoId });
-            renderListaMateriaisPrec();
-            calcularPrecificacaoUniversal();
-            $('formAddMaterial')?.classList.add('hidden');
-            _limparFormMat();
-        });
-
-        // === MÁQUINAS ===
-        $('btnAddMaquina')?.addEventListener('click', () => {
-            $('formAddMaquina')?.classList.toggle('hidden');
-        });
-        $('novoMaqId')?.addEventListener('change', () => {
-            const m = maquinas.find(x => String(x.id) === String($('novoMaqId')?.value));
-            if (m) setVal('novoMaqCusto', m.custo_total_hora || 0);
-        });
-        $('btnCancelMaquina')?.addEventListener('click', () => {
-            $('formAddMaquina')?.classList.add('hidden');
-            _limparFormMaq();
-        });
-        $('btnConfirmMaquina')?.addEventListener('click', () => {
-            const maqId = $('novoMaqId')?.value;
-            const m = maquinas.find(x => String(x.id) === maqId);
-            if (!maqId) { App.toast('warning', 'Selecione uma máquina.'); return; }
-            const tempo = parseFloat($('novoMaqTempo')?.value || '0') || 0;
-            if (tempo <= 0) { App.toast('warning', 'Informe o tempo de uso.'); return; }
-            const unidade_tempo = $('novoMaqUnidade')?.value || 'h';
-            const custo_hora    = parseFloat($('novoMaqCusto')?.value || '0') || (m?.custo_total_hora || 0);
-            const observacao    = $('novoMaqObs')?.value.trim() || '';
-            precItens.maquinas.push({ id: nextPrecId(), maquina_id: m?.id || null, nome: m?.nome || 'Máquina', tipo: m?.tipo || '', tempo, unidade_tempo, custo_hora, observacao });
-            renderListaMaquinasPrec();
-            calcularPrecificacaoUniversal();
-            $('formAddMaquina')?.classList.add('hidden');
-            _limparFormMaq();
-        });
-
-        // === MÃO DE OBRA ===
-        $('btnAddMaoObra')?.addEventListener('click', () => {
-            $('formAddMaoObra')?.classList.toggle('hidden');
-            $('novoMoDesc')?.focus();
-        });
-        $('btnCancelMaoObra')?.addEventListener('click', () => {
-            $('formAddMaoObra')?.classList.add('hidden');
-            _limparFormMo();
-        });
-        $('btnConfirmMaoObra')?.addEventListener('click', () => {
-            const desc    = $('novoMoDesc')?.value.trim();
-            const tempo   = parseFloat($('novoMoTempo')?.value || '0') || 0;
-            const valorH  = parseFloat($('novoMoValor')?.value || '0') || 0;
-            const unidade_tempo = $('novoMoUnidade')?.value || 'h';
-            if (!desc)    { App.toast('warning', 'Informe a descrição da atividade.'); return; }
-            if (tempo <= 0) { App.toast('warning', 'Informe o tempo.'); return; }
-            precItens.mao_obra.push({ id: nextPrecId(), descricao: desc, tempo, unidade_tempo, valor_hora: valorH });
-            renderListaMaoObraPrec();
-            calcularPrecificacaoUniversal();
-            $('formAddMaoObra')?.classList.add('hidden');
-            _limparFormMo();
-        });
-    }
-
-    function _limparFormMat() {
-        if ($('novoMatNome'))     $('novoMatNome').value     = '';
-        if ($('novoMatQtd'))      $('novoMatQtd').value      = '0';
-        if ($('novoMatCusto'))    $('novoMatCusto').value    = '0';
-        if ($('novoMatInsumoId')) $('novoMatInsumoId').value = '';
-    }
-    function _limparFormMaq() {
-        if ($('novoMaqId'))    $('novoMaqId').value    = '';
-        if ($('novoMaqTempo')) $('novoMaqTempo').value = '0';
-        if ($('novoMaqCusto')) $('novoMaqCusto').value = '0';
-        if ($('novoMaqObs'))   $('novoMaqObs').value   = '';
-    }
-    function _limparFormMo() {
-        if ($('novoMoDesc'))   $('novoMoDesc').value  = '';
-        if ($('novoMoTempo'))  $('novoMoTempo').value = '0';
-        if ($('novoMoValor'))  $('novoMoValor').value = '0';
     }
 
     async function carregarMaquinas() {
         try {
             maquinas = await App.api('/maquinas');
-            const ativos = maquinas.filter(m => String(m.status || 'ATIVA') !== 'INATIVA');
-            const opts = ativos.map(m => `<option value="${m.id}">${esc(m.nome)}${m.modelo ? ' - '+esc(m.modelo) : ''} • ${money(m.custo_total_hora)}/h</option>`).join('');
-            const selNew = $('novoMaqId');
-            if (selNew) selNew.innerHTML = '<option value="">Selecione a máquina...</option>' + opts;
-            if (multiVariacaoAtiva) renderListaVariacoesMultiplas();
         } catch { maquinas = []; }
     }
 
     async function carregarInsumos() {
         try {
             insumos = await App.api('/insumos');
-            const ativos = insumos.filter(i => String(i.status || 'ATIVO') !== 'INATIVO');
-            const opts = ativos.map(i => `<option value="${i.id}">${i.status === 'PRE_CADASTRO' ? '⚠ ' : ''}${esc(i.nome)} • ${money(i.custo_unitario)}/${esc(i.unidade)} • estoque: ${App.number(i.estoque_atual)}${i.status === 'PRE_CADASTRO' ? ' (pré-cadastro)' : ''}</option>`).join('');
-            const selNew = $('novoMatInsumoId');
-            if (selNew) selNew.innerHTML = '<option value="">Personalizado (digite abaixo)...</option>' + opts;
-            if (multiVariacaoAtiva) renderListaVariacoesMultiplas();
         } catch { insumos = []; }
     }
 
@@ -1276,86 +979,55 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
     $('btnSalvar')?.addEventListener('click', async () => {
         const nome = $('nome')?.value.trim();
-        let variacao = $('variacao')?.value.trim();
-        let variacoesPayload = null;
-
-        if (multiVariacaoAtiva) {
-            const validas = variacoesMultiplas.filter(v => v.variacao.trim());
-            if (!nome) { App.toast('warning', 'Informe o nome do produto.'); return; }
-            if (!validas.length) { App.toast('warning', 'Adicione ao menos um tamanho/variação (passo 3).'); return; }
-            variacao = validas[0].variacao.trim();
-            variacoesPayload = validas.map(v => {
-                const calc = calcularCustoVariacao(v);
-                return {
-                    variacao_id: v.variacaoId || null,
-                    variacao: v.variacao.trim(),
-                    sku: v.sku?.trim() || '',
-                    preco_venda: v.preco_venda || 0,
-                    preco_repasse: 0,
-                    estoque: 0,
-                    quantidade_produzida: v.quantidadeProduzida || 1,
-                    itens_precificacao_json: JSON.stringify(v.precItens),
-                    custo_material: Number(calc.totalMat.toFixed(4)),
-                    custo_maquina: Number(calc.totalMaq.toFixed(4)),
-                    custo_mao_obra: Number(calc.totalMo.toFixed(4)),
-                    custo_total_producao: Number(calc.custoTotal.toFixed(4)),
-                    custo_unitario: Number(calc.custoUnit.toFixed(4)),
-                    preco_sugerido: Number(calc.pAdjUnit.toFixed(4)),
-                    precos_qtd: v.precosQtd.map(f => ({ quantidade: f.quantidade, preco_unitario: f.preco }))
-                };
-            });
-        } else if (!nome || !variacao) {
-            App.toast('warning','Preencha nome e variação (passo 2).'); return;
-        }
+        const validas = variacoesMultiplas.filter(v => v.variacao.trim());
+        if (!nome) { App.toast('warning', 'Informe o nome do produto.'); return; }
+        if (!validas.length) { App.toast('warning', 'Adicione ao menos uma variação ("+ Adicionar variação").'); return; }
+        const variacao = validas[0].variacao.trim();
+        const variacoesPayload = validas.map(v => {
+            const calc = calcularCustoVariacao(v);
+            return {
+                variacao_id: v.variacaoId || null,
+                variacao: v.variacao.trim(),
+                sku: v.sku?.trim() || '',
+                preco_venda: v.preco_venda || 0,
+                preco_repasse: 0,
+                estoque: 0,
+                quantidade_produzida: v.quantidadeProduzida || 1,
+                itens_precificacao_json: JSON.stringify(v.precItens),
+                custo_material: Number(calc.totalMat.toFixed(4)),
+                custo_maquina: Number(calc.totalMaq.toFixed(4)),
+                custo_mao_obra: Number(calc.totalMo.toFixed(4)),
+                custo_total_producao: Number(calc.custoTotal.toFixed(4)),
+                custo_unitario: Number(calc.custoUnit.toFixed(4)),
+                preco_sugerido: Number(calc.pAdjUnit.toFixed(4)),
+                precos_qtd: v.precosQtd.map(f => ({ quantidade: f.quantidade, preco_unitario: f.preco }))
+            };
+        });
 
         const fd = new FormData();
         fd.append('nome',         nome);
         fd.append('categoria',    $('categoria')?.value.trim() || '');
-        fd.append('variacao',     multiVariacaoAtiva ? variacao : ($('variacao2')?.value.trim() || variacao));
-        fd.append('sku',          multiVariacaoAtiva ? '' : ($('sku2')?.value.trim() || $('sku')?.value.trim() || ''));
-        if (variacoesPayload) fd.append('variacoes_json', JSON.stringify(variacoesPayload));
+        fd.append('variacao',     variacao);
+        fd.append('sku',          '');
+        fd.append('variacoes_json', JSON.stringify(variacoesPayload));
         fd.append('descricao', $('descricao')?.value.trim() || '');
         const _qlHtml = quillEditor ? quillEditor.root.innerHTML : ($('descricao_longa')?.value || '');
         fd.append('descricao_longa', _qlHtml === '<p><br></p>' ? '' : _qlHtml);
         fd.append('status',       $('status')?.value || 'ATIVO');
-        fd.append('estoque',      $('estoque')?.value || '0');
         fd.append('tipo_oferta',  tipoAtivo);
         fd.append('status_fluxo', statusFluxo);
         fd.append('destino_final',destinoAtivo);
         fd.append('precificado', 'true');
 
-        // Campos do formulário (inclui campos V6.6 + backward compat)
+        // Campos do formulário (V6.6 + específicos por tipo)
         const financ = [
-            'custo_producao','preco_repasse','preco_venda',
-            'quantidade_produzida','unidade_precificacao',
-            // backward compat (seguros se não existirem no template)
-            'peso_gramas','valor_kg_material','maquina_id','tempo_maquina_horas','valor_hora_maquina','custo_energia','custo_acessorios',
-            // campos V6.6 presentes no template universal
-            'custo_embalagem','custo_entrega','custo_taxas','custo_extra','custo_perdas','perdas_tipo',
-            'margem_percentual','canal_venda','taxa_canal_percentual','taxa_canal_fixa',
-            // campos específicos por tipo
+            'unidade_precificacao',
             'lead_time_dias','qtd_minima','horas_estimadas','valor_hora','tipo_cobranca','subtipo_projeto',
             'itens_pacote','desconto_pacote','fornecedor','codigo_fornecedor','preco_compra','margem_revenda',
+            'custo_embalagem','custo_entrega','custo_taxas','custo_extra','custo_perdas','perdas_tipo',
+            'margem_percentual','canal_venda','taxa_canal_percentual','taxa_canal_fixa',
         ];
         financ.forEach(id => { if ($(id)) fd.append(id, $(id).value); });
-
-        // Totais calculados (V6.6)
-        fd.append('itens_precificacao_json',  JSON.stringify(precItens));
-        fd.append('custo_material',           String((_precCalc.totalMat  || 0).toFixed(4)));
-        fd.append('custo_maquina',            String((_precCalc.totalMaq  || 0).toFixed(4)));
-        fd.append('custo_mao_obra',           String((_precCalc.totalMo   || 0).toFixed(4)));
-        fd.append('custo_total_producao',     String((_precCalc.custoTotal|| 0).toFixed(4)));
-        fd.append('custo_unitario',           String((_precCalc.custoUnit || 0).toFixed(4)));
-        fd.append('preco_sugerido',           String((_precCalc.pAdjUnit  || 0).toFixed(4)));
-        fd.append('preco_total_lote',         String((_precCalc.pLote     || 0).toFixed(4)));
-        // Snapshot da 1ª máquina para backward compat
-        if (precItens.maquinas.length > 0) {
-            const f = precItens.maquinas[0];
-            if (!$('maquina_id'))          fd.append('maquina_id',           String(f.maquina_id || ''));
-            if (!$('tempo_maquina_horas')) fd.append('tempo_maquina_horas',  String(f.unidade_tempo === 'h' ? f.tempo : f.tempo / 60));
-            if (!$('valor_hora_maquina'))  fd.append('valor_hora_maquina',   String(f.custo_hora));
-            fd.append('maquina_nome_snapshot', f.nome);
-        }
 
         // Imagens — envia arquivos novos em ordem ou, se só houver URLs, envia a nova ordem
         const _fileItems = galeriaItems.filter(i => !i.isUrl && i.file);
@@ -1410,18 +1082,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Step 2 — campos estáticos
             $('nome').value      = p.nome      || '';
-            $('categoria').value = p.categoria || '';
-            $('variacao').value  = p.variacao  || '';
-            $('sku').value       = p.sku       || '';
             $('descricao').value = p.descricao || '';
             if (quillEditor && p.descricao_longa) {
                 quillEditor.root.innerHTML = p.descricao_longa;
             }
+            await carregarCategorias(p.categoria || '');
 
-            // Produto com múltiplas variações/tamanhos cadastradas anteriormente
-            if (Array.isArray(p.variacoes) && p.variacoes.length > 1) {
-                multiVariacaoAtiva = true;
-                if ($('toggleMultiVariacao')) $('toggleMultiVariacao').checked = true;
+            // Carrega variações já cadastradas (ou cria uma a partir dos campos legados do produto)
+            if (Array.isArray(p.variacoes) && p.variacoes.length > 0) {
                 variacoesMultiplas = p.variacoes.map(v => {
                     let precItensSalvos = { materiais: [], maquinas: [], mao_obra: [] };
                     try {
@@ -1443,7 +1111,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         precosQtd: (v.precos_qtd || []).map(f => ({ id: nextFaixaId(), quantidade: f.quantidade, preco: Number(f.preco_unitario || 0) }))
                     };
                 });
+            } else if (p.variacao) {
+                // Backward compat: produto antigo só com campos de variação no nível do produto
+                variacoesMultiplas = [{
+                    id: nextVarMultId(),
+                    variacaoId: p.variacao_id || null,
+                    variacao: p.variacao || '',
+                    sku: p.sku || '',
+                    preco_venda: Number(p.preco_venda || p.preco_sugerido || 0),
+                    quantidadeProduzida: parseInt(p.quantidade_produzida, 10) || 1,
+                    precItens: { materiais: [], maquinas: [], mao_obra: [] },
+                    precosQtd: [],
+                }];
             }
+            renderVariacaoSelectOptions();
+            renderVariacoesResumo();
 
             // Guarda dados para preencher step 3 quando for renderizado
             _dadosEdicao = p;
@@ -1465,52 +1147,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const p = _dadosEdicao;
         if (!p) return;
 
-        // Campos do template universal (renderizados dinamicamente)
         const set = (id, val) => { const el = $(id); if (el && val != null && val !== '') el.value = val; };
-        set('variacao2',             p.variacao         || '');
-        set('sku2',                  p.sku              || '');
-        set('estoque',               p.estoque_central  ?? 0);
-        set('quantidade_produzida',  p.quantidade_produzida || 1);
         set('unidade_precificacao',  p.unidade_precificacao);
         set('status',                p.status           || 'ATIVO');
-        // Campos de variação (lead_time, qtd_min vêm de produto_variacoes)
         set('lead_time_dias',        p.lead_time_dias);
         set('qtd_minima',            p.qtd_minima);
-        // Outros custos (existem na tabela precificacoes)
         set('custo_embalagem',       p.custo_embalagem);
         set('custo_entrega',         p.custo_entrega);
         set('custo_taxas',           p.custo_taxas);
         set('custo_extra',           p.custo_extra);
         set('custo_perdas',          p.custo_perdas);
         set('perdas_tipo',           p.perdas_tipo);
-        // Margem/canal
         set('margem_percentual',     p.margem_percentual);
         set('canal_venda',           p.canal_venda);
         set('taxa_canal_percentual', p.taxa_canal_percentual);
         set('taxa_canal_fixa',       p.taxa_canal_fixa);
-        // Valores finais
-        set('custo_producao',        p.custo_total_producao || p.custo_producao);
-        set('preco_repasse',         p.preco_repasse);
-        set('preco_venda',           p.preco_sugerido || p.preco_venda);
-
-        // Restaura itens de precificação
-        if (p.itens_precificacao_json) {
-            try {
-                const itens = typeof p.itens_precificacao_json === 'string'
-                    ? JSON.parse(p.itens_precificacao_json)
-                    : p.itens_precificacao_json;
-                if (itens && typeof itens === 'object') {
-                    if (Array.isArray(itens.materiais)) precItens.materiais = itens.materiais;
-                    if (Array.isArray(itens.maquinas))  precItens.maquinas  = itens.maquinas;
-                    if (Array.isArray(itens.mao_obra))  precItens.mao_obra  = itens.mao_obra;
-                    renderListaMateriaisPrec();
-                    renderListaMaquinasPrec();
-                    renderListaMaoObraPrec();
-                }
-            } catch {}
-        }
-
-        calcularPrecificacaoUniversal();
     }
 
     function galeriaUrls(p) {
@@ -1526,17 +1177,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
     // EVENT LISTENERS DA NAVEGAÇÃO
     // =========================================================
-    function novaVariacaoMultipla() {
-        return { id: nextVarMultId(), variacaoId: null, variacao: '', sku: '', preco_venda: 0, precosQtd: [], quantidadeProduzida: 1, precItens: { materiais: [], maquinas: [], mao_obra: [] } };
-    }
-
-    $('toggleMultiVariacao')?.addEventListener('change', (e) => {
-        multiVariacaoAtiva = e.target.checked;
-        if (multiVariacaoAtiva && !variacoesMultiplas.length) {
-            variacoesMultiplas.push(novaVariacaoMultipla());
-        }
-    });
-
     $('btnP1Prox')?.addEventListener('click', () => irPasso(2));
     $('btnP2Ant')?.addEventListener('click', () => { stepAtual = 1; renderPasso(); });
     $('btnP2Prox')?.addEventListener('click', () => irPasso(3));
@@ -1548,6 +1188,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // INIT
     // =========================================================
     renderTipos();
+    carregarCategorias();
+    renderVariacaoSelectOptions();
+    renderVariacoesResumo();
 
     const params = new URLSearchParams(location.search);
     const idEdit = params.get('id');

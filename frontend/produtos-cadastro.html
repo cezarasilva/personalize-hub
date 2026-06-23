@@ -85,23 +85,18 @@
                     </div>
                     <div class="form-group">
                         <label for="categoria">Categoria</label>
-                        <input id="categoria" name="categoria" placeholder="Ex.: Impressão 3D, Design, Artesanato...">
-                    </div>
-                    <div class="form-group">
-                        <label for="variacao">Variação *</label>
-                        <input id="variacao" name="variacao" required placeholder="Cor, tamanho, modelo, padrão...">
-                    </div>
-                    <div class="form-group">
-                        <label for="sku">SKU</label>
-                        <input id="sku" name="sku" placeholder="Gerado automaticamente se vazio">
+                        <select id="categoria" name="categoria">
+                            <option value="">+ Adicionar categoria</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-group mt-2">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
-                        <input type="checkbox" id="toggleMultiVariacao" style="width:17px;height:17px">
-                        Este produto tem mais de um tamanho/variação, com tabela de preço por quantidade?
-                    </label>
-                    <small class="text-muted">Ex.: tamanhos 10x15 e 20x14, cada um com preço diferente por quantidade comprada.</small>
+                    <label for="variacaoSelect">Variações deste produto *</label>
+                    <select id="variacaoSelect">
+                        <option value="">+ Adicionar variação</option>
+                    </select>
+                    <small class="text-muted">Cadastre cores, tamanhos ou modelos — cada um com sua própria precificação e tabela de preço por quantidade.</small>
+                    <div class="variacoes-resumo" id="variacoesResumo"></div>
                 </div>
                 <div class="form-group mt-2">
                     <label for="descricao">Descrição curta</label>
@@ -191,6 +186,25 @@
         </form>
 
     </main>
+</div>
+
+<!-- Modal variação -->
+<div id="modalVariacao" class="app-modal hidden" aria-hidden="true">
+    <div class="app-modal-card app-modal-card-lg">
+        <div class="app-modal-header">
+            <div>
+                <h3 id="modalVariacaoTitulo">Nova variação</h3>
+                <p>Defina o nome, SKU e a precificação desta variação.</p>
+            </div>
+            <button type="button" class="icon-btn" id="btnFecharModalVariacao"><i class="bx bx-x"></i></button>
+        </div>
+        <div class="app-modal-body" id="modalVariacaoBody"></div>
+        <div class="app-modal-actions">
+            <button type="button" class="btn btn-light" id="btnRemoverVariacaoModal" style="display:none;margin-right:auto"><i class="bx bx-trash"></i> Remover variação</button>
+            <button type="button" class="btn btn-light" id="btnCancelarVariacaoModal">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btnSalvarVariacaoModal"><i class="bx bx-check"></i> Salvar variação</button>
+        </div>
+    </div>
 </div>
 
 <!-- Modal crop -->

@@ -1201,6 +1201,57 @@ tr:hover td { background: var(--surface-2); }
 .crop-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 
 /* ============================================================
+   MODAL GENÉRICO (ex.: adicionar/editar variação, categoria...)
+   ============================================================ */
+.app-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.app-modal-card {
+  width: min(640px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.app-modal-card-lg { width: min(880px, 100%); }
+.app-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.app-modal-header h3 { font-size: 18px; color: var(--text); font-weight: 700; margin-bottom: 3px; }
+.app-modal-header p { color: var(--muted); font-size: 13px; }
+.app-modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.app-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .app-modal { padding: 0; align-items: flex-end; }
+  .app-modal-card { width: 100%; max-height: 92vh; border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
+  .app-modal-card-lg { width: 100%; }
+}
+
+/* ============================================================
    GALERIA
    ============================================================ */
 .gallery-preview-box { align-items: flex-start; }
@@ -1249,6 +1300,24 @@ tr:hover td { background: var(--surface-2); }
 /* ============================================================
    PRODUTOS — CADASTRO / PRECIFICAÇÃO
    ============================================================ */
+.variacoes-resumo { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.variacao-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 8px 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.variacao-chip:hover { border-color: var(--primary); }
+.variacao-chip small { color: var(--muted); font-weight: 500; margin-left: 4px; }
+.variacao-chip .icon-btn { width: 24px; height: 24px; font-size: 13px; }
 .page-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .product-list-header { gap: 16px; align-items: center; flex-wrap: wrap; }
 .product-list-header input { max-width: 340px; }

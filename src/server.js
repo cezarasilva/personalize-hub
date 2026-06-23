@@ -1487,6 +1487,16 @@ app.get('/api/produtos', autenticar, async (req, res) => {
     }
 });
 
+app.get('/api/produtos/categorias', autenticar, async (req, res) => {
+    try {
+        const r = await db.query(`SELECT DISTINCT categoria FROM produtos WHERE categoria IS NOT NULL AND TRIM(categoria) <> '' ORDER BY categoria ASC`);
+        res.json(r.rows.map(row => row.categoria));
+    } catch (e) {
+        console.error('❌ Erro categorias:', e);
+        res.status(500).json({ erro: 'Erro ao buscar categorias: ' + e.message });
+    }
+});
+
 app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imagem', maxCount: 1 }, { name: 'imagens', maxCount: 10 }]), async (req, res) => {
     try {
         const { nome, categoria, descricao, variacao, sku, preco_venda, preco_repasse, custo_producao, estoque, status } = req.body;
