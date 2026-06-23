@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             produto_id: p.produto_id || p.id,
             id: p.produto_id || p.id,
+            variacao_id: p.variacao_id || null,
+            tipo_oferta: p.tipo_oferta || 'PRODUTO_PROPRIO',
             nome: p.produto_nome || p.nome || 'Produto sem nome',
             variacao: p.variacao || '',
             sku: p.sku || '',
@@ -353,6 +355,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         lote.push({
             produto_id: produtoSelecionado.produto_id,
+            variacao_id: produtoSelecionado.variacao_id,
+            tipo_oferta: produtoSelecionado.tipo_oferta,
             nome: produtoSelecionado.nome,
             variacao: produtoSelecionado.variacao,
             imagem_url: produtoSelecionado.imagem_url,
@@ -371,14 +375,85 @@ document.addEventListener('DOMContentLoaded', () => {
         if (idx !== undefined) { lote.splice(Number(idx), 1); renderCarrinho(); }
     });
 
+    // Produtos sob encomenda vendidos direto da Sede Central podem usar insumos
+    // que ainda não foram fisicamente comprados (pré-cadastro) ou que não têm
+    // estoque suficiente para esta quantidade. Antes de lançar a venda, verifica
+    // e pede confirmação de compra — só então a venda é enviada.
+    async function buscarInsumosPendentes() {
+        if (App.isParceiro() || origemVenda.value) return []; // só na venda direta central
+        const porInsumo = new Map();
+        for (const item of lote) {
+            if (item.tipo_oferta !== 'SOB_ENCOMENDA' || !item.variacao_id) continue;
+            try {
+                const pendentes = await App.api(`/produtos/${item.produto_id}/insumos-pendentes?variacao_id=${item.variacao_id}&quantidade=${item.quantidade}`);
+                pendentes.forEach(p => {
+                    const atual = porInsumo.get(p.insumo_id);
+                    if (!atual || p.faltante > atual.faltante) porInsumo.set(p.insumo_id, p);
+                });
+            } catch { /* se a checagem falhar, não bloqueia a venda */ }
+        }
+        return [...porInsumo.values()];
+    }
+
+    async function confirmarCompraInsumosPendentes(pendentes) {
+        const linhas = pendentes.map((p, idx) => `
+            <div style="text-align:left;margin-bottom:10px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">
+                <strong>${App.escapeHtml(p.nome)}</strong>
+                <small style="display:block;color:#64748b;">Necessário: ${App.number(p.necessario)} ${App.escapeHtml(p.unidade)} • Em estoque: ${App.number(p.disponivel)} ${App.escapeHtml(p.unidade)}</small>
+                <div style="display:flex;gap:8px;margin-top:6px;">
+                    <input id="pendQtd_${idx}" type="number" step="0.001" min="0" value="${p.faltante}" placeholder="Qtd. comprada" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:6px;">
+                    <input id="pendCusto_${idx}" type="number" step="0.01" min="0" value="${(p.faltante * (p.custo_unitario || 0)).toFixed(2)}" placeholder="Custo total pago (R$)" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:6px;">
+                </div>
+            </div>`).join('');
+
+        const r = await Swal.fire({
+            title: 'Confirmar compra de insumos',
+            html: `<div style="text-align:left;font-size:13px;margin-bottom:10px;">
+                       Este produto é sob encomenda e usa insumo(s) sem estoque suficiente.
+                       Informe a quantidade <strong>realmente comprada</strong> (pode ser maior do
+                       que o necessário para este pedido) e o custo total pago.
+                   </div>${linhas}`,
+            showCancelButton: true,
+            confirmButtonText: 'Confirmar compra e lançar venda',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            preConfirm: () => {
+                return pendentes.map((p, idx) => ({
+                    insumo_id: p.insumo_id,
+                    quantidade_comprada: Number(document.getElementById(`pendQtd_${idx}`).value || 0),
+                    custo_total: Number(document.getElementById(`pendCusto_${idx}`).value || 0)
+                }));
+            }
+        });
+        if (!r.isConfirmed) return false;
+
+        for (const c of r.value) {
+            if (c.quantidade_comprada <= 0) continue;
+            await App.api(`/insumos/${c.insumo_id}/confirmar-compra`, { method: 'PATCH', body: JSON.stringify(c) });
+        }
+        return true;
+    }
+
     btnFecharVenda.addEventListener('click', async () => {
         if (!lote.length) return App.toast('warning', 'Adicione produtos ao carrinho.');
+
+        try {
+            const pendentes = await buscarInsumosPendentes();
+            if (pendentes.length) {
+                const confirmou = await confirmarCompraInsumosPendentes(pendentes);
+                if (!confirmou) return;
+            }
+        } catch (err) {
+            App.toast('error', err.message);
+            return;
+        }
 
         const payload = {
             parceiro_id: App.isParceiro() ? null : (origemVenda.value || null),
             forma_pagamento: formaPagamentoVenda.value,
             itens: lote.map(i => ({
                 produto_id: i.produto_id,
+                variacao_id: i.variacao_id,
                 quantidade: i.quantidade,
                 ...(i.manual ? { valor_final_manual: i.valor_total.toFixed(2) } : {})
             }))

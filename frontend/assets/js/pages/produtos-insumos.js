@@ -71,6 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!i) return;
         editando = i;
         ['nome', 'unidade', 'custo_unitario', 'estoque_atual', 'estoque_minimo', 'status', 'observacao'].forEach(k => set(k, i[k] ?? ''));
+        const dica = document.getElementById('dicaPreCadastro');
+        if (dica) dica.style.display = i.status === 'PRE_CADASTRO' ? '' : 'none';
         document.getElementById('tituloInsumo').textContent = `Editando: ${i.nome}`;
         document.getElementById('btnCancelarEdicaoInsumo').classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -81,6 +83,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!ok.isConfirmed) return;
         try { await App.api(`/insumos/${id}`, { method: 'DELETE' }); App.toast('success', 'Insumo excluído.'); carregar(); } catch (err) { App.toast('error', err.message); }
     };
+
+    document.getElementById('status')?.addEventListener('change', (e) => {
+        const dica = document.getElementById('dicaPreCadastro');
+        if (dica) dica.style.display = e.target.value === 'PRE_CADASTRO' ? '' : 'none';
+    });
 
     document.getElementById('btnCancelarEdicaoInsumo').addEventListener('click', () => {
         editando = null;

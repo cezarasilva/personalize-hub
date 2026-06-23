@@ -74,7 +74,7 @@
         const imgs = imagensProduto(p);
         const key = `${p.id}-${p.variacao_id}`;
         const idx = galeriasEstado.get(key) || 0;
-        if (!imgs.length) return '<div class="catalogo-gallery"><div class="img-placeholder"><i class="bx bx-image"></i>Sem foto</div></div>';
+        if (!imgs.length) return '<div class="catalogo-gallery"><div class="img-placeholder"><i class="bx bx-image-alt"></i>Fotos em breve</div></div>';
         const nav = imgs.length > 1 ? `
             <button class="gallery-nav prev" onclick="moverFoto('${key}', -1)"><i class="bx bx-chevron-left"></i></button>
             <button class="gallery-nav next" onclick="moverFoto('${key}', 1)"><i class="bx bx-chevron-right"></i></button>` : '';
@@ -134,6 +134,23 @@
         }));
     }
 
+    // --- Variações / tabela de preço por quantidade ---
+
+    function variacoesDoProduto(p) {
+        if (Array.isArray(p.variacoes) && p.variacoes.length) return p.variacoes;
+        return [{ variacao_id: p.variacao_id, variacao: p.variacao, preco_publico: p.preco_publico, precos_qtd: [] }];
+    }
+
+    function opcoesQtd(variacao) {
+        if (Array.isArray(variacao.precos_qtd) && variacao.precos_qtd.length) return variacao.precos_qtd;
+        return [{ quantidade: 1, preco_unitario: variacao.preco_publico }];
+    }
+
+    function temSeletor(p) {
+        const vs = variacoesDoProduto(p);
+        return vs.length > 1 || vs.some(v => Array.isArray(v.precos_qtd) && v.precos_qtd.length > 0);
+    }
+
     function renderTopbar() {
         const nome = loja.nome_loja || 'PERSONALIZE';
         const topNome = document.getElementById('topbarNome');
@@ -152,6 +169,21 @@
 
     function cardHtml(p) {
         const gallery = renderGallery(p);
+        const vs = variacoesDoProduto(p);
+        const comSel = temSeletor(p);
+        const precoInicial = vs[0].preco_publico;
+
+        const seletorHtml = comSel ? `
+            <div class="cat-card-seletores" data-pid="${p.id}">
+                ${vs.length > 1 ? `
+                <select class="cat-sel-tamanho" onchange="window._catSelTamanhoChange(this, ${p.id})">
+                    ${vs.map((v, i) => `<option value="${i}">${esc(v.variacao || 'Padrão')}</option>`).join('')}
+                </select>` : ''}
+                <select class="cat-sel-qtd" onchange="window._catSelQtdChange(this, ${p.id})">
+                    ${opcoesQtd(vs[0]).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un.</option>`).join('')}
+                </select>
+            </div>` : '';
+
         return `
         <article class="cat-card">
             <div class="cat-card-media">
@@ -163,17 +195,41 @@
             <div class="cat-card-body">
                 <h3 class="cat-card-name">${esc(p.nome)}</h3>
                 <p class="cat-card-desc">${esc(p.descricao || '')}</p>
+                ${seletorHtml}
                 <div class="cat-card-bottom">
-                    <span class="cat-card-price">${money(p.preco_publico)}</span>
+                    <span class="cat-card-price" data-price-for="${p.id}">${money(precoInicial)}</span>
                     <div class="cat-card-btns">
-                        <a class="cat-btn-more" href="produto-detalhe.html?loja=${esc(slug)}&id=${p.id}&vid=${p.variacao_id}">Ver mais</a>
-                        <button class="cat-btn-add" onclick="adicionarItem(${p.id}, ${p.variacao_id})">
+                        <a class="cat-btn-more" href="produto-detalhe.html?loja=${esc(slug)}&id=${p.id}&vid=${vs[0].variacao_id}">Ver mais</a>
+                        <button class="cat-btn-add" onclick="adicionarItem(${p.id})">
                             <i class="bx bx-cart-add"></i> Adicionar
                         </button>
                     </div>
                 </div>
             </div>
         </article>`;
+    }
+
+    // Troca de tamanho: repopula as opções de quantidade da variação escolhida
+    window._catSelTamanhoChange = (selTam, produtoId) => {
+        const card = selTam.closest('.cat-card-seletores');
+        const prod = produtos.find(p => Number(p.id) === Number(produtoId));
+        if (!card || !prod) return;
+        const vs = variacoesDoProduto(prod);
+        const variacao = vs[Number(selTam.value || 0)] || vs[0];
+        const selQtd = card.querySelector('.cat-sel-qtd');
+        if (selQtd) {
+            selQtd.innerHTML = opcoesQtd(variacao).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un.</option>`).join('');
+        }
+        atualizarPrecoCard(produtoId, variacao.preco_publico);
+    };
+
+    window._catSelQtdChange = (selQtd, produtoId) => {
+        const preco = selQtd.selectedOptions[0]?.dataset.preco;
+        atualizarPrecoCard(produtoId, preco);
+    };
+
+    function atualizarPrecoCard(produtoId, preco) {
+        document.querySelectorAll(`[data-price-for="${produtoId}"]`).forEach(el => { el.textContent = money(preco); });
     }
 
     function atualizarVerMais() {
@@ -221,13 +277,46 @@
         atualizarVerMais();
     }
 
-    window.adicionarItem = (produtoId, variacaoId) => {
-        const prod = produtos.find(p => Number(p.id) === Number(produtoId) && Number(p.variacao_id) === Number(variacaoId));
+    // variacaoIdOverride/quantidadeOverride: usados quando o item vem da página de
+    // detalhe (sem card/selects na tela) — ver produto-detalhe.js
+    window.adicionarItem = (produtoId, variacaoIdOverride, quantidadeOverride) => {
+        const prod = produtos.find(p => Number(p.id) === Number(produtoId));
         if (!prod) return;
-        const key = `${produtoId}-${variacaoId}`;
+        const vs = variacoesDoProduto(prod);
+        const comSel = temSeletor(prod);
+
+        let variacao = vs[0];
+        let quantidade = 1;
+
+        if (variacaoIdOverride != null) {
+            variacao = vs.find(v => Number(v.variacao_id) === Number(variacaoIdOverride)) || vs[0];
+            if (quantidadeOverride != null) quantidade = Number(quantidadeOverride) || 1;
+        } else if (comSel) {
+            const card = document.querySelector(`.cat-card-seletores[data-pid="${produtoId}"]`);
+            if (card) {
+                const selTam = card.querySelector('.cat-sel-tamanho');
+                const selQtd = card.querySelector('.cat-sel-qtd');
+                const idx = selTam ? Number(selTam.value || 0) : 0;
+                variacao = vs[idx] || vs[0];
+                if (selQtd) quantidade = Number(selQtd.value || 1);
+            }
+        }
+
+        const faixa = opcoesQtd(variacao).find(f => Number(f.quantidade) === quantidade);
+        const precoUnit = faixa ? Number(faixa.preco_unitario) : Number(variacao.preco_publico || 0);
+
+        // Item com faixa de quantidade fixa: cada combinação tamanho+quantidade
+        // é uma linha própria no carrinho (não soma +1 livre, troca-se a faixa).
+        const key = `${produtoId}-${variacao.variacao_id}${comSel ? '-' + quantidade : ''}`;
         const existente = carrinho.find(i => i.key === key);
-        if (existente) existente.quantidade += 1;
-        else carrinho.push({ key, produto_id: produtoId, variacao_id: variacaoId, nome: prod.nome, variacao: prod.variacao, preco: Number(prod.preco_publico || 0), quantidade: 1 });
+        if (existente && !comSel) existente.quantidade += 1;
+        else if (!existente) {
+            carrinho.push({
+                key, produto_id: produtoId, variacao_id: variacao.variacao_id,
+                nome: prod.nome, variacao: variacao.variacao,
+                preco: precoUnit, quantidade, usaFaixa: comSel
+            });
+        }
         renderCarrinho();
         abrirCarrinho();
     };
@@ -248,17 +337,23 @@
             return;
         }
         lista.innerHTML = carrinho.map((i, idx) => {
-            const produto = produtos.find(p => Number(p.id) === Number(i.produto_id) && Number(p.variacao_id) === Number(i.variacao_id));
+            const produto = produtos.find(p => Number(p.id) === Number(i.produto_id));
             const imagem = imagensProduto(produto || {})[0] || '';
+            const variacao = produto ? (variacoesDoProduto(produto).find(v => Number(v.variacao_id) === Number(i.variacao_id))) : null;
+            const qtyControl = i.usaFaixa && variacao
+                ? `<select class="cart-qty-select" onchange="window._cartTrocarFaixa(${idx}, this)">
+                       ${opcoesQtd(variacao).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}" ${f.quantidade === i.quantidade ? 'selected' : ''}>${f.quantidade} un.</option>`).join('')}
+                   </select>`
+                : `<button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade - 1})" type="button">-</button>
+                   <span class="cart-qty-val">${i.quantidade}</span>
+                   <button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade + 1})" type="button">+</button>`;
             return `<div class="cart-item">
                 ${imagem ? `<img src="${esc(imagem)}" alt="${esc(i.nome)}">` : `<div class="cart-img-placeholder"><i class='bx bx-image'></i></div>`}
                 <div class="cart-item-info">
                     <div class="cart-item-title">${esc(i.nome)}</div>
-                    <div class="cart-item-price">${esc(i.variacao || '')} • ${money(i.preco)}</div>
+                    <div class="cart-item-price">${esc(i.variacao || '')} • ${money(i.preco)}/un</div>
                     <div class="cart-qty-box">
-                        <button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade - 1})" type="button">-</button>
-                        <span class="cart-qty-val">${i.quantidade}</span>
-                        <button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade + 1})" type="button">+</button>
+                        ${qtyControl}
                         <button class="cart-remove-inline" onclick="removerItem(${idx})" type="button"><i class='bx bx-trash'></i></button>
                     </div>
                 </div>
@@ -271,6 +366,16 @@
 
     window.alterarQtd = (idx, qtd) => { carrinho[idx].quantidade = Math.max(1, Number(qtd || 1)); renderCarrinho(); };
     window.removerItem = (idx) => { carrinho.splice(idx, 1); renderCarrinho(); };
+
+    // Troca a faixa de quantidade de um item com tabela de preço por quantidade
+    window._cartTrocarFaixa = (idx, sel) => {
+        const item = carrinho[idx];
+        if (!item) return;
+        item.quantidade = Number(sel.value || 1);
+        item.preco = Number(sel.selectedOptions[0]?.dataset.preco || item.preco);
+        item.key = `${item.produto_id}-${item.variacao_id}-${item.quantidade}`;
+        renderCarrinho();
+    };
 
     function abrirCarrinho() { document.getElementById('cartSidebar').classList.add('active'); document.getElementById('cartOverlay').classList.add('active'); renderCarrinho(); }
     function fecharCarrinho() { document.getElementById('cartSidebar').classList.remove('active'); document.getElementById('cartOverlay').classList.remove('active'); }
@@ -430,18 +535,16 @@
         document.body.style.setProperty('--catalogo-price-color', loja.cor_preco || '#16a34a');
         document.body.style.setProperty('--catalogo-button-color', loja.cor_botao || loja.cor_tema || '#2563eb');
         document.body.classList.toggle('catalogo-dark-app', String(loja.tema_catalogo || '').toUpperCase() === 'DARK_PREMIUM');
-        const links = [];
         const whats = whatsappDestino();
+        const wfloat = document.getElementById('whatsappFloat');
         if (whats) {
-            links.push(`<a class="btn btn-success" target="_blank" href="https://wa.me/55${whats}"><i class="bx bxl-whatsapp"></i> WhatsApp</a>`);
-            const wfloat = document.getElementById('whatsappFloat');
-            if (wfloat) { wfloat.href = `https://wa.me/55${whats}?text=${encodeURIComponent('Olá! Vim pelo catálogo ' + (loja.nome_loja || '') + ' e gostaria de atendimento.')}`; wfloat.style.display = 'flex'; }
+            const msg = encodeURIComponent('Olá! Vim pelo catálogo ' + (loja.nome_loja || '') + ' e gostaria de atendimento.');
+            if (wfloat) { wfloat.href = `https://wa.me/55${whats}?text=${msg}`; }
         } else {
-            const wfloat = document.getElementById('whatsappFloat');
             if (wfloat) wfloat.style.display = 'none';
         }
-        if (loja.instagram_catalogo) links.push(`<a class="btn btn-light" target="_blank" href="https://instagram.com/${esc(String(loja.instagram_catalogo).replace('@',''))}"><i class="bx bxl-instagram"></i> Instagram</a>`);
-        document.getElementById('linksContato').innerHTML = links.join('');
+        // Hero não exibe botões — apenas os flutuantes ficam visíveis
+        document.getElementById('linksContato').innerHTML = '';
         renderTopbar(); renderFooter(); iniciarBanners(); renderCarrinho(); renderCategorias(); renderProdutos();
 
         // Processar item pendente adicionado na página de detalhe
@@ -449,17 +552,41 @@
         if (pendingCart.length) {
             localStorage.removeItem('catalogoPending');
             pendingCart.forEach(p => {
-                const prod = produtos.find(x => Number(x.id) === Number(p.produto_id) && Number(x.variacao_id) === Number(p.variacao_id));
-                if (prod) adicionarItem(prod.id, prod.variacao_id);
+                const prod = produtos.find(x => Number(x.id) === Number(p.produto_id));
+                if (prod) adicionarItem(prod.id, p.variacao_id, p.quantidade);
             });
         }
     }
 
     // Topbar: transparente → sólido ao rolar
+    // Botões flutuantes: visíveis somente entre o hero e o footer
     const topbar = document.getElementById('catalogoTopbar');
-    window.addEventListener('scroll', () => {
-        topbar?.classList.toggle('scrolled', window.scrollY > 10);
-    }, { passive: true });
+    const floatEls = [
+        document.querySelector('.whatsapp-float'),
+        document.getElementById('floatingCartBtn'),
+        document.getElementById('floatingSearch'),
+    ].filter(Boolean);
+
+    function atualizarScroll() {
+        const scrollY = window.scrollY;
+        topbar?.classList.toggle('scrolled', scrollY > 10);
+
+        const hero   = document.getElementById('catalogoHeader');
+        const footer = document.getElementById('catalogoFooter');
+        if (!hero || !footer) return;
+
+        const heroBottom   = hero.getBoundingClientRect().bottom;
+        const footerTop    = footer.getBoundingClientRect().top;
+        const visivelZona  = heroBottom <= 20 && footerTop >= window.innerHeight * 0.15;
+
+        floatEls.forEach(el => {
+            el.style.opacity       = visivelZona ? '' : '0';
+            el.style.pointerEvents = visivelZona ? '' : 'none';
+        });
+    }
+
+    window.addEventListener('scroll', atualizarScroll, { passive: true });
+    atualizarScroll();
 
     // Touch: tap no card abre overlay; tap fora fecha
     document.getElementById('catalogoGrid')?.addEventListener('click', (e) => {

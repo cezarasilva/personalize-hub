@@ -1795,7 +1795,11 @@ tr:hover td { background: var(--surface-2); }
   position: fixed;
   right: 24px;
   z-index: 990;
-  transition: transform .25s ease, filter .25s ease;
+  transition: transform .25s ease, filter .25s ease, opacity .3s ease;
+}
+.whatsapp-float,
+.floating-cart-btn {
+  transition: transform .18s ease, filter .18s ease, opacity .3s ease !important;
 }
 .whatsapp-float {
   bottom: 166px;
@@ -1983,6 +1987,10 @@ tr:hover td { background: var(--surface-2); }
 }
 .cart-remove-inline { color: #f87171; }
 .cart-qty-val { font-size: 13px; font-weight: 700; width: 28px; text-align: center; color: #f1f5f9; }
+.cart-qty-select {
+  background: #1e293b; color: #f1f5f9; border: none; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 700; padding: 6px 8px; cursor: pointer;
+}
 .cart-footer {
   background: #020c1b;
   padding: 22px 28px;
@@ -2934,7 +2942,8 @@ tr:hover td { background: var(--surface-2); }
 
 /* Placeholder sem foto */
 .cat-card-media .img-placeholder {
-  min-height: 240px;
+  aspect-ratio: 3 / 4;
+  min-height: 180px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -3030,6 +3039,25 @@ tr:hover td { background: var(--surface-2); }
   overflow: hidden;
   margin-bottom: 8px;
 }
+.cat-card-seletores {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.cat-card-seletores select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(255,255,255,.1);
+  color: #fff;
+  padding: 0 8px;
+}
+.cat-card-seletores select option { color: #0f172a; }
+
 .cat-card-bottom {
   display: flex;
   align-items: center;
@@ -4256,6 +4284,13 @@ tr:hover td { background: var(--surface-2); }
   color: var(--text-2);
   margin: 0;
   font-weight: 600;
+}
+.det-seletores { display: flex; gap: 12px; margin: 14px 0; flex-wrap: wrap; }
+.det-seletores .form-group { flex: 1; min-width: 140px; margin: 0; }
+.det-seletores select {
+  width: 100%; height: 42px; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 14px; font-weight: 600; padding: 0 10px;
 }
 .det-preco-wrap { display: flex; align-items: center; gap: 12px; }
 .det-preco {

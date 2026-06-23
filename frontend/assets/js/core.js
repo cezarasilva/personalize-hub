@@ -110,6 +110,7 @@ window.App = (() => {
 
     function badgeStatus(status) {
         const st = String(status || '').toUpperCase();
+        if (st === 'PRE_CADASTRO') return `<span class="badge badge-yellow">PRÉ-CADASTRO</span>`;
         if (['ATIVO', 'CONCLUIDA', 'CONCLUÍDA', 'PAGO', 'RECEBIDA', 'ASSINADA', 'APROVADA'].includes(st)) return `<span class="badge badge-green">${escapeHtml(st)}</span>`;
         if (['PENDENTE', 'ESTORNO_PARCIAL', 'SEPARACAO', 'DESENVOLVIMENTO', 'AGUARDANDO_APROVACAO', 'PRODUCAO', 'TRANSPORTE'].includes(st)) return `<span class="badge badge-yellow">${escapeHtml(st)}</span>`;
         if (['ENVIADA', 'ABERTA'].includes(st)) return `<span class="badge badge-blue">${escapeHtml(st)}</span>`;

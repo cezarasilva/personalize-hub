@@ -253,6 +253,29 @@ async function migrarPrecosParceiroCatalogo() {
 migrarPrecosParceiroCatalogo();
 
 // =========================================================
+// V7.4 — Migração: tabela de preço por quantidade, por variação
+// (permite cadastrar faixas de preço — ex.: 1un, 2un, 10un...60un —
+// para cada variação/tamanho de um produto)
+// =========================================================
+async function migrarPrecosPorQuantidade() {
+    const ops = [
+        `CREATE TABLE IF NOT EXISTS produto_variacao_precos_qtd (
+            id             SERIAL PRIMARY KEY,
+            variacao_id    INTEGER NOT NULL REFERENCES produto_variacoes(id) ON DELETE CASCADE,
+            quantidade     INTEGER NOT NULL CHECK (quantidade > 0),
+            preco_unitario NUMERIC(10,2) NOT NULL CHECK (preco_unitario >= 0),
+            criado_em      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(variacao_id, quantidade)
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_pvpq_variacao ON produto_variacao_precos_qtd(variacao_id)`
+    ];
+    for (const sql of ops) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V7.4:', e.message); }
+    }
+}
+migrarPrecosPorQuantidade();
+
+// =========================================================
 // V7.1 — Migração: venda em lote (carrinho) com forma de pagamento
 // =========================================================
 async function migrarVendasLote() {
@@ -648,6 +671,84 @@ async function salvarPrecificacaoProduto(client, produtoId, variacaoId, body, us
         try { await client.query(`RELEASE SAVEPOINT ${sp}`); } catch (_) {}
         console.warn('⚠️ Falha ao salvar histórico de precificação. Produto será salvo normalmente:', err.message);
     }
+}
+
+// Cria/atualiza variações múltiplas de um produto (tamanhos diferentes),
+// cada uma com sua tabela de preço por quantidade. Usado quando o cadastro
+// envia `variacoes_json`. Retorna o id da primeira variação processada.
+async function salvarVariacoesMultiplas(client, produtoId, variacoesJson, body, usuarioId) {
+    let lista;
+    try { lista = JSON.parse(variacoesJson || '[]'); } catch { lista = []; }
+    if (!Array.isArray(lista) || !lista.length) return null;
+
+    let primeiraVariacaoId = null;
+    for (const item of lista) {
+        const nomeVar = String(item.variacao || '').trim();
+        if (!nomeVar) continue;
+        const precoVenda = parseMoeda(item.preco_venda);
+        const precoRepasse = parseMoeda(item.preco_repasse);
+        let variacaoId = toInt(item.variacao_id, 0) || null;
+        let variacaoNova = false;
+
+        if (variacaoId) {
+            await client.query(
+                `UPDATE produto_variacoes
+                 SET sku = COALESCE($1, sku), variacao = $2, preco_venda = $3, preco_repasse = $4
+                 WHERE id = $5 AND produto_id = $6`,
+                [item.sku ? normalizarSku(item.sku) : null, nomeVar, precoVenda, precoRepasse, variacaoId, produtoId]
+            );
+        } else {
+            const skuFinal = normalizarSku(item.sku) || gerarSkuAutomatico(body.nome || '', body.categoria || 'Impressão 3D', produtoId);
+            const vNova = await client.query(
+                `INSERT INTO produto_variacoes
+                    (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central, lead_time_dias, qtd_minima)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                 RETURNING id`,
+                [produtoId, skuFinal, nomeVar, precoVenda, precoRepasse, parseMoeda(body.custo_producao),
+                 toInt(item.estoque, 0), toInt(body.lead_time_dias, 0) || null, toInt(body.qtd_minima, 1)]
+            );
+            variacaoId = vNova.rows[0].id;
+            variacaoNova = true;
+        }
+        if (!primeiraVariacaoId) primeiraVariacaoId = variacaoId;
+
+        // Cada variação tem sua própria precificação (materiais, máquinas, mão de
+        // obra e custo unitário) — só os custos compartilhados (embalagem, entrega,
+        // taxas, perdas, margem, canal) vêm do corpo global do formulário.
+        const itemBody = {
+            ...body,
+            precificado: 'true',
+            quantidade_produzida: item.quantidade_produzida ?? body.quantidade_produzida,
+            itens_precificacao_json: item.itens_precificacao_json ?? body.itens_precificacao_json,
+            custo_material: item.custo_material ?? body.custo_material,
+            custo_maquina: item.custo_maquina ?? body.custo_maquina,
+            custo_mao_obra: item.custo_mao_obra ?? body.custo_mao_obra,
+            custo_total_producao: item.custo_total_producao ?? body.custo_total_producao,
+            custo_unitario: item.custo_unitario ?? body.custo_unitario,
+            preco_sugerido: item.preco_sugerido ?? body.preco_sugerido,
+        };
+        await salvarPrecificacaoProduto(client, produtoId, variacaoId, itemBody, usuarioId);
+        // Baixa de insumos só ocorre na criação da variação (mesma regra do
+        // caminho simples: editar não re-debita estoque de insumos).
+        if (variacaoNova) await baixarEstoqueInsumos(client, itemBody.itens_precificacao_json, usuarioId, body.nome || '');
+
+        // Substitui por completo as faixas de preço por quantidade desta variação
+        await client.query(`DELETE FROM produto_variacao_precos_qtd WHERE variacao_id = $1`, [variacaoId]);
+        const faixas = Array.isArray(item.precos_qtd) ? item.precos_qtd : [];
+        for (const f of faixas) {
+            const qtd = toInt(f.quantidade, 0);
+            const preco = parseMoeda(f.preco_unitario);
+            if (qtd > 0 && preco >= 0) {
+                await client.query(
+                    `INSERT INTO produto_variacao_precos_qtd (variacao_id, quantidade, preco_unitario)
+                     VALUES ($1, $2, $3)
+                     ON CONFLICT (variacao_id, quantidade) DO UPDATE SET preco_unitario = EXCLUDED.preco_unitario`,
+                    [variacaoId, qtd, preco]
+                );
+            }
+        }
+    }
+    return primeiraVariacaoId;
 }
 
 // Dá baixa no estoque dos insumos cadastrados usados na precificação do produto
@@ -1269,6 +1370,38 @@ app.delete('/api/insumos/:id', autenticar, somenteAdmin, async (req, res) => {
     }
 });
 
+// Confirma a compra de um insumo (pré-cadastro ou reabastecimento): soma ao
+// estoque, atualiza o custo e garante status ATIVO. Quantidade comprada pode
+// ser maior do que o necessário para um pedido específico (ex.: comprar um
+// rolo inteiro para usar em vários produtos futuros).
+app.patch('/api/insumos/:id/confirmar-compra', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const quantidadeComprada = parseMoeda(req.body.quantidade_comprada);
+        const custoUnitario = req.body.custo_unitario !== undefined
+            ? parseMoeda(req.body.custo_unitario)
+            : (quantidadeComprada > 0 ? parseMoeda(req.body.custo_total) / quantidadeComprada : null);
+        if (quantidadeComprada <= 0) return res.status(400).json({ erro: 'Informe a quantidade comprada.' });
+
+        const r = await db.query(
+            `UPDATE insumos
+             SET estoque_atual = estoque_atual + $1,
+                 custo_unitario = COALESCE($2, custo_unitario),
+                 status = 'ATIVO',
+                 atualizado_em = CURRENT_TIMESTAMP
+             WHERE id = $3
+             RETURNING *`,
+            [quantidadeComprada, custoUnitario, req.params.id]
+        );
+        if (!r.rows.length) return res.status(404).json({ erro: 'Insumo não encontrado.' });
+        const ins = r.rows[0];
+        await registrarAuditoria(req.user.id, `Confirmou compra de ${quantidadeComprada} ${ins.unidade} de "${ins.nome}" (estoque atual: ${ins.estoque_atual})`);
+        res.json(ins);
+    } catch (e) {
+        console.error('❌ Erro confirmar compra de insumo:', e);
+        res.status(500).json({ erro: 'Erro ao confirmar compra: ' + e.message });
+    }
+});
+
 // =========================================================
 // PRODUTOS
 // =========================================================
@@ -1380,19 +1513,26 @@ app.post('/api/produtos', autenticar, somenteAdmin, upload.fields([{ name: 'imag
             );
             produtoId = nP.rows[0].id;
 
-            const skuFinal = normalizarSku(sku) || gerarSkuAutomatico(nome, categoria || 'Impressão 3D', produtoId);
-            const vNova = await client.query(
-                `INSERT INTO produto_variacoes
-                    (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central, lead_time_dias, qtd_minima)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                 RETURNING id`,
-                [produtoId, skuFinal, variacao, precoVenda, precoRepasse, custo, qtdEstoque,
-                 toInt(req.body.lead_time_dias, 0) || null,
-                 toInt(req.body.qtd_minima, 1)]
-            );
+            // Produto com múltiplas variações/tamanhos (cada uma com sua tabela
+            // de preço por quantidade) — vem do construtor dinâmico do wizard.
+            const idVariacaoMultipla = await salvarVariacoesMultiplas(client, produtoId, req.body.variacoes_json, req.body, req.user.id);
 
-            await salvarPrecificacaoProduto(client, produtoId, vNova.rows[0].id, req.body, req.user.id);
-            await baixarEstoqueInsumos(client, req.body.itens_precificacao_json, req.user.id, nome);
+            if (!idVariacaoMultipla) {
+                // Caminho padrão: produto simples com 1 variação (comportamento atual).
+                const skuFinal = normalizarSku(sku) || gerarSkuAutomatico(nome, categoria || 'Impressão 3D', produtoId);
+                const vNova = await client.query(
+                    `INSERT INTO produto_variacoes
+                        (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central, lead_time_dias, qtd_minima)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                     RETURNING id`,
+                    [produtoId, skuFinal, variacao, precoVenda, precoRepasse, custo, qtdEstoque,
+                     toInt(req.body.lead_time_dias, 0) || null,
+                     toInt(req.body.qtd_minima, 1)]
+                );
+
+                await salvarPrecificacaoProduto(client, produtoId, vNova.rows[0].id, req.body, req.user.id);
+                await baixarEstoqueInsumos(client, req.body.itens_precificacao_json, req.user.id, nome);
+            }
 
             if (imagensUrls.length) {
                 await salvarGaleriaProduto(client, produtoId, imagensUrls);
@@ -1443,6 +1583,33 @@ app.get('/api/produtos/:id', autenticar, async (req, res) => {
                 v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central,
                 COALESCE(v.lead_time_dias, 0) AS lead_time_dias,
                 COALESCE(v.qtd_minima, 1)     AS qtd_minima,
+                COALESCE(
+                    (SELECT jsonb_agg(
+                        jsonb_build_object(
+                            'variacao_id', v2.id,
+                            'sku', v2.sku,
+                            'variacao', v2.variacao,
+                            'preco_venda', v2.preco_venda,
+                            'preco_repasse', v2.preco_repasse,
+                            'precos_qtd', COALESCE(
+                                (SELECT jsonb_agg(
+                                    jsonb_build_object('quantidade', pq.quantidade, 'preco_unitario', pq.preco_unitario)
+                                    ORDER BY pq.quantidade ASC)
+                                 FROM produto_variacao_precos_qtd pq WHERE pq.variacao_id = v2.id),
+                                '[]'::jsonb
+                            ),
+                            'quantidade_produzida', (
+                                SELECT pr2.quantidade_produzida FROM precificacoes pr2
+                                WHERE pr2.variacao_id = v2.id ORDER BY pr2.id DESC LIMIT 1
+                            ),
+                            'itens_precificacao_json', (
+                                SELECT pr2.itens_precificacao_json FROM precificacoes pr2
+                                WHERE pr2.variacao_id = v2.id ORDER BY pr2.id DESC LIMIT 1
+                            )
+                        ) ORDER BY v2.id ASC)
+                     FROM produto_variacoes v2 WHERE v2.produto_id = p.id),
+                    '[]'::jsonb
+                ) AS variacoes,
                 pr.id AS prec_id,
                 pr.custo_material, pr.custo_maquina, pr.custo_mao_obra,
                 pr.custo_embalagem, pr.custo_entrega, pr.custo_taxas,
@@ -1477,6 +1644,59 @@ app.get('/api/produtos/:id', autenticar, async (req, res) => {
     } catch (e) {
         console.error('❌ Erro produto por id:', e);
         res.status(500).json({ erro: 'Erro: ' + e.message });
+    }
+});
+
+// Verifica se os insumos da receita de uma variação têm estoque suficiente
+// para a quantidade que está sendo vendida agora. Não depende só do status
+// do insumo (PRE_CADASTRO) — mesmo um insumo já ATIVO pode não ter estoque
+// suficiente para um pedido maior, e nesse caso também entra como pendente.
+app.get('/api/produtos/:id/insumos-pendentes', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const variacaoId = toInt(req.query.variacao_id, 0);
+        const quantidade = Math.max(1, toInt(req.query.quantidade, 1));
+        if (!variacaoId) return res.status(400).json({ erro: 'variacao_id é obrigatório.' });
+
+        const prec = await db.query(
+            `SELECT itens_precificacao_json FROM precificacoes WHERE variacao_id = $1 ORDER BY id DESC LIMIT 1`,
+            [variacaoId]
+        );
+        if (!prec.rows.length) return res.json([]);
+
+        let itens;
+        try { itens = JSON.parse(prec.rows[0].itens_precificacao_json || '{}'); } catch { return res.json([]); }
+        const materiais = Array.isArray(itens?.materiais) ? itens.materiais : [];
+        const necessarios = materiais
+            .map(m => ({ insumoId: toInt(m?.insumo_id, 0), necessario: parseMoeda(m?.quantidade) * quantidade }))
+            .filter(m => m.insumoId && m.necessario > 0);
+        if (!necessarios.length) return res.json([]);
+
+        const ids = necessarios.map(m => m.insumoId);
+        const insumosRes = await db.query(`SELECT id, nome, unidade, estoque_atual, custo_unitario, status FROM insumos WHERE id = ANY($1)`, [ids]);
+        const porId = new Map(insumosRes.rows.map(i => [i.id, i]));
+
+        const pendentes = necessarios
+            .map(m => {
+                const ins = porId.get(m.insumoId);
+                if (!ins) return null;
+                const disponivel = parseMoeda(ins.estoque_atual);
+                if (disponivel >= m.necessario) return null;
+                return {
+                    insumo_id: ins.id,
+                    nome: ins.nome,
+                    unidade: ins.unidade,
+                    custo_unitario: parseMoeda(ins.custo_unitario),
+                    necessario: m.necessario,
+                    disponivel,
+                    faltante: Number((m.necessario - disponivel).toFixed(4))
+                };
+            })
+            .filter(Boolean);
+
+        res.json(pendentes);
+    } catch (e) {
+        console.error('❌ Erro insumos pendentes:', e);
+        res.status(500).json({ erro: 'Erro ao verificar insumos: ' + e.message });
     }
 });
 
@@ -1527,39 +1747,48 @@ app.put('/api/produtos/:id', autenticar, somenteAdmin, upload.fields([{ name: 'i
             const estoqueAnterior = toInt(produtoAtual.rows[0].estoque_central, 0);
             const estoqueNovo = novoEstoque !== undefined && novoEstoque !== '' ? toInt(novoEstoque, estoqueAnterior) : estoqueAnterior;
 
-            await client.query(
-                `UPDATE produto_variacoes
-                 SET sku = COALESCE($1, sku),
-                     variacao = COALESCE($2, variacao),
-                     preco_venda = COALESCE($3, preco_venda),
-                     preco_repasse = COALESCE($4, preco_repasse),
-                     custo_producao = COALESCE($5, custo_producao),
-                     estoque_central = COALESCE($6, estoque_central)
-                 WHERE produto_id = $7`,
-                [
-                    sku !== undefined ? normalizarSku(sku) : null,
-                    variacao || null,
-                    preco_venda !== undefined && preco_venda !== '' ? parseMoeda(preco_venda) : null,
-                    preco_repasse !== undefined && preco_repasse !== '' ? parseMoeda(preco_repasse) : null,
-                    custo_producao !== undefined && custo_producao !== '' ? parseMoeda(custo_producao) : null,
-                    estoqueNovo,
-                    id
-                ]
-            );
+            // Produto com múltiplas variações/tamanhos: atualiza/insere cada uma
+            // e suas faixas de preço por quantidade. Variações já existentes não
+            // listadas em variacoes_json não são removidas (preserva histórico
+            // de vendas/remessas que já referenciam aquela variação).
+            const idVariacaoMultipla = await salvarVariacoesMultiplas(client, id, req.body.variacoes_json, req.body, req.user.id);
 
-            await salvarPrecificacaoProduto(client, id, variacaoId, req.body, req.user.id);
+            if (!idVariacaoMultipla) {
+                // Caminho padrão: produto simples com 1 variação (comportamento atual).
+                await client.query(
+                    `UPDATE produto_variacoes
+                     SET sku = COALESCE($1, sku),
+                         variacao = COALESCE($2, variacao),
+                         preco_venda = COALESCE($3, preco_venda),
+                         preco_repasse = COALESCE($4, preco_repasse),
+                         custo_producao = COALESCE($5, custo_producao),
+                         estoque_central = COALESCE($6, estoque_central)
+                     WHERE produto_id = $7`,
+                    [
+                        sku !== undefined ? normalizarSku(sku) : null,
+                        variacao || null,
+                        preco_venda !== undefined && preco_venda !== '' ? parseMoeda(preco_venda) : null,
+                        preco_repasse !== undefined && preco_repasse !== '' ? parseMoeda(preco_repasse) : null,
+                        custo_producao !== undefined && custo_producao !== '' ? parseMoeda(custo_producao) : null,
+                        estoqueNovo,
+                        id
+                    ]
+                );
 
-            if (estoqueNovo !== estoqueAnterior) {
-                await registrarMovimentacao(client, {
-                    produto_id: id,
-                    variacao_id: variacaoId,
-                    usuario_id: req.user.id,
-                    tipo: 'AJUSTE_ESTOQUE_CENTRAL',
-                    quantidade: estoqueNovo - estoqueAnterior,
-                    estoque_origem: 'CENTRAL',
-                    estoque_destino: 'CENTRAL',
-                    observacao: `Ajuste manual: ${estoqueAnterior} → ${estoqueNovo}`
-                });
+                await salvarPrecificacaoProduto(client, id, variacaoId, req.body, req.user.id);
+
+                if (estoqueNovo !== estoqueAnterior) {
+                    await registrarMovimentacao(client, {
+                        produto_id: id,
+                        variacao_id: variacaoId,
+                        usuario_id: req.user.id,
+                        tipo: 'AJUSTE_ESTOQUE_CENTRAL',
+                        quantidade: estoqueNovo - estoqueAnterior,
+                        estoque_origem: 'CENTRAL',
+                        estoque_destino: 'CENTRAL',
+                        observacao: `Ajuste manual: ${estoqueAnterior} → ${estoqueNovo}`
+                    });
+                }
             }
         });
 
@@ -3183,6 +3412,7 @@ app.post('/api/vendas/lote', autenticar, async (req, res) => {
         await transacao(async (client) => {
             for (const item of itens) {
                 const { produto_id, quantidade, valor_final_manual } = item || {};
+                const variacaoIdItem = item?.variacao_id ? toInt(item.variacao_id, 0) : null;
                 const qtd = toInt(quantidade, 0);
                 if (!produto_id || qtd <= 0) throw new Error('Item inválido no carrinho.');
 
@@ -3190,9 +3420,10 @@ app.post('/api/vendas/lote', autenticar, async (req, res) => {
                     `SELECT v.id, v.preco_venda, v.preco_repasse, v.estoque_central, p.id AS produto_id, p.nome
                      FROM produto_variacoes v
                      JOIN produtos p ON p.id = v.produto_id
-                     WHERE v.produto_id = $1
+                     WHERE v.produto_id = $1 AND ($2::integer IS NULL OR v.id = $2)
+                     ORDER BY v.id ASC
                      LIMIT 1`,
-                    [produto_id]
+                    [produto_id, variacaoIdItem]
                 );
                 if (info.rows.length === 0) throw new Error('Produto não encontrado.');
                 const v = info.rows[0];
@@ -4597,26 +4828,47 @@ app.get('/api/catalogo-publico/:slug/produto/:id', async (req, res) => {
                         WHERE pi.produto_id = p.id ORDER BY pi.principal DESC, pi.ordem ASC LIMIT 1),
                        p.imagem_url
                    ) AS imagem_url,
-                   v.id AS variacao_id, v.variacao,
-                   COALESCE(v.lead_time_dias, 0) AS lead_time_dias,
-                   COALESCE(v.qtd_minima, 1) AS qtd_minima,
-                   v.estoque_central,
-                   CASE
-                       WHEN p.dono_tipo = 'PARCEIRO' THEN v.preco_venda
-                       ELSE COALESCE(v.preco_catalogo, v.preco_venda)
-                   END AS preco_publico,
+                   (vars.lista->0->>'variacao_id')::int AS variacao_id,
+                   vars.lista->0->>'variacao' AS variacao,
+                   (vars.lista->0->>'lead_time_dias')::int AS lead_time_dias,
+                   (vars.lista->0->>'qtd_minima')::int AS qtd_minima,
+                   (vars.lista->0->>'estoque_central')::int AS estoque_central,
+                   (vars.lista->0->>'preco_publico')::numeric AS preco_publico,
+                   vars.lista AS variacoes,
                    CASE WHEN p.dono_tipo = 'PARCEIRO' THEN 'LOJA' ELSE 'PERSONALIZE' END AS origem_publica
             FROM produtos p
-            JOIN produto_variacoes v ON v.produto_id = p.id
             LEFT JOIN LATERAL (
                 SELECT json_agg(pi.imagem_url ORDER BY pi.principal DESC, pi.ordem ASC, pi.id ASC) AS imagens
                 FROM produto_imagens pi WHERE pi.produto_id = p.id
             ) imgs ON true
+            JOIN LATERAL (
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'variacao_id', v.id,
+                        'variacao', v.variacao,
+                        'lead_time_dias', COALESCE(v.lead_time_dias, 0),
+                        'qtd_minima', COALESCE(v.qtd_minima, 1),
+                        'estoque_central', v.estoque_central,
+                        'preco_publico', CASE
+                            WHEN p.dono_tipo = 'PARCEIRO' THEN v.preco_venda
+                            ELSE COALESCE(v.preco_catalogo, v.preco_venda)
+                        END,
+                        'precos_qtd', COALESCE(
+                            (SELECT jsonb_agg(
+                                jsonb_build_object('quantidade', pq.quantidade, 'preco_unitario', pq.preco_unitario)
+                                ORDER BY pq.quantidade ASC)
+                             FROM produto_variacao_precos_qtd pq WHERE pq.variacao_id = v.id),
+                            '[]'::jsonb
+                        )
+                    ) ORDER BY v.id ASC
+                ) AS lista
+                FROM produto_variacoes v
+                WHERE v.produto_id = p.id
+            ) vars ON true
             WHERE p.id = $1
               AND COALESCE(p.status, 'ATIVO') = 'ATIVO'
               AND COALESCE(p.visivel_catalogo, true) = true
               AND COALESCE(p.aprovado_admin, true) = true
-            ORDER BY v.id ASC LIMIT 1
         `, [id]);
 
         if (!r.rows.length) return res.status(404).json({ erro: 'Produto não encontrado.' });
@@ -4681,22 +4933,42 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
                 p.id, p.nome, p.descricao, p.descricao_longa, p.categoria, p.dono_tipo, p.parceiro_id, p.origem_produto, COALESCE(p.produto_destaque, false) AS produto_destaque,
                 COALESCE((imgs.imagens->>0), p.imagem_url) AS imagem_url,
                 COALESCE(imgs.imagens, '[]'::json) AS imagens,
-                v.id AS variacao_id, v.variacao,
-                CASE
-                    WHEN ppc.preco_catalogo IS NOT NULL THEN ppc.preco_catalogo
-                    WHEN p.dono_tipo = 'PARCEIRO'       THEN v.preco_venda
-                    ELSE COALESCE(v.preco_catalogo, v.preco_venda)
-                END AS preco_publico,
+                (vars.lista->0->>'variacao_id')::int AS variacao_id,
+                vars.lista->0->>'variacao' AS variacao,
+                (vars.lista->0->>'preco_publico')::numeric AS preco_publico,
+                vars.lista AS variacoes,
                 CASE WHEN p.dono_tipo = 'PARCEIRO' THEN 'LOJA' ELSE 'PERSONALIZE' END AS origem_publica
              FROM produtos p
-             JOIN produto_variacoes v ON v.produto_id = p.id
              LEFT JOIN LATERAL (
                 SELECT json_agg(pi.imagem_url ORDER BY pi.principal DESC, pi.ordem ASC, pi.id ASC) AS imagens
                 FROM produto_imagens pi
                 WHERE pi.produto_id = p.id
              ) imgs ON true
-             LEFT JOIN parceiro_precos_catalogo ppc
-                ON ppc.variacao_id = v.id AND ppc.parceiro_id = ${parceiroId ? `$${params.length + 1}` : 'NULL'}
+             JOIN LATERAL (
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'variacao_id', v.id,
+                        'variacao', v.variacao,
+                        'preco_publico', CASE
+                            WHEN ppc.preco_catalogo IS NOT NULL THEN ppc.preco_catalogo
+                            WHEN p.dono_tipo = 'PARCEIRO'       THEN v.preco_venda
+                            ELSE COALESCE(v.preco_catalogo, v.preco_venda)
+                        END,
+                        'precos_qtd', COALESCE(
+                            (SELECT jsonb_agg(
+                                jsonb_build_object('quantidade', pq.quantidade, 'preco_unitario', pq.preco_unitario)
+                                ORDER BY pq.quantidade ASC)
+                             FROM produto_variacao_precos_qtd pq WHERE pq.variacao_id = v.id),
+                            '[]'::jsonb
+                        )
+                    ) ORDER BY v.id ASC
+                ) AS lista
+                FROM produto_variacoes v
+                LEFT JOIN parceiro_precos_catalogo ppc
+                    ON ppc.variacao_id = v.id AND ppc.parceiro_id = ${parceiroId ? `$${params.length + 1}` : 'NULL'}
+                WHERE v.produto_id = p.id
+                  AND COALESCE(ppc.visivel, true) = true
+             ) vars ON true
              WHERE ${where}
                AND COALESCE(p.status, 'ATIVO') = 'ATIVO'
                AND (
@@ -4704,7 +4976,7 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
                    OR COALESCE(p.visivel_catalogo, true) = true
                )
                AND COALESCE(p.aprovado_admin, true) = true
-               AND COALESCE(ppc.visivel, true) = true
+               AND vars.lista IS NOT NULL
              ORDER BY COALESCE(p.produto_destaque, false) DESC, CASE WHEN COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' THEN 0 ELSE 1 END, COALESCE(p.catalogo_ordem, 999999), p.nome ASC`,
             parceiroId ? [...params, parceiroId] : params
         );
@@ -4741,19 +5013,23 @@ app.post('/api/catalogo-publico/:slug/leads', limiterCatalogoPublico, async (req
         for (const item of itens) {
             const produtoId = toInt(item.produto_id, 0);
             const variacaoId = item.variacao_id ? toInt(item.variacao_id, 0) : null;
+            const quantidade = Math.max(1, toInt(item.quantidade, 1));
             const produto = await client.query(
                 `SELECT p.id, p.nome, p.dono_tipo, p.parceiro_id, v.id AS variacao_id, v.variacao,
-                        CASE WHEN p.dono_tipo = 'PARCEIRO' THEN v.preco_venda ELSE COALESCE(v.preco_catalogo, v.preco_venda) END AS preco_publico
+                        CASE WHEN p.dono_tipo = 'PARCEIRO' THEN v.preco_venda ELSE COALESCE(v.preco_catalogo, v.preco_venda) END AS preco_publico,
+                        (SELECT pq.preco_unitario FROM produto_variacao_precos_qtd pq
+                         WHERE pq.variacao_id = v.id AND pq.quantidade = $3) AS preco_faixa
                  FROM produtos p
                  JOIN produto_variacoes v ON v.produto_id = p.id
                  WHERE p.id = $1 AND ($2::integer IS NULL OR v.id = $2)
                  LIMIT 1`,
-                [produtoId, variacaoId]
+                [produtoId, variacaoId, quantidade]
             );
             if (!produto.rows.length) throw new Error('Produto não encontrado.');
             const p = produto.rows[0];
-            const quantidade = Math.max(1, toInt(item.quantidade, 1));
-            const valor = parseMoeda(p.preco_publico);
+            // Preço da faixa de quantidade cadastrada tem prioridade sobre o preço base —
+            // resolvido sempre no servidor, nunca confiado do cliente.
+            const valor = p.preco_faixa != null ? parseMoeda(p.preco_faixa) : parseMoeda(p.preco_publico);
             subtotal += valor * quantidade;
             snapshots.push({ ...p, quantidade, valor });
         }

@@ -106,15 +106,51 @@
         `;
     }
 
+    // --- Variações / tabela de preço por quantidade (mesmo padrão do catalogo-publico.js) ---
+
+    function variacoesDoProduto(p) {
+        if (Array.isArray(p.variacoes) && p.variacoes.length) return p.variacoes;
+        return [{ variacao_id: p.variacao_id, variacao: p.variacao, preco_publico: p.preco_publico, precos_qtd: [] }];
+    }
+
+    function opcoesQtd(variacao) {
+        if (Array.isArray(variacao.precos_qtd) && variacao.precos_qtd.length) return variacao.precos_qtd;
+        return [{ quantidade: 1, preco_unitario: variacao.preco_publico }];
+    }
+
+    function temSeletor(p) {
+        const vs = variacoesDoProduto(p);
+        return vs.length > 1 || vs.some(v => Array.isArray(v.precos_qtd) && v.precos_qtd.length > 0);
+    }
+
     function renderInfo(produto, loja) {
         const el = q('detInfoCol');
         if (!el) return;
 
         const whats = String(loja.whatsapp_catalogo || loja.telefone || '').replace(/\D/g, '');
-        const msgWa = `Olá! Tenho interesse no produto: *${produto.nome}*${produto.variacao ? ' (' + produto.variacao + ')' : ''}. Preço: ${money(produto.preco_publico)}`;
+        const vs = variacoesDoProduto(produto);
+        const comSel = temSeletor(produto);
+        const precoInicial = vs[0].preco_publico;
+
+        const msgWa = `Olá! Tenho interesse no produto: *${produto.nome}*${produto.variacao ? ' (' + produto.variacao + ')' : ''}. Preço: ${money(precoInicial)}`;
         const waLink = whats ? `https://wa.me/55${whats}?text=${encodeURIComponent(msgWa)}` : null;
 
         const estoque = produto.estoque_central !== null ? Number(produto.estoque_central) : null;
+
+        const seletorHtml = comSel ? `
+            <div class="det-seletores" id="detSeletores">
+                ${vs.length > 1 ? `
+                <div class="form-group"><label>Tamanho/variação</label>
+                    <select id="detSelTamanho" onchange="window._detTamanhoChange()">
+                        ${vs.map((v, i) => `<option value="${i}">${esc(v.variacao || 'Padrão')}</option>`).join('')}
+                    </select>
+                </div>` : ''}
+                <div class="form-group"><label>Quantidade</label>
+                    <select id="detSelQtd" onchange="window._detQtdChange()">
+                        ${opcoesQtd(vs[0]).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un.</option>`).join('')}
+                    </select>
+                </div>
+            </div>` : '';
 
         el.innerHTML = `
             <div class="det-info">
@@ -122,8 +158,10 @@
                 <h1 class="det-produto-nome">${esc(produto.nome)}</h1>
                 ${produto.variacao ? `<p class="det-produto-var">${esc(produto.variacao)}</p>` : ''}
 
+                ${seletorHtml}
+
                 <div class="det-preco-wrap">
-                    <span class="det-preco">${money(produto.preco_publico)}</span>
+                    <span class="det-preco" id="detPreco">${money(precoInicial)}</span>
                 </div>
 
                 ${produto.descricao ? `<p class="det-desc-curta">${esc(produto.descricao)}</p>` : ''}
@@ -155,11 +193,45 @@
                 </div>
             </div>
         `;
+
+        _produtoAtual = produto;
     }
 
+    let _produtoAtual = null;
+
+    window._detTamanhoChange = function () {
+        if (!_produtoAtual) return;
+        const vs = variacoesDoProduto(_produtoAtual);
+        const idx = Number(q('detSelTamanho')?.value || 0);
+        const variacao = vs[idx] || vs[0];
+        const selQtd = q('detSelQtd');
+        if (selQtd) selQtd.innerHTML = opcoesQtd(variacao).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un.</option>`).join('');
+        const preco = q('detPreco');
+        if (preco) preco.textContent = money(variacao.preco_publico);
+    };
+
+    window._detQtdChange = function () {
+        const sel = q('detSelQtd');
+        const preco = q('detPreco');
+        if (sel && preco) preco.textContent = money(sel.selectedOptions[0]?.dataset.preco);
+    };
+
     window._detAdd = function () {
+        let vidSelecionado = Number(variacaoId);
+        let qtdSelecionada = 1;
+
+        if (_produtoAtual) {
+            const vs = variacoesDoProduto(_produtoAtual);
+            const selTam = q('detSelTamanho');
+            const selQtd = q('detSelQtd');
+            const idx = selTam ? Number(selTam.value || 0) : 0;
+            const variacao = vs[idx] || vs[0];
+            vidSelecionado = Number(variacao.variacao_id);
+            if (selQtd) qtdSelecionada = Number(selQtd.value || 1);
+        }
+
         const pending = JSON.parse(localStorage.getItem('catalogoPending') || '[]');
-        pending.push({ produto_id: Number(produtoId), variacao_id: Number(variacaoId) });
+        pending.push({ produto_id: Number(produtoId), variacao_id: vidSelecionado, quantidade: qtdSelecionada });
         localStorage.setItem('catalogoPending', JSON.stringify(pending));
         const btn = q('detBtnCart');
         const ok = q('detAddOk');
