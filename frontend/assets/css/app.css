@@ -2819,61 +2819,6 @@ tr:hover td { background: var(--surface-2); }
   z-index: 2;
 }
 
-/* ---- Trust bar ---- */
-.cat-trust {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0,1fr));
-  gap: 14px;
-  margin-bottom: 32px;
-}
-.cat-trust-item {
-  background: rgba(255,255,255,.82);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255,255,255,.6);
-  border-radius: 20px;
-  padding: 20px 18px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.14);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  transition: box-shadow .25s, transform .25s;
-}
-[data-theme="dark"] .cat-trust-item {
-  background: rgba(15,23,42,.78);
-  border-color: rgba(255,255,255,.1);
-  box-shadow: 0 8px 32px rgba(0,0,0,.32);
-}
-.cat-trust-item:hover { box-shadow: 0 12px 40px rgba(0,0,0,.22); transform: translateY(-3px); }
-.cat-trust-icon {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.cat-trust-icon i {
-  font-size: 32px;
-  line-height: 1;
-  display: block;
-  color: var(--catalogo-button-color, var(--primary));
-}
-.cat-trust-item strong {
-  display: block;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1.2;
-}
-.cat-trust-item span {
-  display: block;
-  font-size: 12px;
-  color: var(--text-2);
-  margin-top: 3px;
-  line-height: 1.4;
-}
-
 /* ---- Filter bar ---- */
 .cat-filter-bar {
   display: flex;
@@ -3366,7 +3311,6 @@ tr:hover td { background: var(--surface-2); }
    RESPONSIVIDADE cat-*
    ============================================================ */
 @media (max-width: 1100px) {
-  .cat-trust { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .cat-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 
   /* Footer: empilha e centraliza também em tablet (não só no mobile) */
@@ -3377,10 +3321,6 @@ tr:hover td { background: var(--surface-2); }
   /* Botão "Adicionar" do card: só ícone em tablet/mobile (texto some) */
   .cat-btn-add { width: 38px; height: 38px; padding: 0; border-radius: 50%; }
   .cat-btn-add-label { display: none; }
-}
-
-@media (max-width: 760px) {
-  .cat-trust { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 
 @media (max-width: 900px) {
@@ -3403,7 +3343,6 @@ tr:hover td { background: var(--surface-2); }
   .cat-nav a { justify-content: center; }
   .cat-cart-pill { justify-content: center; }
   .cat-menu-toggle { display: inline-flex; }
-  .cat-trust { grid-template-columns: 1fr; }
   .cat-custom-content { grid-template-columns: 1fr; }
   .cat-custom-info { border-right: none; border-bottom: 1px solid rgba(255,255,255,.06); }
 }
