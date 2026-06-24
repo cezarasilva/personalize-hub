@@ -736,14 +736,18 @@ document.addEventListener('DOMContentLoaded', () => {
           </label>
           <div class="prec-lista">
             ${v.precosQtd.map(f => {
+                // Custo desta faixa = custo unitário base × quantidade da faixa
+                // (escala com a quantidade — 3un custa mais que 2un, e assim por diante).
+                const custoFaixa = calc.custoUnit * f.quantidade;
+                const precoTotalFaixa = f.preco * f.quantidade;
                 const margem = calc.custoUnit > 0 ? ((f.preco - calc.custoUnit) / calc.custoUnit * 100) : null;
                 return `<div class="prec-item">
                   <div class="prec-item-info">
                     <span class="prec-item-nome">${f.quantidade} un.</span>
                     <span class="prec-item-detalhe">
-                      <input type="number" step="0.01" min="0" value="${f.preco}" style="width:90px;display:inline-block"
-                             oninput="window._faixaSetPreco(${v.id},${f.id}, this.value)"> /un
-                      ${calc.custoUnit > 0 ? ` · custo ${money(calc.custoUnit)} · margem ${margem.toFixed(0)}%` : ''}
+                      <input type="number" step="0.01" min="0" value="${precoTotalFaixa.toFixed(2)}" style="width:90px;display:inline-block"
+                             oninput="window._faixaSetPreco(${v.id},${f.id}, this.value)"> total
+                      ${calc.custoUnit > 0 ? ` (${money(f.preco)}/un) · custo ${money(custoFaixa)} (${f.quantidade}×${money(calc.custoUnit)}) · margem ${margem.toFixed(0)}%` : ''}
                     </span>
                   </div>
                   <button type="button" class="btn btn-small btn-danger" onclick="window._faixaRemover(${v.id},${f.id})"><i class="bx bx-trash"></i></button>
@@ -752,7 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="prec-add-row" style="margin-top:8px">
             <div class="form-group"><label>Quantidade</label><input type="number" min="1" id="novaFaixaQtd_${v.id}" value="1"></div>
-            <div class="form-group"><label>Preço unit. (R$)</label><input type="number" step="0.01" min="0" id="novaFaixaPreco_${v.id}" value="0"></div>
+            <div class="form-group"><label>Valor de venda final (R$)</label><input type="number" step="0.01" min="0" id="novaFaixaPreco_${v.id}" value="0" placeholder="Total para essa quantidade"></div>
             <div class="form-group prec-add-actions"><label>&nbsp;</label>
               <button type="button" class="btn btn-primary btn-small" onclick="window._faixaAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
             </div>
@@ -827,10 +831,14 @@ document.addEventListener('DOMContentLoaded', () => {
         renderVariacaoModalBody();
     };
 
+    // O campo na tela é o VALOR DE VENDA FINAL daquela faixa (o total que o
+    // cliente paga por "quantidade" unidades, igual à tabela oficial — ex.:
+    // "3 un = R$5,90"). Internamente guardamos preço POR UNIDADE (f.preco),
+    // que é o que o catálogo/carrinho usam — por isso dividimos aqui.
     window._faixaSetPreco = (vid, fid, val) => {
         const v = variacoesMultiplas.find(x => x.id === vid);
         const f = v?.precosQtd.find(x => x.id === fid);
-        if (f) f.preco = parseFloat(val) || 0;
+        if (f) f.preco = (parseFloat(val) || 0) / f.quantidade;
     };
     window._faixaRemover = (vid, fid) => {
         const v = variacoesMultiplas.find(x => x.id === vid);
@@ -841,10 +849,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window._faixaAdicionar = (vid) => {
         const v = variacoesMultiplas.find(x => x.id === vid);
         if (!v) return;
-        const qtd   = parseInt($(`novaFaixaQtd_${vid}`)?.value || '0', 10) || 0;
-        const preco = parseFloat($(`novaFaixaPreco_${vid}`)?.value || '0') || 0;
+        const qtd = parseInt($(`novaFaixaQtd_${vid}`)?.value || '0', 10) || 0;
+        const valorVendaFinal = parseFloat($(`novaFaixaPreco_${vid}`)?.value || '0') || 0;
         if (qtd <= 0) { App.toast('warning', 'Informe uma quantidade válida.'); return; }
         if (v.precosQtd.some(f => f.quantidade === qtd)) { App.toast('warning', 'Já existe uma faixa para essa quantidade.'); return; }
+        const preco = valorVendaFinal / qtd; // guarda por unidade
         v.precosQtd.push({ id: nextFaixaId(), quantidade: qtd, preco });
         v.precosQtd.sort((a, b) => a.quantidade - b.quantidade);
         renderVariacaoModalBody();

@@ -590,16 +590,23 @@ async function salvarGaleriaProduto(client, produtoId, urls) {
 }
 
 
-function gerarSkuAutomatico(nome, categoria, produtoId) {
-    const limpar = (texto, fallback) => {
+// `extra` diferencia o SKU entre múltiplas variações do MESMO produto (ex.:
+// nome da variação + índice) — sem isso, duas variações sem SKU manual
+// geravam exatamente o mesmo código (categoria+nome+produtoId são iguais
+// para todas as variações de um produto) e violavam a constraint única.
+function gerarSkuAutomatico(nome, categoria, produtoId, extra) {
+    const limpar = (texto, fallback, tamanho = 3) => {
         const s = String(texto || '')
             .normalize('NFD')
             .replace(/[̀-ͯ]/g, '')
             .replace(/[^a-zA-Z0-9]/g, '')
             .toUpperCase();
-        return (s.slice(0, 3) || fallback);
+        return (s.slice(0, tamanho) || fallback);
     };
-    return `${limpar(categoria, 'PRD')}-${limpar(nome, 'PRO')}-${String(produtoId || Date.now()).padStart(4, '0')}`;
+    const base = `${limpar(categoria, 'PRD')}-${limpar(nome, 'PRO')}-${String(produtoId || Date.now()).padStart(4, '0')}`;
+    if (extra === undefined || extra === null || extra === '') return base;
+    const sufixo = limpar(extra, '', 8);
+    return sufixo ? `${base}-${sufixo}` : base;
 }
 
 function normalizarSku(valor) {
@@ -696,7 +703,8 @@ async function salvarVariacoesMultiplas(client, produtoId, variacoesJson, body, 
     if (!Array.isArray(lista) || !lista.length) return null;
 
     let primeiraVariacaoId = null;
-    for (const item of lista) {
+    for (let idx = 0; idx < lista.length; idx++) {
+        const item = lista[idx];
         const nomeVar = String(item.variacao || '').trim();
         if (!nomeVar) continue;
         // O modal de variação não tem mais um campo manual de "preço base" —
@@ -729,7 +737,7 @@ async function salvarVariacoesMultiplas(client, produtoId, variacoesJson, body, 
                 [item.sku ? normalizarSku(item.sku) : null, nomeVar, precoVenda, precoRepasse, custoProducao, eixosJson, variacaoId, produtoId]
             );
         } else {
-            const skuFinal = normalizarSku(item.sku) || gerarSkuAutomatico(body.nome || '', body.categoria || 'Impressão 3D', produtoId);
+            const skuFinal = normalizarSku(item.sku) || gerarSkuAutomatico(body.nome || '', body.categoria || 'Impressão 3D', produtoId, `${nomeVar}-${idx + 1}`);
             const vNova = await client.query(
                 `INSERT INTO produto_variacoes
                     (produto_id, sku, variacao, preco_venda, preco_repasse, custo_producao, estoque_central, lead_time_dias, qtd_minima, eixos_json)
