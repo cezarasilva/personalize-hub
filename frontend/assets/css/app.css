@@ -2427,7 +2427,8 @@ tr:hover td { background: var(--surface-2); }
   .floating-cart-btn { right: 16px !important; bottom: 18px !important; }
   .floating-search.active { width: calc(100vw - 32px) !important; }
   .catalogo-footer { padding: 52px 16px 32px !important; }
-  .footer-content { flex-direction: column; gap: 28px; }
+  .footer-content { flex-direction: column; align-items: center; gap: 28px; }
+  .footer-col { width: 100%; max-width: 320px; text-align: center; }
   .footer-lead-form { grid-template-columns: 1fr !important; }
   .kanban-toolbar { display: block; }
   .kanban-toolbar .form-group { margin-bottom: 10px; }
@@ -3179,8 +3180,26 @@ tr:hover td { background: var(--surface-2); }
 .cat-destaques-cabecalho p {
   font-size: 13.5px; color: var(--muted); font-weight: 500; margin: 0;
 }
-.cat-destaques-viewport { overflow: hidden; }
-.cat-destaques-track { display: flex; transition: transform .5s cubic-bezier(.4,0,.2,1); }
+.cat-destaques-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+.cat-destaques-viewport::-webkit-scrollbar { display: none; }
+.cat-destaques-track { display: flex; gap: 14px; }
+.cat-destaques-track .cat-card {
+  scroll-snap-align: start;
+  flex: 0 0 calc((100% - 3 * 14px) / 4);
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .cat-destaques-track .cat-card { flex: 0 0 calc((100% - 2 * 14px) / 3); }
+}
+@media (max-width: 640px) {
+  .cat-destaques-track .cat-card { flex: 0 0 100%; }
+}
 .cat-destaques-dots { display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
 .cat-destaques-dots span {
   width: 7px; height: 7px; border-radius: 50%;
@@ -3349,6 +3368,15 @@ tr:hover td { background: var(--surface-2); }
 @media (max-width: 1100px) {
   .cat-trust { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .cat-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+
+  /* Footer: empilha e centraliza também em tablet (não só no mobile) */
+  .footer-content { flex-direction: column; align-items: center; gap: 28px; }
+  .footer-col { width: 100%; max-width: 360px; text-align: center; }
+  .footer-col a { text-align: center; }
+
+  /* Botão "Adicionar" do card: só ícone em tablet/mobile (texto some) */
+  .cat-btn-add { width: 38px; height: 38px; padding: 0; border-radius: 50%; }
+  .cat-btn-add-label { display: none; }
 }
 
 @media (max-width: 760px) {
@@ -4171,7 +4199,8 @@ tr:hover td { background: var(--surface-2); }
 .det-main {
   max-width: 1140px;
   margin: 0 auto;
-  padding: 24px 20px 64px;
+  /* topbar é fixed (64px) e essa página não tem hero pra "abrir espaço" — soma aqui */
+  padding: calc(64px + 24px) 20px 64px;
 }
 
 /* Loading */

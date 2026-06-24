@@ -195,8 +195,9 @@
                 ${seletorHtml}
                 <div class="cat-card-bottom">
                     <span class="cat-card-price-pill" data-price-for="${p.id}">${money(precoInicial)}</span>
-                    <button class="cat-btn-add" onclick="adicionarItem(${p.id})">
-                        Adicionar <i class="bx bx-right-arrow-alt"></i>
+                    <button class="cat-btn-add" onclick="adicionarItem(${p.id})" title="Adicionar à sacola">
+                        <span class="cat-btn-add-label">Adicionar</span>
+                        <i class="bx bx-cart-add"></i>
                     </button>
                 </div>
                 ${stepperHtml(p)}
@@ -315,6 +316,10 @@
     }
 
     // --- Carrossel de destaques (logo abaixo do banner, antes da grade) ---
+    // O tamanho de cada card (4 desktop / 3 tablet / 1 mobile) é só CSS
+    // (flex-basis em %, ver app.css) — o scroll real é nativo do navegador
+    // (scroll-snap), então não há cálculo manual de pixel que possa
+    // "estourar" a lateral por arredondamento.
 
     function itensVisiveisDestaque() {
         const w = window.innerWidth;
@@ -338,7 +343,6 @@
         track.innerHTML = destaques.map(cardHtml).join('');
         destaqueIndex = 0;
         renderDestaqueDots();
-        aplicarPosicaoDestaque();
         iniciarAutoAvancoDestaque();
     }
 
@@ -349,28 +353,18 @@
         dots.innerHTML = paginas > 1
             ? Array.from({ length: paginas }, (_, i) => `<span data-dot="${i}"></span>`).join('')
             : '';
-        dots.querySelectorAll('[data-dot]').forEach(d => d.addEventListener('click', () => {
-            destaqueIndex = Number(d.dataset.dot);
-            aplicarPosicaoDestaque();
-            iniciarAutoAvancoDestaque();
-        }));
+        dots.querySelectorAll('[data-dot]').forEach(d => d.addEventListener('click', () => irParaPaginaDestaque(Number(d.dataset.dot))));
+        atualizarDotsAtivos();
     }
 
-    // Define a largura de cada card via JS (em vez de % no CSS) para garantir
-    // que exatamente N cards (4 desktop / 3 tablet / 1 mobile) caibam por
-    // "página" — translateX por página inteira fica simples e exato.
-    function aplicarPosicaoDestaque() {
+    function irParaPaginaDestaque(pagina) {
         const viewport = document.querySelector('.cat-destaques-viewport');
-        const track = document.getElementById('catalogoDestaquesTrack');
-        if (!viewport || !track || !destaques.length) return;
-        const itens = itensVisiveisDestaque();
-        const gap = 14;
-        const cardWidth = (viewport.offsetWidth - gap * (itens - 1)) / itens;
-        [...track.children].forEach(card => {
-            card.style.flex = `0 0 ${cardWidth}px`;
-            card.style.marginRight = gap + 'px';
-        });
-        track.style.transform = `translateX(-${destaqueIndex * viewport.offsetWidth}px)`;
+        if (!viewport) return;
+        destaqueIndex = pagina;
+        viewport.scrollTo({ left: pagina * viewport.clientWidth, behavior: 'smooth' });
+    }
+
+    function atualizarDotsAtivos() {
         document.querySelectorAll('#catalogoDestaquesDots [data-dot]').forEach((d, i) => d.classList.toggle('active', i === destaqueIndex));
     }
 
@@ -378,16 +372,30 @@
         clearInterval(destaqueTimer);
         if (totalPaginasDestaque() <= 1) return;
         destaqueTimer = setInterval(() => {
-            destaqueIndex = (destaqueIndex + 1) % totalPaginasDestaque();
-            aplicarPosicaoDestaque();
+            const viewport = document.querySelector('.cat-destaques-viewport');
+            if (!viewport) return;
+            const proxima = (destaqueIndex + 1) % totalPaginasDestaque();
+            irParaPaginaDestaque(proxima);
         }, 4500);
     }
+
+    // Mantém os pontinhos sincronizados quando o usuário arrasta/rola manualmente
+    let _scrollDestaqueRaf = null;
+    document.querySelector('.cat-destaques-viewport')?.addEventListener('scroll', () => {
+        if (_scrollDestaqueRaf) return;
+        _scrollDestaqueRaf = requestAnimationFrame(() => {
+            _scrollDestaqueRaf = null;
+            const viewport = document.querySelector('.cat-destaques-viewport');
+            if (!viewport || !viewport.clientWidth) return;
+            destaqueIndex = Math.round(viewport.scrollLeft / viewport.clientWidth);
+            atualizarDotsAtivos();
+        });
+    }, { passive: true });
 
     function redimensionarDestaque() {
         if (!destaques.length) return;
         destaqueIndex = Math.min(destaqueIndex, totalPaginasDestaque() - 1);
         renderDestaqueDots();
-        aplicarPosicaoDestaque();
         iniciarAutoAvancoDestaque();
     }
 
