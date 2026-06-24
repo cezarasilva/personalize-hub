@@ -30,6 +30,13 @@ window.App = (() => {
         if (!isAdmin()) window.location.replace('parceiro-dashboard.html');
     }
 
+    // ---- PWA: captura o prompt de instalação (Android/Windows) ----
+    let _deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        _deferredInstallPrompt = e;
+    });
+
     // ---- Loading overlay ----
     function _mostrarLoader() {
         if (document.getElementById('ph-page-loader')) return;
@@ -299,6 +306,11 @@ window.App = (() => {
                         <span>Alterar senha</span>
                     </button>
                     <div class="sc-divider"></div>
+                    <button class="sc-item" id="scInstalarApp" type="button">
+                        <i class="bx bx-download"></i>
+                        <span>Instalar app</span>
+                    </button>
+                    <div class="sc-divider"></div>
                     <button class="sc-item sc-item--danger" id="scSair" type="button">
                         <i class="bx bx-log-out"></i>
                         <span>Sair</span>
@@ -439,8 +451,44 @@ window.App = (() => {
             _abrirModalSenha();
         });
 
+        // Instalar app (PWA)
+        document.getElementById('scInstalarApp')?.addEventListener('click', () => {
+            footer?.classList.remove('open');
+            _instalarApp();
+        });
+
         // Sair
         document.getElementById('scSair')?.addEventListener('click', () => logout());
+    }
+
+    // ---- PWA: aciona o prompt nativo ou orienta a instalação manual ----
+    async function _instalarApp() {
+        const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        if (standalone) {
+            toast('info', 'O app já está instalado neste dispositivo.');
+            return;
+        }
+        if (_deferredInstallPrompt) {
+            const result = await _deferredInstallPrompt.prompt();
+            _deferredInstallPrompt = null;
+            if (result?.outcome === 'accepted') toast('success', 'App instalado com sucesso!');
+            return;
+        }
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+            if (window.Swal) {
+                Swal.fire({
+                    title: 'Instalar no iPhone/iPad',
+                    html: 'Toque no ícone <strong>Compartilhar</strong> na barra do Safari e depois em <strong>"Adicionar à Tela de Início"</strong>.',
+                    icon: 'info',
+                    confirmButtonText: 'Entendi'
+                });
+            } else {
+                alert('No Safari, toque em Compartilhar e depois em "Adicionar à Tela de Início".');
+            }
+            return;
+        }
+        toast('info', 'Abra o menu do navegador e escolha "Instalar app" ou "Adicionar à tela inicial".');
     }
 
     function _abrirModalSenha() {
