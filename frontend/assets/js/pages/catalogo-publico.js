@@ -22,6 +22,12 @@
     let bannerIndex = 0;
     let categoriaAtiva = 'TODOS';
     const galeriasEstado = new Map();
+    const stepperLivre = new Map(); // produtoId -> quantidade (produtos sem seletor/faixa)
+
+    // Carrossel de destaques
+    let destaques = [];
+    let destaqueIndex = 0;
+    let destaqueTimer = null;
 
     function pegarSlug() {
         const path = location.pathname.split('/').filter(Boolean);
@@ -75,45 +81,31 @@
         const key = `${p.id}-${p.variacao_id}`;
         const idx = galeriasEstado.get(key) || 0;
         if (!imgs.length) return '<div class="catalogo-gallery"><div class="img-placeholder"><i class="bx bx-image-alt"></i>Fotos em breve</div></div>';
-        const nav = imgs.length > 1 ? `
-            <button class="gallery-nav prev" onclick="moverFoto('${key}', -1)"><i class="bx bx-chevron-left"></i></button>
-            <button class="gallery-nav next" onclick="moverFoto('${key}', 1)"><i class="bx bx-chevron-right"></i></button>` : '';
+        const nav = imgs.length > 1
+            ? `<button class="gallery-nav next" onclick="event.preventDefault();event.stopPropagation();moverFoto('${key}', 1)"><i class="bx bx-chevron-right"></i></button>`
+            : '';
+        const dots = imgs.length > 1
+            ? `<div class="cat-card-dots">${imgs.map((_, i) => `<span class="${i === idx ? 'active' : ''}"></span>`).join('')}</div>`
+            : '';
         return `<div class="catalogo-gallery" data-gallery="${key}">
             <img src="${esc(imgs[idx])}" alt="${esc(p.nome)}">
             ${nav}
-            <button class="gallery-zoom" onclick="abrirZoom('${key}')"><i class="bx bx-search-alt-2"></i></button>
+            ${dots}
         </div>`;
     }
 
+    // Atualiza só a(s) galeria(s) daquele produto no DOM (pode existir tanto na
+    // grade quanto no carrossel de destaques) — evita re-renderizar tudo e
+    // resetar a posição/timer do carrossel.
     window.moverFoto = (key, delta) => {
         const prod = produtos.find(p => `${p.id}-${p.variacao_id}` === key);
         if (!prod) return;
         const imgs = imagensProduto(prod);
         const atual = galeriasEstado.get(key) || 0;
         galeriasEstado.set(key, (atual + delta + imgs.length) % imgs.length);
-        renderProdutos();
-    };
-
-    window.abrirZoom = (key) => {
-        const prod = produtos.find(p => `${p.id}-${p.variacao_id}` === key);
-        if (!prod) return;
-        const imgs = imagensProduto(prod);
-        let idx = galeriasEstado.get(key) || 0;
-        const overlay = document.createElement('div');
-        overlay.className = 'catalogo-modal-zoom';
-        const render = () => {
-            overlay.innerHTML = `
-                <button class="btn btn-light zoom-close"><i class="bx bx-x"></i> Fechar</button>
-                ${imgs.length > 1 ? '<button class="gallery-nav prev"><i class="bx bx-chevron-left"></i></button>' : ''}
-                <img src="${esc(imgs[idx])}" alt="${esc(prod.nome)}">
-                ${imgs.length > 1 ? '<button class="gallery-nav next"><i class="bx bx-chevron-right"></i></button>' : ''}
-            `;
-            overlay.querySelector('.zoom-close').onclick = () => overlay.remove();
-            overlay.querySelector('.prev')?.addEventListener('click', () => { idx = (idx - 1 + imgs.length) % imgs.length; galeriasEstado.set(key, idx); render(); });
-            overlay.querySelector('.next')?.addEventListener('click', () => { idx = (idx + 1) % imgs.length; galeriasEstado.set(key, idx); render(); });
-        };
-        render();
-        document.body.appendChild(overlay);
+        document.querySelectorAll(`.catalogo-gallery[data-gallery="${key}"]`).forEach(el => {
+            el.outerHTML = renderGallery(prod);
+        });
     };
 
 
@@ -172,6 +164,7 @@
         const vs = variacoesDoProduto(p);
         const comSel = temSeletor(p);
         const precoInicial = vs[0].preco_publico;
+        const href = `produto-detalhe.html?loja=${esc(slug)}&id=${p.id}&vid=${vs[0].variacao_id}`;
 
         const seletorHtml = comSel ? `
             <div class="cat-card-seletores" data-pid="${p.id}">
@@ -186,28 +179,72 @@
 
         return `
         <article class="cat-card">
-            <div class="cat-card-media">
-                ${gallery}
-                <div class="cat-card-badges">
+            <a class="cat-card-media-link" href="${href}">
+                <div class="cat-card-media">
+                    ${gallery}
                     ${p.produto_destaque ? '<span class="cat-badge-star"><i class="bx bxs-star"></i> Destaque</span>' : ''}
                 </div>
-            </div>
+            </a>
             <div class="cat-card-body">
-                <h3 class="cat-card-name">${esc(p.nome)}</h3>
+                <div class="cat-card-toprow">
+                    <a class="cat-card-name-link" href="${href}"><h3 class="cat-card-name">${esc(p.nome)}</h3></a>
+                    <span class="cat-card-price-inline" data-price-for="${p.id}">${money(precoInicial)}</span>
+                </div>
+                ${p.categoria ? `<p class="cat-card-subtitle">${esc(p.categoria)}</p>` : ''}
                 <p class="cat-card-desc">${esc(p.descricao || '')}</p>
                 ${seletorHtml}
                 <div class="cat-card-bottom">
-                    <span class="cat-card-price" data-price-for="${p.id}">${money(precoInicial)}</span>
-                    <div class="cat-card-btns">
-                        <a class="cat-btn-more" href="produto-detalhe.html?loja=${esc(slug)}&id=${p.id}&vid=${vs[0].variacao_id}">Ver mais</a>
-                        <button class="cat-btn-add" onclick="adicionarItem(${p.id})">
-                            <i class="bx bx-cart-add"></i> Adicionar
-                        </button>
-                    </div>
+                    <span class="cat-card-price-pill" data-price-for="${p.id}">${money(precoInicial)}</span>
+                    <button class="cat-btn-add" onclick="adicionarItem(${p.id})">
+                        Adicionar <i class="bx bx-right-arrow-alt"></i>
+                    </button>
                 </div>
+                ${stepperHtml(p)}
             </div>
         </article>`;
     }
+
+    // Stepper de quantidade — usado só no card mobile (lista horizontal). Para
+    // produtos com tabela de preço por quantidade, avança entre as faixas
+    // cadastradas (sincronizado com o <select> de quantidade); para produtos
+    // simples, é um contador livre a partir de 1.
+    function stepperHtml(p) {
+        const comSel = temSeletor(p);
+        const vs = variacoesDoProduto(p);
+        const valor = comSel ? `${opcoesQtd(vs[0])[0]?.quantidade ?? 1} un.` : String(stepperLivre.get(p.id) || 1);
+        return `
+        <div class="cat-card-stepper" data-pid="${p.id}">
+            <button type="button" class="cat-stepper-btn" onclick="window._catStepperMove(${p.id}, -1)" aria-label="Diminuir">−</button>
+            <span class="cat-stepper-val" data-stepper-val="${p.id}">${valor}</span>
+            <button type="button" class="cat-stepper-btn" onclick="window._catStepperMove(${p.id}, 1)" aria-label="Aumentar">+</button>
+            <button type="button" class="cat-btn-add-mobile" onclick="adicionarItem(${p.id})" title="Adicionar ao carrinho">
+                <i class="bx bx-cart-add"></i>
+            </button>
+        </div>`;
+    }
+
+    window._catStepperMove = (produtoId, delta) => {
+        const prod = produtos.find(p => Number(p.id) === Number(produtoId));
+        if (!prod) return;
+        const comSel = temSeletor(prod);
+        const valEl = document.querySelector(`[data-stepper-val="${produtoId}"]`);
+
+        if (comSel) {
+            const card = document.querySelector(`.cat-card-seletores[data-pid="${produtoId}"]`);
+            const selQtd = card?.querySelector('.cat-sel-qtd');
+            if (!selQtd) return;
+            const novoIndex = Math.min(selQtd.options.length - 1, Math.max(0, selQtd.selectedIndex + delta));
+            if (novoIndex === selQtd.selectedIndex) return;
+            selQtd.selectedIndex = novoIndex;
+            selQtd.dispatchEvent(new Event('change'));
+            if (valEl) valEl.textContent = `${selQtd.value} un.`;
+        } else {
+            const atual = stepperLivre.get(produtoId) || 1;
+            const novo = Math.max(1, atual + delta);
+            stepperLivre.set(produtoId, novo);
+            if (valEl) valEl.textContent = String(novo);
+        }
+    };
 
     // Troca de tamanho: repopula as opções de quantidade da variação escolhida
     window._catSelTamanhoChange = (selTam, produtoId) => {
@@ -277,6 +314,83 @@
         atualizarVerMais();
     }
 
+    // --- Carrossel de destaques (logo abaixo do banner, antes da grade) ---
+
+    function itensVisiveisDestaque() {
+        const w = window.innerWidth;
+        if (w <= 640) return 1;
+        if (w <= 1100) return 3;
+        return 4;
+    }
+
+    function totalPaginasDestaque() {
+        return Math.max(1, Math.ceil(destaques.length / itensVisiveisDestaque()));
+    }
+
+    function renderDestaques() {
+        const secao = document.getElementById('catalogoDestaques');
+        const track = document.getElementById('catalogoDestaquesTrack');
+        if (!secao || !track) return;
+        destaques = produtos.filter(p => p.produto_destaque);
+        clearInterval(destaqueTimer);
+        if (!destaques.length) { secao.style.display = 'none'; return; }
+        secao.style.display = '';
+        track.innerHTML = destaques.map(cardHtml).join('');
+        destaqueIndex = 0;
+        renderDestaqueDots();
+        aplicarPosicaoDestaque();
+        iniciarAutoAvancoDestaque();
+    }
+
+    function renderDestaqueDots() {
+        const dots = document.getElementById('catalogoDestaquesDots');
+        if (!dots) return;
+        const paginas = totalPaginasDestaque();
+        dots.innerHTML = paginas > 1
+            ? Array.from({ length: paginas }, (_, i) => `<span data-dot="${i}"></span>`).join('')
+            : '';
+        dots.querySelectorAll('[data-dot]').forEach(d => d.addEventListener('click', () => {
+            destaqueIndex = Number(d.dataset.dot);
+            aplicarPosicaoDestaque();
+            iniciarAutoAvancoDestaque();
+        }));
+    }
+
+    // Define a largura de cada card via JS (em vez de % no CSS) para garantir
+    // que exatamente N cards (4 desktop / 3 tablet / 1 mobile) caibam por
+    // "página" — translateX por página inteira fica simples e exato.
+    function aplicarPosicaoDestaque() {
+        const viewport = document.querySelector('.cat-destaques-viewport');
+        const track = document.getElementById('catalogoDestaquesTrack');
+        if (!viewport || !track || !destaques.length) return;
+        const itens = itensVisiveisDestaque();
+        const gap = 14;
+        const cardWidth = (viewport.offsetWidth - gap * (itens - 1)) / itens;
+        [...track.children].forEach(card => {
+            card.style.flex = `0 0 ${cardWidth}px`;
+            card.style.marginRight = gap + 'px';
+        });
+        track.style.transform = `translateX(-${destaqueIndex * viewport.offsetWidth}px)`;
+        document.querySelectorAll('#catalogoDestaquesDots [data-dot]').forEach((d, i) => d.classList.toggle('active', i === destaqueIndex));
+    }
+
+    function iniciarAutoAvancoDestaque() {
+        clearInterval(destaqueTimer);
+        if (totalPaginasDestaque() <= 1) return;
+        destaqueTimer = setInterval(() => {
+            destaqueIndex = (destaqueIndex + 1) % totalPaginasDestaque();
+            aplicarPosicaoDestaque();
+        }, 4500);
+    }
+
+    function redimensionarDestaque() {
+        if (!destaques.length) return;
+        destaqueIndex = Math.min(destaqueIndex, totalPaginasDestaque() - 1);
+        renderDestaqueDots();
+        aplicarPosicaoDestaque();
+        iniciarAutoAvancoDestaque();
+    }
+
     // variacaoIdOverride/quantidadeOverride: usados quando o item vem da página de
     // detalhe (sem card/selects na tela) — ver produto-detalhe.js
     window.adicionarItem = (produtoId, variacaoIdOverride, quantidadeOverride) => {
@@ -300,6 +414,9 @@
                 variacao = vs[idx] || vs[0];
                 if (selQtd) quantidade = Number(selQtd.value || 1);
             }
+        } else {
+            // Produto simples (sem seletor) — usa a quantidade definida no stepper mobile, se houver.
+            quantidade = stepperLivre.get(produtoId) || 1;
         }
 
         const faixa = opcoesQtd(variacao).find(f => Number(f.quantidade) === quantidade);
@@ -545,7 +662,7 @@
         }
         // Hero não exibe botões — apenas os flutuantes ficam visíveis
         document.getElementById('linksContato').innerHTML = '';
-        renderTopbar(); renderFooter(); iniciarBanners(); renderCarrinho(); renderCategorias(); renderProdutos();
+        renderTopbar(); renderFooter(); iniciarBanners(); renderCarrinho(); renderCategorias(); renderProdutos(); renderDestaques();
 
         // Processar item pendente adicionado na página de detalhe
         const pendingCart = JSON.parse(localStorage.getItem('catalogoPending') || '[]');
@@ -588,15 +705,7 @@
     window.addEventListener('scroll', atualizarScroll, { passive: true });
     atualizarScroll();
 
-    // Touch: tap no card abre overlay; tap fora fecha
-    document.getElementById('catalogoGrid')?.addEventListener('click', (e) => {
-        const card = e.target.closest('.cat-card');
-        if (!card) return;
-        if (e.target.closest('button') || e.target.closest('a')) return;
-        const isOpen = card.classList.contains('touch-open');
-        document.querySelectorAll('.cat-card.touch-open').forEach(c => c.classList.remove('touch-open'));
-        if (!isOpen) card.classList.add('touch-open');
-    });
+    window.addEventListener('resize', redimensionarDestaque);
 
     // Ver mais
     document.getElementById('btnVerMais')?.addEventListener('click', carregarMais);

@@ -123,6 +123,50 @@
         return vs.length > 1 || vs.some(v => Array.isArray(v.precos_qtd) && v.precos_qtd.length > 0);
     }
 
+    // Lê o eixos_json de cada variação (gerado pelo "Gerar variações" do
+    // cadastro). Se TODAS as variações tiverem eixos válidos, retorna um mapa
+    // {NomeDoEixo: [valores únicos]} para montar seletores separados (chips).
+    // Se alguma variação não tiver (produto simples/legado), retorna null —
+    // cai no <select> único de sempre, sem regressão.
+    function parseEixos(v) {
+        try {
+            const e = typeof v.eixos_json === 'string' ? JSON.parse(v.eixos_json) : v.eixos_json;
+            return e && typeof e === 'object' ? e : null;
+        } catch { return null; }
+    }
+
+    function eixosDasVariacoes(vs) {
+        const parsed = vs.map(parseEixos);
+        if (vs.length < 2 || parsed.some(e => !e)) return null;
+        const eixos = {};
+        parsed.forEach(combo => {
+            Object.entries(combo).forEach(([nome, valor]) => {
+                if (!eixos[nome]) eixos[nome] = [];
+                if (!eixos[nome].includes(valor)) eixos[nome].push(valor);
+            });
+        });
+        return Object.keys(eixos).length ? eixos : null;
+    }
+
+    function encontrarVariacaoPorEixos(vs, selecao) {
+        return vs.find(v => {
+            const e = parseEixos(v);
+            if (!e) return false;
+            return Object.keys(selecao).every(k => String(e[k]) === String(selecao[k]));
+        });
+    }
+
+    function formatarVendidos(n) {
+        const total = Number(n || 0);
+        if (total <= 0) return '';
+        if (total < 5) return `${total} vendido${total === 1 ? '' : 's'}`;
+        const faixas = [1000, 500, 100, 50, 25, 10, 5];
+        const faixa = faixas.find(f => total >= f) || 5;
+        return `+${faixa} vendidos`;
+    }
+
+    let _variacaoAtualId = null;
+
     function renderInfo(produto, loja) {
         const el = q('detInfoCol');
         if (!el) return;
@@ -130,14 +174,38 @@
         const whats = String(loja.whatsapp_catalogo || loja.telefone || '').replace(/\D/g, '');
         const vs = variacoesDoProduto(produto);
         const comSel = temSeletor(produto);
-        const precoInicial = vs[0].preco_publico;
+        const eixosMap = eixosDasVariacoes(vs);
+        const variacaoInicial = vs.find(v => Number(v.variacao_id) === Number(variacaoId)) || vs[0];
+        const precoInicial = variacaoInicial.preco_publico;
+        _variacaoAtualId = variacaoInicial.variacao_id;
 
         const msgWa = `Olá! Tenho interesse no produto: *${produto.nome}*${produto.variacao ? ' (' + produto.variacao + ')' : ''}. Preço: ${money(precoInicial)}`;
         const waLink = whats ? `https://wa.me/55${whats}?text=${encodeURIComponent(msgWa)}` : null;
 
         const estoque = produto.estoque_central !== null ? Number(produto.estoque_central) : null;
+        const vendidosTxt = formatarVendidos(produto.total_vendido);
 
-        const seletorHtml = comSel ? `
+        let seletorHtml;
+        if (eixosMap) {
+            const selecaoInicial = parseEixos(variacaoInicial) || {};
+            seletorHtml = `
+                <div class="det-eixos" id="detEixos">
+                    ${Object.entries(eixosMap).map(([nomeEixo, valores]) => `
+                        <div class="det-eixo-grupo">
+                            <label>${esc(nomeEixo)}</label>
+                            <div class="det-eixo-chips">
+                                ${valores.map(v => `<button type="button" class="det-eixo-chip${selecaoInicial[nomeEixo] === v ? ' active' : ''}" data-eixo="${esc(nomeEixo)}" data-valor="${esc(v)}" onclick="window._detEixoSelecionar(this)">${esc(v)}</button>`).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="form-group mt-2"><label>Quantidade</label>
+                    <select id="detSelQtd" onchange="window._detQtdChange()">
+                        ${opcoesQtd(variacaoInicial).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un.</option>`).join('')}
+                    </select>
+                </div>`;
+        } else if (comSel) {
+            seletorHtml = `
             <div class="det-seletores" id="detSeletores">
                 ${vs.length > 1 ? `
                 <div class="form-group"><label>Tamanho/variação</label>
@@ -150,13 +218,17 @@
                         ${opcoesQtd(vs[0]).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un.</option>`).join('')}
                     </select>
                 </div>
-            </div>` : '';
+            </div>`;
+        } else {
+            seletorHtml = '';
+        }
 
         el.innerHTML = `
             <div class="det-info">
                 ${produto.categoria ? `<span class="det-cat-pill">${esc(produto.categoria)}</span>` : ''}
                 <h1 class="det-produto-nome">${esc(produto.nome)}</h1>
                 ${produto.variacao ? `<p class="det-produto-var">${esc(produto.variacao)}</p>` : ''}
+                ${vendidosTxt ? `<p class="det-vendidos"><i class="bx bx-trending-up"></i> ${esc(vendidosTxt)}</p>` : ''}
 
                 ${seletorHtml}
 
@@ -204,6 +276,31 @@
         const vs = variacoesDoProduto(_produtoAtual);
         const idx = Number(q('detSelTamanho')?.value || 0);
         const variacao = vs[idx] || vs[0];
+        _variacaoAtualId = variacao.variacao_id;
+        const selQtd = q('detSelQtd');
+        if (selQtd) selQtd.innerHTML = opcoesQtd(variacao).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un.</option>`).join('');
+        const preco = q('detPreco');
+        if (preco) preco.textContent = money(variacao.preco_publico);
+    };
+
+    // Seleção por eixo separado (ex.: Cor e Tamanho independentes). Atualiza
+    // só o grupo do eixo clicado e recompõe a seleção lendo todos os grupos.
+    window._detEixoSelecionar = function (btn) {
+        if (!_produtoAtual) return;
+        const vs = variacoesDoProduto(_produtoAtual);
+
+        btn.closest('.det-eixo-grupo')?.querySelectorAll('.det-eixo-chip').forEach(c => c.classList.toggle('active', c === btn));
+
+        const selecao = {};
+        document.querySelectorAll('#detEixos .det-eixo-grupo').forEach(grupo => {
+            const ativo = grupo.querySelector('.det-eixo-chip.active');
+            if (ativo) selecao[ativo.dataset.eixo] = ativo.dataset.valor;
+        });
+
+        const variacao = encontrarVariacaoPorEixos(vs, selecao);
+        if (!variacao) return; // combinação ainda incompleta ou indisponível
+
+        _variacaoAtualId = variacao.variacao_id;
         const selQtd = q('detSelQtd');
         if (selQtd) selQtd.innerHTML = opcoesQtd(variacao).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un.</option>`).join('');
         const preco = q('detPreco');
@@ -217,18 +314,9 @@
     };
 
     window._detAdd = function () {
-        let vidSelecionado = Number(variacaoId);
-        let qtdSelecionada = 1;
-
-        if (_produtoAtual) {
-            const vs = variacoesDoProduto(_produtoAtual);
-            const selTam = q('detSelTamanho');
-            const selQtd = q('detSelQtd');
-            const idx = selTam ? Number(selTam.value || 0) : 0;
-            const variacao = vs[idx] || vs[0];
-            vidSelecionado = Number(variacao.variacao_id);
-            if (selQtd) qtdSelecionada = Number(selQtd.value || 1);
-        }
+        const selQtd = q('detSelQtd');
+        const qtdSelecionada = selQtd ? Number(selQtd.value || 1) : 1;
+        const vidSelecionado = _variacaoAtualId != null ? Number(_variacaoAtualId) : Number(variacaoId);
 
         const pending = JSON.parse(localStorage.getItem('catalogoPending') || '[]');
         pending.push({ produto_id: Number(produtoId), variacao_id: vidSelecionado, quantidade: qtdSelecionada });

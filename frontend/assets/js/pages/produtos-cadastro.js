@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let insumos     = [];
 
     // Variações deste produto (cada uma com sua própria precificação e tabela de preço por quantidade)
-    let variacoesMultiplas  = []; // { id, variacaoId, variacao, sku, preco_venda, precosQtd: [{id, quantidade, preco}], precItens, quantidadeProduzida }
+    let variacoesMultiplas  = []; // { id, variacaoId, variacao, sku, preco_venda, precosQtd: [{id, quantidade, preco}], precItens, quantidadeProduzida, eixos }
     let variacaoModalId       = null;  // id da variação aberta no modal de edição
     let _variacaoModalEraNova = false; // true se foi criada agora (cancelar = descartar)
     let _varMultId = 0;
@@ -42,6 +42,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function nextFaixaId() { return ++_faixaId; }
     let _precItemId = 0;
     function nextPrecId() { return ++_precItemId; }
+
+    // Eixos de variação (ex.: Tamanho, Cor) — gerador em lote por cima de variacoesMultiplas
+    let eixosProduto = []; // { id, nome, valores: [string, ...] }
+    let _eixoId = 0;
+    function nextEixoId() { return ++_eixoId; }
 
     // editor rico
     let quillEditor = null;
@@ -157,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!sel) return;
         let cats = [];
         try { cats = await App.api('/produtos/categorias'); } catch { cats = []; }
-        sel.innerHTML = '<option value="">+ Adicionar categoria</option>' +
+        sel.innerHTML = '<option value="">Selecione...</option>' +
             cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
         if (selecionada) {
             if (!cats.includes(selecionada)) {
@@ -167,9 +172,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    $('categoria')?.addEventListener('change', async () => {
+    // Botão "+" dedicado: independe do valor atual do select (o evento
+    // "change" nativo não dispara se o usuário reselecionar a mesma opção
+    // já ativa — por isso um botão de clique direto é mais confiável aqui).
+    $('btnAddCategoria')?.addEventListener('click', async () => {
         const sel = $('categoria');
-        if (!sel || sel.value !== '') return; // categoria existente selecionada, nada a fazer
+        if (!sel) return;
         const { value: nova } = await Swal.fire({
             title: 'Nova categoria',
             input: 'text',
@@ -179,25 +187,120 @@ document.addEventListener('DOMContentLoaded', () => {
             cancelButtonText: 'Cancelar',
         });
         const cat = (nova || '').trim();
-        if (cat) {
+        if (!cat) return;
+        if (![...sel.options].some(o => o.value === cat)) {
             sel.insertAdjacentHTML('beforeend', `<option value="${esc(cat)}">${esc(cat)}</option>`);
-            sel.value = cat;
-        } else {
-            sel.value = '';
         }
+        sel.value = cat;
+    });
+
+    // =========================================================
+    // PASSO 2 — EIXOS DE VARIAÇÃO (Tamanho, Cor...) — gerador em lote
+    // =========================================================
+    function renderEixos() {
+        const el = $('listaEixos');
+        if (!el) return;
+        if (!eixosProduto.length) { el.innerHTML = ''; return; }
+        el.innerHTML = eixosProduto.map(eixo => `
+            <div class="eixo-card" data-eixo="${eixo.id}">
+                <div class="eixo-card-header">
+                    <strong>${esc(eixo.nome)}</strong>
+                    <button type="button" class="icon-btn" title="Remover eixo" onclick="window._eixoRemover(${eixo.id})"><i class="bx bx-trash"></i></button>
+                </div>
+                <div class="eixo-valores">
+                    ${eixo.valores.map(v => `
+                        <span class="eixo-valor-chip">${esc(v)}
+                            <button type="button" onclick="window._eixoValorRemover(${eixo.id}, ${JSON.stringify(v)})"><i class="bx bx-x"></i></button>
+                        </span>
+                    `).join('')}
+                    <span class="eixo-valor-add">
+                        <input type="text" id="novoValorEixo_${eixo.id}" placeholder="Novo valor">
+                        <button type="button" class="btn btn-small" onclick="window._eixoValorAdicionar(${eixo.id})"><i class="bx bx-plus"></i></button>
+                    </span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    window._eixoRemover = (id) => {
+        eixosProduto = eixosProduto.filter(e => e.id !== id);
+        renderEixos();
+    };
+    window._eixoValorRemover = (eixoId, valor) => {
+        const eixo = eixosProduto.find(e => e.id === eixoId);
+        if (!eixo) return;
+        eixo.valores = eixo.valores.filter(v => v !== valor);
+        renderEixos();
+    };
+    window._eixoValorAdicionar = (eixoId) => {
+        const eixo = eixosProduto.find(e => e.id === eixoId);
+        if (!eixo) return;
+        const input = $(`novoValorEixo_${eixoId}`);
+        const valor = input?.value.trim();
+        if (!valor) { App.toast('warning', 'Informe um valor.'); return; }
+        if (eixo.valores.includes(valor)) { App.toast('warning', 'Esse valor já existe nesse eixo.'); return; }
+        eixo.valores.push(valor);
+        renderEixos();
+    };
+
+    $('btnAddEixo')?.addEventListener('click', () => {
+        const input = $('novoEixoNome');
+        const nome = input?.value.trim();
+        if (!nome) { App.toast('warning', 'Informe o nome do eixo (ex.: Tamanho, Cor).'); return; }
+        if (eixosProduto.some(e => e.nome.toLowerCase() === nome.toLowerCase())) { App.toast('warning', 'Já existe um eixo com esse nome.'); return; }
+        eixosProduto.push({ id: nextEixoId(), nome, valores: [] });
+        input.value = '';
+        renderEixos();
+    });
+
+    // Calcula o produto cartesiano dos valores de todos os eixos e gera/atualiza
+    // as variações correspondentes — preserva variações já configuradas (mesmo
+    // nome concatenado mantém variacaoId/preços/receita); combinações que
+    // existiam antes e não são mais geradas NÃO são removidas automaticamente
+    // (evita perder histórico de venda).
+    $('btnGerarVariacoes')?.addEventListener('click', () => {
+        const eixosComValores = eixosProduto.filter(e => e.valores.length);
+        if (!eixosComValores.length) { App.toast('warning', 'Adicione ao menos um eixo com valores.'); return; }
+
+        let combinacoes = [{}];
+        for (const eixo of eixosComValores) {
+            const novas = [];
+            for (const combo of combinacoes) {
+                for (const valor of eixo.valores) {
+                    novas.push({ ...combo, [eixo.nome]: valor });
+                }
+            }
+            combinacoes = novas;
+        }
+
+        let criadas = 0;
+        combinacoes.forEach(combo => {
+            const nomeConcatenado = Object.values(combo).join(' / ');
+            const existente = variacoesMultiplas.find(v => v.variacao.trim() === nomeConcatenado);
+            if (existente) { existente.eixos = combo; return; }
+            const nova = novaVariacaoMultipla();
+            nova.variacao = nomeConcatenado;
+            nova.eixos = combo;
+            variacoesMultiplas.push(nova);
+            criadas++;
+        });
+
+        renderVariacaoSelectOptions();
+        renderVariacoesResumo();
+        App.toast('success', `${combinacoes.length} combinação${combinacoes.length !== 1 ? 'ões' : ''} geradas (${criadas} nova${criadas !== 1 ? 's' : ''}).`);
     });
 
     // =========================================================
     // PASSO 2 — VARIAÇÕES (dropdown "+ Adicionar variação" + modal + resumo em chips)
     // =========================================================
     function novaVariacaoMultipla() {
-        return { id: nextVarMultId(), variacaoId: null, variacao: '', sku: '', preco_venda: 0, precosQtd: [], quantidadeProduzida: 1, precItens: { materiais: [], maquinas: [], mao_obra: [] } };
+        return { id: nextVarMultId(), variacaoId: null, variacao: '', sku: '', preco_venda: 0, precosQtd: [], quantidadeProduzida: 1, precItens: { materiais: [], maquinas: [], mao_obra: [] }, eixos: null };
     }
 
     function renderVariacaoSelectOptions() {
         const sel = $('variacaoSelect');
         if (!sel) return;
-        sel.innerHTML = '<option value="">+ Adicionar variação</option>' +
+        sel.innerHTML = '<option value="">Selecione para editar...</option>' +
             variacoesMultiplas.map(v => `<option value="${v.id}">${esc(v.variacao || '(sem nome)')}</option>`).join('');
         sel.value = '';
     }
@@ -236,8 +339,12 @@ document.addEventListener('DOMContentLoaded', () => {
     $('variacaoSelect')?.addEventListener('change', () => {
         const sel = $('variacaoSelect');
         const val = sel?.value;
-        abrirModalVariacao(val ? Number(val) : null);
+        if (!val) return; // "Selecione para editar..." — nada a abrir
+        abrirModalVariacao(Number(val));
     });
+
+    // Botão "+" dedicado: sempre abre o modal de nova variação, em qualquer estado do select.
+    $('btnAddVariacao')?.addEventListener('click', () => abrirModalVariacao(null));
 
     function abrirModalVariacao(id) {
         if (id) {
@@ -1000,7 +1107,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 custo_total_producao: Number(calc.custoTotal.toFixed(4)),
                 custo_unitario: Number(calc.custoUnit.toFixed(4)),
                 preco_sugerido: Number(calc.pAdjUnit.toFixed(4)),
-                precos_qtd: v.precosQtd.map(f => ({ quantidade: f.quantidade, preco_unitario: f.preco }))
+                precos_qtd: v.precosQtd.map(f => ({ quantidade: f.quantidade, preco_unitario: f.preco })),
+                eixos: v.eixos || null
             };
         });
 
@@ -1010,6 +1118,9 @@ document.addEventListener('DOMContentLoaded', () => {
         fd.append('variacao',     variacao);
         fd.append('sku',          '');
         fd.append('variacoes_json', JSON.stringify(variacoesPayload));
+        if (eixosProduto.length) {
+            fd.append('opcoes_json', JSON.stringify(eixosProduto.map(e => ({ nome: e.nome, valores: e.valores }))));
+        }
         fd.append('descricao', $('descricao')?.value.trim() || '');
         const _qlHtml = quillEditor ? quillEditor.root.innerHTML : ($('descricao_longa')?.value || '');
         fd.append('descricao_longa', _qlHtml === '<p><br></p>' ? '' : _qlHtml);
@@ -1100,6 +1211,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (Array.isArray(parsed.mao_obra))  precItensSalvos.mao_obra  = parsed.mao_obra.map(m => ({ ...m, id: nextPrecId() }));
                         }
                     } catch {}
+                    let eixosSalvos = null;
+                    try {
+                        const parsedEixos = typeof v.eixos_json === 'string' ? JSON.parse(v.eixos_json) : v.eixos_json;
+                        if (parsedEixos && typeof parsedEixos === 'object') eixosSalvos = parsedEixos;
+                    } catch {}
                     return {
                         id: nextVarMultId(),
                         variacaoId: v.variacao_id,
@@ -1108,7 +1224,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         preco_venda: Number(v.preco_venda || 0),
                         quantidadeProduzida: parseInt(v.quantidade_produzida, 10) || 1,
                         precItens: precItensSalvos,
-                        precosQtd: (v.precos_qtd || []).map(f => ({ id: nextFaixaId(), quantidade: f.quantidade, preco: Number(f.preco_unitario || 0) }))
+                        precosQtd: (v.precos_qtd || []).map(f => ({ id: nextFaixaId(), quantidade: f.quantidade, preco: Number(f.preco_unitario || 0) })),
+                        eixos: eixosSalvos
                     };
                 });
             } else if (p.variacao) {
@@ -1122,10 +1239,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     quantidadeProduzida: parseInt(p.quantidade_produzida, 10) || 1,
                     precItens: { materiais: [], maquinas: [], mao_obra: [] },
                     precosQtd: [],
+                    eixos: null,
                 }];
             }
             renderVariacaoSelectOptions();
             renderVariacoesResumo();
+
+            // Recarrega a definição dos eixos (Tamanho, Cor...) para o editor
+            try {
+                const parsedOpcoes = typeof p.opcoes_json === 'string' ? JSON.parse(p.opcoes_json) : p.opcoes_json;
+                if (Array.isArray(parsedOpcoes)) {
+                    eixosProduto = parsedOpcoes.map(e => ({ id: nextEixoId(), nome: e.nome, valores: Array.isArray(e.valores) ? e.valores : [] }));
+                    renderEixos();
+                }
+            } catch {}
 
             // Guarda dados para preencher step 3 quando for renderizado
             _dadosEdicao = p;

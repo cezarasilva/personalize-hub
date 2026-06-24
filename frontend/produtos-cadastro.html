@@ -85,17 +85,33 @@
                     </div>
                     <div class="form-group">
                         <label for="categoria">Categoria</label>
-                        <select id="categoria" name="categoria">
-                            <option value="">+ Adicionar categoria</option>
-                        </select>
+                        <div class="select-add-row">
+                            <select id="categoria" name="categoria">
+                                <option value="">Selecione...</option>
+                            </select>
+                            <button type="button" class="btn btn-light icon-btn" id="btnAddCategoria" title="Adicionar categoria"><i class="bx bx-plus"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group mt-2">
+                    <label>Eixos de variação <small class="text-muted">(opcional — ex.: Tamanho, Cor)</small></label>
+                    <small class="text-muted">Defina os eixos que esse produto varia e clique em "Gerar variações" para criar automaticamente todas as combinações abaixo.</small>
+                    <div id="listaEixos" class="eixos-lista"></div>
+                    <div class="eixos-add-row">
+                        <input type="text" id="novoEixoNome" placeholder="Nome do eixo (ex.: Cor)">
+                        <button type="button" class="btn btn-light" id="btnAddEixo"><i class="bx bx-plus"></i> Adicionar eixo</button>
+                        <button type="button" class="btn btn-primary" id="btnGerarVariacoes"><i class="bx bx-shuffle"></i> Gerar variações</button>
                     </div>
                 </div>
                 <div class="form-group mt-2">
                     <label for="variacaoSelect">Variações deste produto *</label>
-                    <select id="variacaoSelect">
-                        <option value="">+ Adicionar variação</option>
-                    </select>
-                    <small class="text-muted">Cadastre cores, tamanhos ou modelos — cada um com sua própria precificação e tabela de preço por quantidade.</small>
+                    <div class="select-add-row">
+                        <select id="variacaoSelect">
+                            <option value="">Selecione para editar...</option>
+                        </select>
+                        <button type="button" class="btn btn-light icon-btn" id="btnAddVariacao" title="Adicionar variação"><i class="bx bx-plus"></i></button>
+                    </div>
+                    <small class="text-muted">Cadastre cores, tamanhos ou modelos — cada um com sua própria precificação e tabela de preço por quantidade. Se você usou eixos acima, as combinações já aparecem aqui.</small>
                     <div class="variacoes-resumo" id="variacoesResumo"></div>
                 </div>
                 <div class="form-group mt-2">

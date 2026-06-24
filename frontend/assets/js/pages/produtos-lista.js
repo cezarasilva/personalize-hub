@@ -55,39 +55,93 @@ document.addEventListener('DOMContentLoaded', () => {
         return [...new Set(urls)].slice(0, 10);
     }
 
+    function agruparPorProduto(lista) {
+        const mapa = new Map();
+        lista.forEach(p => {
+            if (!mapa.has(p.id)) mapa.set(p.id, []);
+            mapa.get(p.id).push(p);
+        });
+        return [...mapa.values()];
+    }
+
+    function faixaValores(grupo, campo) {
+        const valores = grupo.map(v => Number(v[campo] || 0)).filter(n => n > 0);
+        if (!valores.length) return '-';
+        const min = Math.min(...valores), max = Math.max(...valores);
+        return min === max ? App.money(min) : `${App.money(min)} – ${App.money(max)}`;
+    }
+
     function render(lista = produtos) {
         erroBox.classList.add('hidden');
         if (!lista.length) {
             tabela.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum produto cadastrado.</td></tr>';
             return;
         }
-        tabela.innerHTML = lista.map(p => {
-            const totalFotos = galeriaUrls(p).length;
-            const visivel = p.visivel_catalogo !== false;
-            const visBtn = `<button class="icon-btn" data-toggle-visivel="${p.id}" data-visivel="${visivel}"
+        const grupos = agruparPorProduto(lista);
+        tabela.innerHTML = grupos.map(grupo => {
+            const principal = grupo[0];
+            const multi = grupo.length > 1;
+            const totalFotos = galeriaUrls(principal).length;
+            const visivel = principal.visivel_catalogo !== false;
+            const destaque = Boolean(principal.produto_destaque);
+            const visBtn = `<button class="icon-btn" data-toggle-visivel="${principal.id}" data-visivel="${visivel}"
                 title="${visivel ? 'Visível no catálogo digital — clique para ocultar' : 'Oculto do catálogo digital — clique para exibir'}"
                 style="color:${visivel ? 'var(--success)' : 'var(--muted)'};">
                 <i class="bx ${visivel ? 'bx-show' : 'bx-hide'}"></i>
             </button>`;
+            const destBtn = `<button class="icon-btn" data-toggle-destaque="${principal.id}" data-destaque="${destaque}"
+                title="${destaque ? 'Produto em destaque — clique para remover' : 'Marcar como destaque no catálogo'}"
+                style="color:${destaque ? '#f59e0b' : 'var(--muted)'};">
+                <i class="bx ${destaque ? 'bxs-star' : 'bx-star'}"></i>
+            </button>`;
+            const acoes = `<div class="actions">${visBtn}${destBtn}<a class="icon-btn" href="produtos-cadastro.html?id=${principal.id}" title="Editar"><i class="bx bx-edit"></i></a><button class="icon-btn" data-del="${principal.id}" title="Excluir"><i class="bx bx-trash"></i></button></div>`;
+
+            if (!multi) {
+                const p = principal;
+                return `
+                <tr>
+                    <td>
+                        <div class="product-cell">
+                            ${App.imageTag(p.imagem_url)}
+                            <div>
+                                <strong>${App.escapeHtml(p.nome)}</strong><br>
+                                <small>${App.escapeHtml(p.variacao || '')} ${p.sku ? '• SKU ' + App.escapeHtml(p.sku) : ''}</small><br>
+                                <small class="text-muted">${totalFotos} foto${totalFotos === 1 ? '' : 's'} ${p.precificado ? '• precificado' : ''}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${App.escapeHtml(p.categoria || '-')}</td>
+                    <td>${campoPreco(p.id, 'preco_venda', p.preco_venda)}</td>
+                    <td>${campoPreco(p.id, 'preco_repasse', p.preco_repasse)}</td>
+                    <td>${campoPreco(p.id, 'custo_producao', p.custo_producao)}</td>
+                    <td>${campoEstoque(p.id, p.estoque_central)}</td>
+                    <td>${App.badgeStatus(p.status)}</td>
+                    <td>${acoes}</td>
+                </tr>`;
+            }
+
+            // Produto com múltiplas variações: 1 linha só, com faixa de preço/custo
+            // e estoque somado — edição de cada variação fica no modal de cadastro.
+            const estoqueTotal = grupo.reduce((s, v) => s + Number(v.estoque_central || 0), 0);
             return `
             <tr>
                 <td>
                     <div class="product-cell">
-                        ${App.imageTag(p.imagem_url)}
+                        ${App.imageTag(principal.imagem_url)}
                         <div>
-                            <strong>${App.escapeHtml(p.nome)}</strong><br>
-                            <small>${App.escapeHtml(p.variacao || '')} ${p.sku ? '• SKU ' + App.escapeHtml(p.sku) : ''}</small><br>
-                            <small class="text-muted">${totalFotos} foto${totalFotos === 1 ? '' : 's'} ${p.precificado ? '• precificado' : ''}</small>
+                            <strong>${App.escapeHtml(principal.nome)}</strong><br>
+                            <small class="badge badge-blue">${grupo.length} variações</small><br>
+                            <small class="text-muted">${totalFotos} foto${totalFotos === 1 ? '' : 's'} ${principal.precificado ? '• precificado' : ''}</small>
                         </div>
                     </div>
                 </td>
-                <td>${App.escapeHtml(p.categoria || '-')}</td>
-                <td>${campoPreco(p.id, 'preco_venda', p.preco_venda)}</td>
-                <td>${campoPreco(p.id, 'preco_repasse', p.preco_repasse)}</td>
-                <td>${campoPreco(p.id, 'custo_producao', p.custo_producao)}</td>
-                <td>${campoEstoque(p.id, p.estoque_central)}</td>
-                <td>${App.badgeStatus(p.status)}</td>
-                <td><div class="actions">${visBtn}<a class="icon-btn" href="produtos-cadastro.html?id=${p.id}" title="Editar"><i class="bx bx-edit"></i></a><button class="icon-btn" data-del="${p.id}" title="Excluir"><i class="bx bx-trash"></i></button></div></td>
+                <td>${App.escapeHtml(principal.categoria || '-')}</td>
+                <td>${faixaValores(grupo, 'preco_venda')}</td>
+                <td>${faixaValores(grupo, 'preco_repasse')}</td>
+                <td>${faixaValores(grupo, 'custo_producao')}</td>
+                <td>${App.number(estoqueTotal)}</td>
+                <td>${App.badgeStatus(principal.status)}</td>
+                <td>${acoes}</td>
             </tr>`;
         }).join('');
     }
@@ -119,9 +173,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const novoVisivel = visBtn.dataset.visivel !== 'true';
             try {
                 await App.api(`/produtos/${produtoId}/visibilidade`, { method: 'PATCH', body: JSON.stringify({ visivel: novoVisivel }) });
-                const p = produtos.find(x => String(x.id) === String(produtoId));
-                if (p) p.visivel_catalogo = novoVisivel;
+                produtos.filter(x => String(x.id) === String(produtoId)).forEach(p => p.visivel_catalogo = novoVisivel);
                 App.toast('success', novoVisivel ? 'Produto visível no catálogo digital.' : 'Produto oculto do catálogo digital.');
+                render(filtrarLista());
+            } catch (err) { App.toast('error', err.message); }
+            return;
+        }
+        const destBtn = e.target.closest('[data-toggle-destaque]');
+        if (destBtn) {
+            const produtoId = destBtn.dataset.toggleDestaque;
+            const novoDestaque = destBtn.dataset.destaque !== 'true';
+            try {
+                await App.api(`/produtos/${produtoId}/destaque`, { method: 'PATCH', body: JSON.stringify({ destaque: novoDestaque }) });
+                produtos.filter(x => String(x.id) === String(produtoId)).forEach(p => p.produto_destaque = novoDestaque);
+                App.toast('success', novoDestaque ? 'Produto marcado como destaque.' : 'Produto removido dos destaques.');
                 render(filtrarLista());
             } catch (err) { App.toast('error', err.message); }
             return;
