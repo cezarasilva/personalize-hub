@@ -1441,6 +1441,52 @@ app.patch('/api/insumos/:id/confirmar-compra', autenticar, somenteAdmin, async (
     }
 });
 
+// Produtos SOB_ENCOMENDA não mantêm estoque parado — antes de uma venda sem
+// estoque suficiente, o vendedor confirma quanto acabou de produzir. Isso gera
+// uma ENTRADA real no histórico de movimentação (rastreável), e a venda em
+// seguida consome esse estoque normalmente pelo fluxo já existente.
+app.patch('/api/produto-variacoes/:id/registrar-producao', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const quantidadeProduzida = toInt(req.body.quantidade_produzida, 0);
+        if (quantidadeProduzida <= 0) return res.status(400).json({ erro: 'Informe a quantidade produzida.' });
+
+        const resultado = await transacao(async (client) => {
+            const v = await client.query(
+                `SELECT v.id, v.variacao, p.id AS produto_id, p.nome
+                 FROM produto_variacoes v JOIN produtos p ON p.id = v.produto_id
+                 WHERE v.id = $1`,
+                [req.params.id]
+            );
+            if (!v.rows.length) throw new Error('Variação não encontrada.');
+            const row = v.rows[0];
+
+            const upd = await client.query(
+                `UPDATE produto_variacoes SET estoque_central = estoque_central + $1 WHERE id = $2 RETURNING estoque_central`,
+                [quantidadeProduzida, req.params.id]
+            );
+
+            await registrarMovimentacao(client, {
+                produto_id: row.produto_id,
+                variacao_id: row.id,
+                usuario_id: req.user.id,
+                tipo: 'ENTRADA_PRODUCAO_SOB_ENCOMENDA',
+                quantidade: quantidadeProduzida,
+                estoque_origem: 'PRODUCAO',
+                estoque_destino: 'CENTRAL',
+                observacao: `Produção confirmada de ${quantidadeProduzida} un. de "${row.nome}" (${row.variacao || 'padrão'}) antes do lançamento da venda.`
+            });
+
+            return { ...row, estoque_central: upd.rows[0].estoque_central };
+        });
+
+        await registrarAuditoria(req.user.id, `Registrou produção de ${quantidadeProduzida} un. da variação "${resultado.variacao || resultado.nome}" (sob encomenda)`);
+        res.json(resultado);
+    } catch (e) {
+        console.error('❌ Erro registrar produção:', e);
+        res.status(400).json({ erro: e.message || 'Erro ao registrar produção.' });
+    }
+});
+
 // =========================================================
 // PRODUTOS
 // =========================================================
@@ -1485,7 +1531,12 @@ app.get('/api/produtos', autenticar, async (req, res) => {
                 v.id AS variacao_id, v.sku, v.variacao,
                 v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central,
                 COALESCE(v.lead_time_dias, 0) AS lead_time_dias,
-                COALESCE(v.qtd_minima,    1) AS qtd_minima
+                COALESCE(v.qtd_minima,    1) AS qtd_minima,
+                COALESCE(
+                    (SELECT jsonb_agg(jsonb_build_object('quantidade', pq.quantidade, 'preco_unitario', pq.preco_unitario) ORDER BY pq.quantidade ASC)
+                     FROM produto_variacao_precos_qtd pq WHERE pq.variacao_id = v.id),
+                    '[]'::jsonb
+                ) AS precos_qtd
              FROM produtos p
              JOIN produto_variacoes v ON p.id = v.produto_id
              ORDER BY p.id DESC`;
@@ -1506,7 +1557,12 @@ app.get('/api/produtos', autenticar, async (req, res) => {
                 p.aprovado_em, p.aprovado_por,
                 v.id AS variacao_id, v.sku, v.variacao,
                 v.preco_venda, v.preco_repasse, v.custo_producao, v.estoque_central,
-                0 AS lead_time_dias, 1 AS qtd_minima
+                0 AS lead_time_dias, 1 AS qtd_minima,
+                COALESCE(
+                    (SELECT jsonb_agg(jsonb_build_object('quantidade', pq.quantidade, 'preco_unitario', pq.preco_unitario) ORDER BY pq.quantidade ASC)
+                     FROM produto_variacao_precos_qtd pq WHERE pq.variacao_id = v.id),
+                    '[]'::jsonb
+                ) AS precos_qtd
              FROM produtos p
              JOIN produto_variacoes v ON p.id = v.produto_id
              ORDER BY p.id DESC`;
@@ -1647,6 +1703,7 @@ app.get('/api/produtos/:id', autenticar, async (req, res) => {
                             'eixos_json', v2.eixos_json,
                             'preco_venda', v2.preco_venda,
                             'preco_repasse', v2.preco_repasse,
+                            'estoque_central', v2.estoque_central,
                             'precos_qtd', COALESCE(
                                 (SELECT jsonb_agg(
                                     jsonb_build_object('quantidade', pq.quantidade, 'preco_unitario', pq.preco_unitario)

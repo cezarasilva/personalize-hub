@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let parceiros = [];
     let produtoSelecionado = null;
     let valorFinalEditadoManualmente = false;
+    let precoUnitarioAtivoFaixa = null; // preço/un. da faixa de quantidade escolhida (null = sem faixa, usa preco_venda cheio)
     let lote = [];
 
     const buscaProdutoVenda = document.getElementById('buscaProdutoVenda');
@@ -15,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const origemVenda = document.getElementById('origemVenda');
     const grupoOrigemVenda = document.getElementById('grupoOrigemVenda');
     const quantidadeVenda = document.getElementById('quantidadeVenda');
+    const grupoFaixaQtdVenda = document.getElementById('grupoFaixaQtdVenda');
+    const faixaQtdVenda = document.getElementById('faixaQtdVenda');
     const grupoValorFinalVenda = document.getElementById('grupoValorFinalVenda');
     const valorFinalVenda = document.getElementById('valorFinalVenda');
     const resumoValorVenda = document.getElementById('resumoValorVenda');
@@ -37,7 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
             estoque: p.quantidade_atual ?? p.estoque_central ?? 0,
             preco_venda: Number(p.preco_venda || 0),
             preco_repasse: Number(p.preco_repasse || 0),
-            origem_parceiro: Boolean(p.quantidade_atual !== undefined)
+            origem_parceiro: Boolean(p.quantidade_atual !== undefined),
+            precos_qtd: Array.isArray(p.precos_qtd) ? p.precos_qtd : []
         };
     }
 
@@ -76,7 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function calcularValorPadraoVenda() {
         if (!produtoSelecionado || !isVendaDiretaCentral()) return 0;
         const qtd = Number(quantidadeVenda.value || 1);
-        return Number(produtoSelecionado.preco_venda || 0) * qtd;
+        const precoUnit = precoUnitarioAtivoFaixa ?? Number(produtoSelecionado.preco_venda || 0);
+        return precoUnit * qtd;
     }
 
     function atualizarResumoValorVenda() {
@@ -109,11 +114,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function limparProdutoSelecionado() {
         produtoSelecionado = null;
         valorFinalEditadoManualmente = false;
+        precoUnitarioAtivoFaixa = null;
         buscaProdutoVenda.value = '';
         sugestoesProdutoVenda.classList.add('hidden');
         produtoBox.classList.add('hidden');
         produtoBox.innerHTML = '';
         quantidadeVenda.value = 1;
+        quantidadeVenda.readOnly = false;
+        grupoFaixaQtdVenda.classList.add('hidden');
+        faixaQtdVenda.innerHTML = '<option value="__outra">Outra quantidade...</option>';
         atualizarCampoValorFinal();
     }
 
@@ -182,10 +191,43 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>`;
     }
 
+    // Faixa de preço por quantidade só se aplica à venda direta ao cliente final
+    // (venda para parceiro usa preco_repasse, que não tem tabela de faixas).
+    function renderFaixaQtdVenda() {
+        precoUnitarioAtivoFaixa = null;
+        quantidadeVenda.readOnly = false;
+        const faixas = produtoSelecionado?.precos_qtd || [];
+        if (!faixas.length || !isVendaDiretaCentral()) {
+            grupoFaixaQtdVenda.classList.add('hidden');
+            faixaQtdVenda.innerHTML = '<option value="__outra">Outra quantidade...</option>';
+            return;
+        }
+        grupoFaixaQtdVenda.classList.remove('hidden');
+        faixaQtdVenda.innerHTML = faixas
+            .map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}">${f.quantidade} un. — ${App.money(f.preco_unitario)}/un</option>`)
+            .join('') + '<option value="__outra">Outra quantidade...</option>';
+        faixaQtdVenda.value = '__outra';
+    }
+
+    faixaQtdVenda.addEventListener('change', () => {
+        const opt = faixaQtdVenda.selectedOptions[0];
+        if (!opt || opt.value === '__outra') {
+            precoUnitarioAtivoFaixa = null;
+            quantidadeVenda.readOnly = false;
+        } else {
+            precoUnitarioAtivoFaixa = Number(opt.dataset.preco || 0);
+            quantidadeVenda.value = opt.value;
+            quantidadeVenda.readOnly = true;
+        }
+        valorFinalEditadoManualmente = false;
+        atualizarCampoValorFinal({ preencher: true, forcar: true });
+    });
+
     function selecionarProduto(id) {
         produtoSelecionado = produtos.find(p => String(p.produto_id) === String(id));
         if (!produtoSelecionado) return;
         valorFinalEditadoManualmente = false;
+        renderFaixaQtdVenda();
 
         buscaProdutoVenda.value = `${produtoSelecionado.nome}${produtoSelecionado.variacao ? ' - ' + produtoSelecionado.variacao : ''}`;
         sugestoesProdutoVenda.classList.add('hidden');
@@ -333,10 +375,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const quantidade = Number(quantidadeVenda.value || 0);
         if (quantidade <= 0) return App.toast('warning', 'Informe uma quantidade válida.');
 
+        // Produto sob encomenda não mantém estoque parado — pode ser vendido mesmo
+        // sem unidades disponíveis; a produção é confirmada (e o estoque "entra e
+        // sai") no fechamento da venda, antes de lançá-la. Vale só na venda direta
+        // central: em consignação, o estoque que importa é o já remetido à loja.
+        const dispensaLimiteEstoque = produtoSelecionado.tipo_oferta === 'SOB_ENCOMENDA' && isVendaDiretaCentral();
         const qtdJaNoCarrinho = lote
             .filter(i => String(i.produto_id) === String(produtoSelecionado.produto_id))
             .reduce((s, i) => s + Number(i.quantidade || 0), 0);
-        if (quantidade + qtdJaNoCarrinho > Number(produtoSelecionado.estoque || 0)) {
+        if (!dispensaLimiteEstoque && quantidade + qtdJaNoCarrinho > Number(produtoSelecionado.estoque || 0)) {
             return App.toast('error', 'Quantidade maior que o estoque disponível.');
         }
 
@@ -434,14 +481,98 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     }
 
+    // Mesmo espírito do fluxo de insumo acima, mas para o estoque do PRODUTO
+    // ACABADO: produtos sob encomenda não guardam estoque parado, então no
+    // fechamento da venda confirmamos quanto foi produzido agora — isso gera
+    // uma entrada real no estoque (rastreável) antes da venda consumi-lo.
+    // Busca estoque fresco (não o snapshot da tela) para não dar falso negativo.
+    async function buscarProducaoPendente() {
+        if (!isVendaDiretaCentral()) return [];
+        const porVariacao = new Map();
+        for (const item of lote) {
+            if (item.tipo_oferta !== 'SOB_ENCOMENDA' || !item.variacao_id) continue;
+            const atual = porVariacao.get(item.variacao_id) || { ...item, quantidade: 0 };
+            atual.quantidade += Number(item.quantidade || 0);
+            porVariacao.set(item.variacao_id, atual);
+        }
+        if (!porVariacao.size) return [];
+
+        const pendentes = [];
+        const cacheProduto = new Map();
+        for (const [variacaoId, agregado] of porVariacao) {
+            try {
+                let produtoFresco = cacheProduto.get(agregado.produto_id);
+                if (!produtoFresco) {
+                    produtoFresco = await App.api(`/produtos/${agregado.produto_id}`);
+                    cacheProduto.set(agregado.produto_id, produtoFresco);
+                }
+                const variacaoFresca = (produtoFresco.variacoes || []).find(v => String(v.variacao_id) === String(variacaoId));
+                const disponivel = Number(variacaoFresca?.estoque_central ?? 0);
+                if (disponivel >= agregado.quantidade) continue;
+                pendentes.push({
+                    variacao_id: variacaoId,
+                    nome: agregado.nome,
+                    variacao: agregado.variacao,
+                    necessario: agregado.quantidade,
+                    disponivel,
+                    faltante: agregado.quantidade - disponivel
+                });
+            } catch { /* se a checagem falhar, não bloqueia a venda */ }
+        }
+        return pendentes;
+    }
+
+    async function confirmarProducaoPendente(pendentes) {
+        const linhas = pendentes.map((p, idx) => `
+            <div style="text-align:left;margin-bottom:10px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">
+                <strong>${App.escapeHtml(p.nome)}</strong>${p.variacao ? ` <small style="color:#64748b;">(${App.escapeHtml(p.variacao)})</small>` : ''}
+                <small style="display:block;color:#64748b;">Necessário: ${App.number(p.necessario)} un. • Em estoque: ${App.number(p.disponivel)} un.</small>
+                <div style="margin-top:6px;">
+                    <input id="prodQtd_${idx}" type="number" step="1" min="0" value="${p.faltante}" placeholder="Qtd. produzida agora" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;">
+                </div>
+            </div>`).join('');
+
+        const r = await Swal.fire({
+            title: 'Confirmar produção',
+            html: `<div style="text-align:left;font-size:13px;margin-bottom:10px;">
+                       Este produto é sob encomenda e não tem estoque suficiente para esta venda.
+                       Informe quantas unidades você <strong>já produziu</strong> agora (pode ser
+                       maior que o necessário — a sobra fica em estoque para a próxima venda).
+                   </div>${linhas}`,
+            showCancelButton: true,
+            confirmButtonText: 'Confirmar produção e lançar venda',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            preConfirm: () => {
+                return pendentes.map((p, idx) => ({
+                    variacao_id: p.variacao_id,
+                    quantidade_produzida: Number(document.getElementById(`prodQtd_${idx}`).value || 0)
+                }));
+            }
+        });
+        if (!r.isConfirmed) return false;
+
+        for (const c of r.value) {
+            if (c.quantidade_produzida <= 0) continue;
+            await App.api(`/produto-variacoes/${c.variacao_id}/registrar-producao`, { method: 'PATCH', body: JSON.stringify(c) });
+        }
+        return true;
+    }
+
     btnFecharVenda.addEventListener('click', async () => {
         if (!lote.length) return App.toast('warning', 'Adicione produtos ao carrinho.');
 
         try {
-            const pendentes = await buscarInsumosPendentes();
-            if (pendentes.length) {
-                const confirmou = await confirmarCompraInsumosPendentes(pendentes);
-                if (!confirmou) return;
+            const pendentesInsumo = await buscarInsumosPendentes();
+            if (pendentesInsumo.length) {
+                const confirmouInsumo = await confirmarCompraInsumosPendentes(pendentesInsumo);
+                if (!confirmouInsumo) return;
+            }
+
+            const pendentesProducao = await buscarProducaoPendente();
+            if (pendentesProducao.length) {
+                const confirmouProducao = await confirmarProducaoPendente(pendentesProducao);
+                if (!confirmouProducao) return;
             }
         } catch (err) {
             App.toast('error', err.message);
