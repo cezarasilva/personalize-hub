@@ -1226,6 +1226,12 @@ tr:hover td { background: var(--surface-2); }
 .crop-image-wrap img { display: block; max-width: 100%; }
 .crop-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 
+/* SweetAlert2 precisa ficar ACIMA do .app-modal (z-index 9999 abaixo) —
+   senão um confirmDialog()/toast aberto por cima de um modal já aberto
+   (ex.: "Remover tema?" dentro do modal de variação) fica preso atrás,
+   invisível e inclicável. */
+.swal2-container { z-index: 10000 !important; }
+
 /* ============================================================
    MODAL GENÉRICO (ex.: adicionar/editar variação, categoria...)
    ============================================================ */
