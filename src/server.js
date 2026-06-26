@@ -9,6 +9,7 @@ const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
+const { PDFDocument } = require('pdf-lib');
 const db = require('./config/db');
 
 const app = express();
@@ -35,6 +36,24 @@ const upload = multer({
             return cb(null, true);
         }
         cb(new Error('Tipo de arquivo não permitido. Envie uma imagem JPEG, PNG, WebP ou GIF.'));
+    }
+});
+
+// Upload dedicado para a arte de temas/subtemas (SOB_ENCOMENDA) — bucket
+// privado próprio, nunca o bucket público de imagens. Limite maior porque
+// artes de produção em alta resolução costumam passar dos 10MB de imagem.
+// Aceita PDF ou imagem (JPG/PNG) — a marca d'água normaliza imagem em PDF
+// na hora de servir a prévia (ver aplicarMarcaDagua). WebP/GIF não entram
+// porque o pdf-lib só sabe embutir JPG e PNG.
+const TEMA_ARTE_ALLOWED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const TEMA_ARTE_ALLOWED_EXT = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
+const uploadArteTema = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 30 * 1024 * 1024 }, // 30 MB
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (TEMA_ARTE_ALLOWED_MIME.has(file.mimetype) && TEMA_ARTE_ALLOWED_EXT.has(ext)) return cb(null, true);
+        cb(new Error('Envie um arquivo PDF, JPG ou PNG.'));
     }
 });
 
@@ -83,6 +102,17 @@ const limiterLogin = rateLimit({
 const limiterCatalogoPublico = rateLimit({
     windowMs: 5 * 60 * 1000, // 5 min
     max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { erro: 'Muitas requisições. Aguarde alguns minutos.' }
+});
+
+// Limiter dedicado pra prévia de PDF de tema/subtema — mais alto que o
+// genérico (cliente legítimo abre várias prévias decidindo a compra), mas
+// ainda limitado pra dificultar scraping em massa de todos os PDFs.
+const limiterPreviewTema = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 60,
     standardHeaders: true,
     legacyHeaders: false,
     message: { erro: 'Muitas requisições. Aguarde alguns minutos.' }
@@ -288,6 +318,49 @@ async function migrarEixosVariacao() {
     }
 }
 migrarEixosVariacao();
+
+// =========================================================
+// V7.6 — Migração: Temas e Subtemas (produtos SOB_ENCOMENDA) —
+// cada tema/subtema carrega 1 PDF protegido (bucket privado no
+// Supabase, nunca URL pública). Subtema tem limite de seleção
+// (ex.: livro com 16 páginas permite no máx. 16 desenhos
+// escolhidos entre os subtemas cadastrados).
+// =========================================================
+async function migrarTemasSubtemas() {
+    const ops = [
+        `CREATE TABLE IF NOT EXISTS produto_temas (
+            id               SERIAL PRIMARY KEY,
+            produto_id       INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+            nome             VARCHAR(120) NOT NULL,
+            pdf_storage_path TEXT NOT NULL,
+            limite_subtemas  INTEGER,
+            ordem            INTEGER DEFAULT 0,
+            criado_em        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_produto_temas_produto ON produto_temas(produto_id)`,
+        `CREATE TABLE IF NOT EXISTS produto_subtemas (
+            id               SERIAL PRIMARY KEY,
+            tema_id          INTEGER NOT NULL REFERENCES produto_temas(id) ON DELETE CASCADE,
+            nome             VARCHAR(120) NOT NULL,
+            pdf_storage_path TEXT NOT NULL,
+            ordem            INTEGER DEFAULT 0,
+            criado_em        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_produto_subtemas_tema ON produto_subtemas(tema_id)`,
+        `ALTER TABLE catalogo_pedido_itens ADD COLUMN IF NOT EXISTS tema_id INTEGER REFERENCES produto_temas(id)`,
+        `ALTER TABLE catalogo_pedido_itens ADD COLUMN IF NOT EXISTS tema_nome_snapshot VARCHAR(120)`,
+        `ALTER TABLE catalogo_pedido_itens ADD COLUMN IF NOT EXISTS subtemas_snapshot_json TEXT`,
+        // O tema pode ser removido depois de já ter sido usado num pedido —
+        // o snapshot do nome (acima) preserva o histórico, então a FK só
+        // precisa soltar a referência (SET NULL), nunca bloquear a exclusão.
+        `ALTER TABLE catalogo_pedido_itens DROP CONSTRAINT IF EXISTS catalogo_pedido_itens_tema_id_fkey`,
+        `ALTER TABLE catalogo_pedido_itens ADD CONSTRAINT catalogo_pedido_itens_tema_id_fkey FOREIGN KEY (tema_id) REFERENCES produto_temas(id) ON DELETE SET NULL`
+    ];
+    for (const sql of ops) {
+        try { await db.query(sql); } catch (e) { console.warn('⚠️ migração V7.6:', e.message); }
+    }
+}
+migrarTemasSubtemas();
 
 // =========================================================
 // V7.1 — Migração: venda em lote (carrinho) com forma de pagamento
@@ -555,6 +628,103 @@ async function uploadImagensProduto(arquivos) {
     }
 
     return urls;
+}
+
+// =========================================================
+// Temas/Subtemas (SOB_ENCOMENDA) — PDF protegido
+// Bucket PRIVADO (nunca getPublicUrl) — os bytes só saem do Supabase via
+// download() server-side e são sempre re-servidos pelos nossos próprios
+// endpoints, nunca por uma URL direta do Storage.
+// =========================================================
+const BUCKET_TEMAS = 'temas-protegidos';
+
+async function uploadPdfTema(file, pastaPrefix) {
+    if (!file) throw new Error('Arquivo obrigatório (PDF, JPG ou PNG).');
+    if (!supabase) throw new Error('Supabase Storage não configurado. Verifique SUPABASE_URL e SUPABASE_KEY.');
+
+    const nomeSeguro = file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
+    const caminho = `${pastaPrefix}/${Date.now()}_${nomeSeguro}`;
+    const { error } = await supabase.storage
+        .from(BUCKET_TEMAS)
+        .upload(caminho, file.buffer, { contentType: file.mimetype, upsert: false });
+    if (error) throw error;
+    return caminho; // path interno — nunca uma URL pública
+}
+
+async function baixarPdfOriginal(storagePath) {
+    if (!supabase) throw new Error('Supabase Storage não configurado.');
+    const { data, error } = await supabase.storage.from(BUCKET_TEMAS).download(storagePath);
+    if (error) throw error;
+    return Buffer.from(await data.arrayBuffer());
+}
+
+async function apagarArquivoTema(storagePath) {
+    if (!supabase || !storagePath) return;
+    try { await supabase.storage.from(BUCKET_TEMAS).remove([storagePath]); }
+    catch (e) { console.warn('⚠️ Falha ao remover arquivo de tema (melhor esforço):', e.message); }
+}
+
+async function baixarLogoBytes(logoUrl) {
+    if (!logoUrl) return null;
+    try {
+        const resp = await fetch(logoUrl);
+        if (!resp.ok) return null;
+        const tipo = resp.headers.get('content-type') || '';
+        const bytes = Buffer.from(await resp.arrayBuffer());
+        return { bytes, tipo };
+    } catch (e) {
+        console.warn('⚠️ Falha ao baixar logo para marca d\'água:', e.message);
+        return null;
+    }
+}
+
+// Aplica a logo da loja como marca d'água em mosaico (opacidade baixa) sobre
+// cada página do PDF. Isso NÃO impede print de tela/foto de câmera — só
+// dificulta o reuso casual do arquivo em si.
+// `storagePath` é usado só pra saber se o arquivo original é uma imagem
+// (JPG/PNG) — nesse caso ela é normalizada numa página de PDF nova antes de
+// aplicar a marca d'água, pra o restante do pipeline (cache, servir, render
+// no front via pdf.js) continuar tratando tudo como PDF, sem distinção.
+async function aplicarMarcaDagua(arquivoBytes, storagePath, logo) {
+    const ehPng = /\.png$/i.test(storagePath || '');
+    const ehImagem = ehPng || /\.jpe?g$/i.test(storagePath || '');
+
+    let pdfDoc;
+    if (ehImagem) {
+        pdfDoc = await PDFDocument.create();
+        const imagem = ehPng ? await pdfDoc.embedPng(arquivoBytes) : await pdfDoc.embedJpg(arquivoBytes);
+        const pagina = pdfDoc.addPage([imagem.width, imagem.height]);
+        pagina.drawImage(imagem, { x: 0, y: 0, width: imagem.width, height: imagem.height });
+    } else {
+        pdfDoc = await PDFDocument.load(arquivoBytes);
+    }
+    if (!logo) return await pdfDoc.save();
+
+    let imagemLogo;
+    try {
+        imagemLogo = logo.tipo.includes('png')
+            ? await pdfDoc.embedPng(logo.bytes)
+            : await pdfDoc.embedJpg(logo.bytes);
+    } catch (e) {
+        console.warn('⚠️ Logo em formato não suportado para marca d\'água (use PNG/JPG):', e.message);
+        return await pdfDoc.save();
+    }
+
+    const escala = 0.12;
+    const largura = imagemLogo.width * escala;
+    const altura = imagemLogo.height * escala;
+    const passoX = largura * 2.2;
+    const passoY = altura * 2.2;
+
+    for (const page of pdfDoc.getPages()) {
+        const { width: pageW, height: pageH } = page.getSize();
+        for (let y = -altura; y < pageH + altura; y += passoY) {
+            for (let x = -largura; x < pageW + largura; x += passoX) {
+                page.drawImage(imagemLogo, { x, y, width: largura, height: altura, opacity: 0.08 });
+            }
+        }
+    }
+    return await pdfDoc.save();
 }
 
 async function salvarGaleriaProduto(client, produtoId, urls) {
@@ -2047,6 +2217,221 @@ app.delete('/api/produtos/:id', autenticar, somenteAdmin, async (req, res) => {
     }
 });
 
+
+// =========================================================
+// Temas / Subtemas (produtos SOB_ENCOMENDA)
+// =========================================================
+
+app.post('/api/produtos/:id/temas', autenticar, somenteAdmin, uploadArteTema.single('arquivo'), async (req, res) => {
+    try {
+        const produtoId = toInt(req.params.id, 0);
+        const nome = String(req.body.nome || '').trim();
+        if (!nome) return res.status(400).json({ erro: 'Informe o nome do tema.' });
+        if (!req.file) return res.status(400).json({ erro: 'Envie o arquivo do tema (PDF, JPG ou PNG).' });
+
+        const p = await db.query('SELECT id, tipo_oferta FROM produtos WHERE id = $1', [produtoId]);
+        if (!p.rows.length) return res.status(404).json({ erro: 'Produto não encontrado.' });
+        if (p.rows[0].tipo_oferta !== 'SOB_ENCOMENDA') {
+            return res.status(400).json({ erro: 'Temas só podem ser cadastrados em produtos sob encomenda.' });
+        }
+
+        const limiteSubtemas = req.body.limite_subtemas !== undefined && req.body.limite_subtemas !== ''
+            ? toInt(req.body.limite_subtemas, null) : null;
+        const caminho = await uploadPdfTema(req.file, `produto_${produtoId}`);
+
+        const r = await db.query(
+            `INSERT INTO produto_temas (produto_id, nome, pdf_storage_path, limite_subtemas)
+             VALUES ($1, $2, $3, $4) RETURNING id, nome, limite_subtemas, ordem`,
+            [produtoId, nome, caminho, limiteSubtemas]
+        );
+        await registrarAuditoria(req.user.id, `Cadastrou tema "${nome}" no produto ${produtoId}`);
+        res.status(201).json({ ...r.rows[0], subtemas: [] });
+    } catch (e) {
+        console.error('❌ Erro criar tema:', e);
+        res.status(500).json({ erro: 'Erro ao criar tema: ' + e.message });
+    }
+});
+
+app.get('/api/produtos/:id/temas', autenticar, async (req, res) => {
+    try {
+        const r = await db.query(
+            `SELECT t.id, t.nome, t.limite_subtemas, t.ordem,
+                    COALESCE(
+                        (SELECT jsonb_agg(jsonb_build_object('id', s.id, 'nome', s.nome, 'ordem', s.ordem) ORDER BY s.ordem ASC, s.id ASC)
+                         FROM produto_subtemas s WHERE s.tema_id = t.id),
+                        '[]'::jsonb
+                    ) AS subtemas
+             FROM produto_temas t
+             WHERE t.produto_id = $1
+             ORDER BY t.ordem ASC, t.id ASC`,
+            [req.params.id]
+        );
+        res.json(r.rows);
+    } catch (e) {
+        console.error('❌ Erro listar temas:', e);
+        res.status(500).json({ erro: 'Erro ao listar temas: ' + e.message });
+    }
+});
+
+app.patch('/api/produto-temas/:temaId', autenticar, somenteAdmin, uploadArteTema.single('arquivo'), async (req, res) => {
+    try {
+        const temaId = toInt(req.params.temaId, 0);
+        const atual = await db.query('SELECT * FROM produto_temas WHERE id = $1', [temaId]);
+        if (!atual.rows.length) return res.status(404).json({ erro: 'Tema não encontrado.' });
+        const t = atual.rows[0];
+
+        const nome = req.body.nome !== undefined ? String(req.body.nome).trim() || t.nome : t.nome;
+        const limiteSubtemas = req.body.limite_subtemas !== undefined
+            ? (req.body.limite_subtemas === '' ? null : toInt(req.body.limite_subtemas, t.limite_subtemas))
+            : t.limite_subtemas;
+
+        let caminho = t.pdf_storage_path;
+        let caminhoAntigo = null;
+        if (req.file) {
+            caminho = await uploadPdfTema(req.file, `produto_${t.produto_id}`);
+            caminhoAntigo = t.pdf_storage_path;
+        }
+
+        const r = await db.query(
+            `UPDATE produto_temas SET nome = $1, limite_subtemas = $2, pdf_storage_path = $3 WHERE id = $4
+             RETURNING id, nome, limite_subtemas, ordem`,
+            [nome, limiteSubtemas, caminho, temaId]
+        );
+        if (caminhoAntigo) {
+            await apagarArquivoTema(caminhoAntigo);
+            await apagarArquivoTema(`cache/tema_${temaId}.pdf`); // invalida cache da prévia
+        }
+        res.json(r.rows[0]);
+    } catch (e) {
+        console.error('❌ Erro editar tema:', e);
+        res.status(500).json({ erro: 'Erro ao editar tema: ' + e.message });
+    }
+});
+
+app.delete('/api/produto-temas/:temaId', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const temaId = toInt(req.params.temaId, 0);
+        const subtemas = await db.query('SELECT pdf_storage_path FROM produto_subtemas WHERE tema_id = $1', [temaId]);
+        const tema = await db.query('DELETE FROM produto_temas WHERE id = $1 RETURNING pdf_storage_path', [temaId]);
+        if (!tema.rows.length) return res.status(404).json({ erro: 'Tema não encontrado.' });
+
+        await apagarArquivoTema(tema.rows[0].pdf_storage_path);
+        await apagarArquivoTema(`cache/tema_${temaId}.pdf`);
+        for (const s of subtemas.rows) await apagarArquivoTema(s.pdf_storage_path);
+
+        res.json({ mensagem: '✅ Tema removido.' });
+    } catch (e) {
+        console.error('❌ Erro remover tema:', e);
+        res.status(500).json({ erro: 'Erro ao remover tema: ' + e.message });
+    }
+});
+
+app.post('/api/produto-temas/:temaId/subtemas', autenticar, somenteAdmin, uploadArteTema.single('arquivo'), async (req, res) => {
+    try {
+        const temaId = toInt(req.params.temaId, 0);
+        const nome = String(req.body.nome || '').trim();
+        if (!nome) return res.status(400).json({ erro: 'Informe o nome do subtema.' });
+        if (!req.file) return res.status(400).json({ erro: 'Envie o arquivo do subtema (PDF, JPG ou PNG).' });
+
+        const tema = await db.query('SELECT id, produto_id FROM produto_temas WHERE id = $1', [temaId]);
+        if (!tema.rows.length) return res.status(404).json({ erro: 'Tema não encontrado.' });
+
+        const caminho = await uploadPdfTema(req.file, `produto_${tema.rows[0].produto_id}`);
+        const r = await db.query(
+            `INSERT INTO produto_subtemas (tema_id, nome, pdf_storage_path) VALUES ($1, $2, $3)
+             RETURNING id, nome, ordem`,
+            [temaId, nome, caminho]
+        );
+        await registrarAuditoria(req.user.id, `Cadastrou subtema "${nome}" no tema ${temaId}`);
+        res.status(201).json(r.rows[0]);
+    } catch (e) {
+        console.error('❌ Erro criar subtema:', e);
+        res.status(500).json({ erro: 'Erro ao criar subtema: ' + e.message });
+    }
+});
+
+app.patch('/api/produto-subtemas/:subtemaId', autenticar, somenteAdmin, uploadArteTema.single('arquivo'), async (req, res) => {
+    try {
+        const subtemaId = toInt(req.params.subtemaId, 0);
+        const atual = await db.query('SELECT * FROM produto_subtemas WHERE id = $1', [subtemaId]);
+        if (!atual.rows.length) return res.status(404).json({ erro: 'Subtema não encontrado.' });
+        const s = atual.rows[0];
+
+        const nome = req.body.nome !== undefined ? String(req.body.nome).trim() || s.nome : s.nome;
+        const tema = await db.query('SELECT produto_id FROM produto_temas WHERE id = $1', [s.tema_id]);
+
+        let caminho = s.pdf_storage_path;
+        let caminhoAntigo = null;
+        if (req.file) {
+            caminho = await uploadPdfTema(req.file, `produto_${tema.rows[0]?.produto_id || 'x'}`);
+            caminhoAntigo = s.pdf_storage_path;
+        }
+
+        const r = await db.query(
+            `UPDATE produto_subtemas SET nome = $1, pdf_storage_path = $2 WHERE id = $3 RETURNING id, nome, ordem`,
+            [nome, caminho, subtemaId]
+        );
+        if (caminhoAntigo) {
+            await apagarArquivoTema(caminhoAntigo);
+            await apagarArquivoTema(`cache/subtema_${subtemaId}.pdf`);
+        }
+        res.json(r.rows[0]);
+    } catch (e) {
+        console.error('❌ Erro editar subtema:', e);
+        res.status(500).json({ erro: 'Erro ao editar subtema: ' + e.message });
+    }
+});
+
+app.delete('/api/produto-subtemas/:subtemaId', autenticar, somenteAdmin, async (req, res) => {
+    try {
+        const subtemaId = toInt(req.params.subtemaId, 0);
+        const r = await db.query('DELETE FROM produto_subtemas WHERE id = $1 RETURNING pdf_storage_path', [subtemaId]);
+        if (!r.rows.length) return res.status(404).json({ erro: 'Subtema não encontrado.' });
+        await apagarArquivoTema(r.rows[0].pdf_storage_path);
+        await apagarArquivoTema(`cache/subtema_${subtemaId}.pdf`);
+        res.json({ mensagem: '✅ Subtema removido.' });
+    } catch (e) {
+        console.error('❌ Erro remover subtema:', e);
+        res.status(500).json({ erro: 'Erro ao remover subtema: ' + e.message });
+    }
+});
+
+// Prévia protegida (admin) — mesmo mecanismo de marca d'água usado no
+// catálogo público, pra o admin conferir exatamente o que o cliente vê.
+async function servirPreviewTema(req, res, { tabela, coluna, cacheFile }) {
+    try {
+        const id = toInt(req.params.id, 0);
+        const row = await db.query(`SELECT * FROM ${tabela} WHERE id = $1`, [id]);
+        if (!row.rows.length) return res.status(404).json({ erro: 'Não encontrado.' });
+        const storagePath = row.rows[0].pdf_storage_path;
+
+        let bytes;
+        try {
+            bytes = await baixarPdfOriginal(`cache/${cacheFile}`);
+        } catch {
+            const original = await baixarPdfOriginal(storagePath);
+            const loja = await buscarConfigCatalogoAdmin(req).catch(() => null);
+            const logo = await baixarLogoBytes(loja?.logo_url);
+            bytes = Buffer.from(await aplicarMarcaDagua(original, storagePath, logo));
+            try {
+                await supabase.storage.from(BUCKET_TEMAS).upload(`cache/${cacheFile}`, bytes, { contentType: 'application/pdf', upsert: true });
+            } catch (e) { console.warn('⚠️ Falha ao gravar cache de prévia:', e.message); }
+        }
+
+        res.set({ 'Content-Type': 'application/pdf', 'Cache-Control': 'no-store' });
+        res.send(bytes);
+    } catch (e) {
+        console.error('❌ Erro servir prévia de tema:', e);
+        res.status(500).json({ erro: 'Não foi possível carregar a prévia.' });
+    }
+}
+
+app.get('/api/produto-temas/:id/preview', autenticar, (req, res) =>
+    servirPreviewTema(req, res, { tabela: 'produto_temas', cacheFile: `tema_${req.params.id}.pdf` })
+);
+app.get('/api/produto-subtemas/:id/preview', autenticar, (req, res) =>
+    servirPreviewTema(req, res, { tabela: 'produto_subtemas', cacheFile: `subtema_${req.params.id}.pdf` })
+);
 
 app.get('/api/produtos/:id/precificacoes', autenticar, somenteAdmin, async (req, res) => {
     try {
@@ -5069,12 +5454,14 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
         const produtos = await db.query(
             `SELECT
                 p.id, p.nome, p.descricao, p.descricao_longa, p.categoria, p.dono_tipo, p.parceiro_id, p.origem_produto, COALESCE(p.produto_destaque, false) AS produto_destaque,
+                COALESCE(p.tipo_oferta, 'PRODUTO_PROPRIO') AS tipo_oferta,
                 COALESCE((imgs.imagens->>0), p.imagem_url) AS imagem_url,
                 COALESCE(imgs.imagens, '[]'::json) AS imagens,
                 (vars.lista->0->>'variacao_id')::int AS variacao_id,
                 vars.lista->0->>'variacao' AS variacao,
                 (vars.lista->0->>'preco_publico')::numeric AS preco_publico,
                 vars.lista AS variacoes,
+                COALESCE(temas.lista, '[]'::jsonb) AS temas,
                 CASE WHEN p.dono_tipo = 'PARCEIRO' THEN 'LOJA' ELSE 'PERSONALIZE' END AS origem_publica
              FROM produtos p
              LEFT JOIN LATERAL (
@@ -5082,6 +5469,20 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
                 FROM produto_imagens pi
                 WHERE pi.produto_id = p.id
              ) imgs ON true
+             LEFT JOIN LATERAL (
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'id', t.id, 'nome', t.nome, 'limite_subtemas', t.limite_subtemas,
+                        'subtemas', COALESCE(
+                            (SELECT jsonb_agg(jsonb_build_object('id', s.id, 'nome', s.nome) ORDER BY s.ordem ASC, s.id ASC)
+                             FROM produto_subtemas s WHERE s.tema_id = t.id),
+                            '[]'::jsonb
+                        )
+                    ) ORDER BY t.ordem ASC, t.id ASC
+                ) AS lista
+                FROM produto_temas t
+                WHERE t.produto_id = p.id
+             ) temas ON true
              JOIN LATERAL (
                 SELECT jsonb_agg(
                     jsonb_build_object(
@@ -5124,6 +5525,71 @@ app.get('/api/catalogo-publico/:slug', async (req, res) => {
     } catch (e) {
         console.error('❌ Erro catálogo público:', e);
         res.status(500).json({ erro: 'Erro ao carregar catálogo: ' + e.message });
+    }
+});
+
+// Mesma regra de visibilidade/posse de produto usada na query do catálogo
+// público acima — reaplicada aqui pra impedir IDOR (alguém iterando IDs de
+// tema sequencialmente e baixando PDF de produto de OUTRA loja/catálogo).
+async function produtoVisivelNoCatalogo(slugBruto, produtoId) {
+    const slug = slugifyCatalogo(slugBruto);
+    const isAdminCatalogo = slug === 'personalize' || slug === 'admin';
+    let parceiroId = null;
+    if (!isAdminCatalogo) {
+        const lojaRes = await db.query('SELECT id FROM parceiros WHERE slug_catalogo = $1', [slug]);
+        if (!lojaRes.rows.length) return false;
+        parceiroId = lojaRes.rows[0].id;
+    }
+    const ignorarVisivelAdmin = !isAdminCatalogo;
+    const where = isAdminCatalogo
+        ? `COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' AND COALESCE(p.produto_global, true) = true`
+        : `(
+            (COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' AND COALESCE(p.produto_global, true) = true)
+            OR (p.dono_tipo = 'PARCEIRO' AND p.parceiro_id = $2)
+          )`;
+    const params = isAdminCatalogo ? [produtoId] : [produtoId, parceiroId];
+    const r = await db.query(
+        `SELECT 1 FROM produtos p
+         WHERE p.id = $1 AND ${where}
+           AND COALESCE(p.status, 'ATIVO') = 'ATIVO'
+           AND (
+               (COALESCE(p.dono_tipo, 'ADMIN') = 'ADMIN' AND ${ignorarVisivelAdmin})
+               OR COALESCE(p.visivel_catalogo, true) = true
+           )
+           AND COALESCE(p.aprovado_admin, true) = true`,
+        params
+    );
+    return r.rows.length > 0;
+}
+
+app.get('/api/catalogo-publico/:slug/produto-temas/:id/preview', limiterPreviewTema, async (req, res) => {
+    try {
+        const tema = await db.query('SELECT produto_id FROM produto_temas WHERE id = $1', [req.params.id]);
+        if (!tema.rows.length) return res.status(404).json({ erro: 'Não encontrado.' });
+        if (!await produtoVisivelNoCatalogo(req.params.slug, tema.rows[0].produto_id)) {
+            return res.status(404).json({ erro: 'Não encontrado.' });
+        }
+        await servirPreviewTema(req, res, { tabela: 'produto_temas', cacheFile: `tema_${req.params.id}.pdf` });
+    } catch (e) {
+        console.error('❌ Erro prévia pública de tema:', e);
+        res.status(500).json({ erro: 'Não foi possível carregar a prévia.' });
+    }
+});
+
+app.get('/api/catalogo-publico/:slug/produto-subtemas/:id/preview', limiterPreviewTema, async (req, res) => {
+    try {
+        const sub = await db.query(
+            `SELECT t.produto_id FROM produto_subtemas s JOIN produto_temas t ON t.id = s.tema_id WHERE s.id = $1`,
+            [req.params.id]
+        );
+        if (!sub.rows.length) return res.status(404).json({ erro: 'Não encontrado.' });
+        if (!await produtoVisivelNoCatalogo(req.params.slug, sub.rows[0].produto_id)) {
+            return res.status(404).json({ erro: 'Não encontrado.' });
+        }
+        await servirPreviewTema(req, res, { tabela: 'produto_subtemas', cacheFile: `subtema_${req.params.id}.pdf` });
+    } catch (e) {
+        console.error('❌ Erro prévia pública de subtema:', e);
+        res.status(500).json({ erro: 'Não foi possível carregar a prévia.' });
     }
 });
 
@@ -5170,7 +5636,29 @@ app.post('/api/catalogo-publico/:slug/leads', limiterCatalogoPublico, async (req
             // resolvido sempre no servidor, nunca confiado do cliente.
             const valor = p.preco_faixa != null ? parseMoeda(p.preco_faixa) : parseMoeda(p.preco_publico);
             subtotal += valor * quantidade;
-            snapshots.push({ ...p, quantidade, valor });
+
+            // Tema/subtema: nome resolvido sempre no servidor (nunca confiado do
+            // cliente), e validado contra o produto_id real do item.
+            let temaId = null, temaNome = null, subtemasSnapshot = null;
+            if (item.tema_id) {
+                const tema = await client.query(
+                    'SELECT id, nome FROM produto_temas WHERE id = $1 AND produto_id = $2',
+                    [toInt(item.tema_id, 0), produtoId]
+                );
+                if (tema.rows.length) {
+                    temaId = tema.rows[0].id;
+                    temaNome = tema.rows[0].nome;
+                    const subtemaIds = Array.isArray(item.subtema_ids) ? item.subtema_ids.map(x => toInt(x, 0)).filter(Boolean) : [];
+                    if (subtemaIds.length) {
+                        const subs = await client.query(
+                            'SELECT id, nome FROM produto_subtemas WHERE tema_id = $1 AND id = ANY($2::int[])',
+                            [temaId, subtemaIds]
+                        );
+                        if (subs.rows.length) subtemasSnapshot = JSON.stringify(subs.rows.map(s => ({ id: s.id, nome: s.nome })));
+                    }
+                }
+            }
+            snapshots.push({ ...p, quantidade, valor, temaId, temaNome, subtemasSnapshot });
         }
         const primeiro = snapshots[0];
         const resumo = snapshots.map(i => `${i.quantidade}x ${i.nome}${i.variacao ? ' - ' + i.variacao : ''}`).join(' | ');
@@ -5190,9 +5678,10 @@ app.post('/api/catalogo-publico/:slug/leads', limiterCatalogoPublico, async (req
             await client.query(
                 `INSERT INTO catalogo_pedido_itens (
                     pedido_id, produto_id, variacao_id, origem_produto, produto_nome_snapshot, variacao_snapshot,
-                    quantidade, valor_unitario_snapshot, valor_total_snapshot
-                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-                [pedido.rows[0].id, item.id, item.variacao_id, item.dono_tipo === 'PARCEIRO' ? 'LOJA' : 'PERSONALIZE', item.nome, item.variacao, item.quantidade, item.valor, item.valor * item.quantidade]
+                    quantidade, valor_unitario_snapshot, valor_total_snapshot, tema_id, tema_nome_snapshot, subtemas_snapshot_json
+                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+                [pedido.rows[0].id, item.id, item.variacao_id, item.dono_tipo === 'PARCEIRO' ? 'LOJA' : 'PERSONALIZE', item.nome, item.variacao,
+                 item.quantidade, item.valor, item.valor * item.quantidade, item.temaId, item.temaNome, item.subtemasSnapshot]
             );
         }
         await client.query('COMMIT');
@@ -5302,7 +5791,9 @@ app.get('/api/catalogo-pedidos', autenticar, async (req, res) => {
                         'quantidade', cpi.quantidade,
                         'valor_unitario', cpi.valor_unitario_snapshot,
                         'valor_total', cpi.valor_total_snapshot,
-                        'origem_produto', cpi.origem_produto
+                        'origem_produto', cpi.origem_produto,
+                        'tema_nome', cpi.tema_nome_snapshot,
+                        'subtemas', cpi.subtemas_snapshot_json
                     ) ORDER BY cpi.id) FILTER (WHERE cpi.id IS NOT NULL), '[]') AS itens
              FROM catalogo_pedidos cp
              LEFT JOIN parceiros parc ON parc.id = cp.parceiro_id

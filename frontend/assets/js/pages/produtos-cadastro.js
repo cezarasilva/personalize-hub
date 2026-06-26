@@ -291,6 +291,150 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // =========================================================
+    // TEMAS E SUBTEMAS (produtos SOB_ENCOMENDA) — editados de DENTRO do
+    // modal de cada variação (a pedido do usuário), mas pertencem ao
+    // PRODUTO inteiro: abrir o modal de qualquer tamanho mostra e edita a
+    // MESMA lista — não há nada pra "copiar" entre variações porque já é
+    // tudo compartilhado. Sem limite de quantidade de temas nem de
+    // subtemas; cada subtema exige seu próprio PDF, assim como o tema.
+    // Diferente de eixos/variações (estado local até o submit final), cada
+    // ação aqui já chama o endpoint correspondente imediatamente — temas
+    // são sub-recursos próprios, só existem depois que o produto tem `id`.
+    // =========================================================
+    let temasProduto = []; // [{id, nome, limite_subtemas, subtemas:[{id,nome}]}]
+
+    async function carregarTemas() {
+        if (!editandoId) { temasProduto = []; return; }
+        try {
+            temasProduto = await App.api(`/produtos/${editandoId}/temas`);
+        } catch (err) {
+            temasProduto = [];
+            App.toast('error', 'Erro ao carregar temas: ' + err.message);
+        }
+    }
+
+    function temasSecaoHtml() {
+        if (tipoAtivo !== 'SOB_ENCOMENDA') return '';
+        if (!editandoId) {
+            return `
+              <div class="prec-bloco" style="margin-top:10px">
+                <div class="prec-bloco-header"><span><i class="bx bx-images"></i> Temas e subtemas (todo o produto)</span></div>
+                <p class="text-muted" style="padding:10px 0">Salve o produto pelo menos uma vez para poder cadastrar temas.</p>
+              </div>`;
+        }
+        return `
+          <div class="prec-bloco" style="margin-top:10px">
+            <div class="prec-bloco-header"><span><i class="bx bx-images"></i> Temas e subtemas <small class="text-muted">(valem para todos os tamanhos deste produto)</small></span></div>
+            <div class="eixos-lista">
+              ${temasProduto.map(t => `
+                <div class="eixo-card" data-tema="${t.id}">
+                    <div class="eixo-card-header">
+                        <strong>${esc(t.nome)}</strong>${t.limite_subtemas ? ` <small class="text-muted">(limite: ${t.limite_subtemas} subtema${t.limite_subtemas !== 1 ? 's' : ''})</small>` : ''}
+                        <div style="display:flex;gap:6px;margin-left:auto">
+                            <button type="button" class="btn btn-small" onclick="window._temaPreview(${t.id})"><i class="bx bx-show"></i> Ver prévia</button>
+                            <button type="button" class="icon-btn" title="Remover tema" onclick="window._temaRemover(${t.id})"><i class="bx bx-trash"></i></button>
+                        </div>
+                    </div>
+                    ${t.limite_subtemas ? `
+                        <div class="eixo-valores" style="flex-direction:column;align-items:stretch">
+                            ${t.subtemas.map(s => `
+                                <span class="eixo-valor-chip" style="justify-content:space-between">
+                                    ${esc(s.nome)}
+                                    <span>
+                                        <button type="button" title="Ver prévia" onclick="window._subtemaPreview(${s.id})"><i class="bx bx-show"></i></button>
+                                        <button type="button" title="Remover" onclick="window._subtemaRemover(${t.id}, ${s.id})"><i class="bx bx-x"></i></button>
+                                    </span>
+                                </span>`).join('')}
+                            <span class="eixo-valor-add">
+                                <input type="text" id="novoSubtemaNome_${t.id}" placeholder="Nome do subtema">
+                                <input type="file" id="novoSubtemaPdf_${t.id}" accept="application/pdf,image/jpeg,image/png" style="max-width:200px">
+                                <button type="button" class="btn btn-small" onclick="window._subtemaAdicionar(${t.id})"><i class="bx bx-plus"></i></button>
+                            </span>
+                        </div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+            <div class="eixos-add-row" style="margin-top:8px">
+                <input type="text" id="novoTemaNome" placeholder="Nome do tema (ex.: MARVEL)">
+                <input type="number" id="novoTemaLimiteSubtemas" placeholder="Limite de subtemas (opcional)" min="1" style="max-width:180px">
+                <input type="file" id="novoTemaPdf" accept="application/pdf,image/jpeg,image/png" style="max-width:220px">
+                <button type="button" class="btn btn-primary" onclick="window._temaAdicionar()"><i class="bx bx-plus"></i> Adicionar tema</button>
+            </div>
+          </div>`;
+    }
+
+    window._temaAdicionar = async () => {
+        if (!editandoId) return App.toast('warning', 'Salve o produto antes de cadastrar temas.');
+        const nome = $('novoTemaNome')?.value.trim();
+        const limite = $('novoTemaLimiteSubtemas')?.value;
+        const arquivo = $('novoTemaPdf')?.files?.[0];
+        if (!nome) return App.toast('warning', 'Informe o nome do tema.');
+        if (!arquivo) return App.toast('warning', 'Selecione o arquivo do tema (PDF, JPG ou PNG).');
+        const fd = new FormData();
+        fd.append('nome', nome);
+        if (limite) fd.append('limite_subtemas', limite);
+        fd.append('arquivo', arquivo);
+        try {
+            const novo = await App.api(`/produtos/${editandoId}/temas`, { method: 'POST', body: fd });
+            temasProduto.push(novo);
+            renderVariacaoModalBody();
+        } catch (err) { App.toast('error', err.message); }
+    };
+
+    window._temaRemover = async (id) => {
+        const ok = await App.confirmDialog({ title: 'Remover tema?', text: 'O arquivo e os subtemas associados também serão removidos.', confirmText: 'Remover' });
+        if (!ok.isConfirmed) return;
+        try {
+            await App.api(`/produto-temas/${id}`, { method: 'DELETE' });
+            temasProduto = temasProduto.filter(t => t.id !== id);
+            renderVariacaoModalBody();
+        } catch (err) { App.toast('error', err.message); }
+    };
+
+    window._subtemaRemover = async (temaId, subtemaId) => {
+        try {
+            await App.api(`/produto-subtemas/${subtemaId}`, { method: 'DELETE' });
+            const tema = temasProduto.find(t => t.id === temaId);
+            if (tema) tema.subtemas = tema.subtemas.filter(s => s.id !== subtemaId);
+            renderVariacaoModalBody();
+        } catch (err) { App.toast('error', err.message); }
+    };
+
+    window._subtemaAdicionar = async (temaId) => {
+        const nome = $(`novoSubtemaNome_${temaId}`)?.value.trim();
+        const arquivo = $(`novoSubtemaPdf_${temaId}`)?.files?.[0];
+        if (!nome) return App.toast('warning', 'Informe o nome do subtema.');
+        if (!arquivo) return App.toast('warning', 'Selecione o arquivo do subtema (PDF, JPG ou PNG).');
+        const fd = new FormData();
+        fd.append('nome', nome);
+        fd.append('arquivo', arquivo);
+        try {
+            const novo = await App.api(`/produto-temas/${temaId}/subtemas`, { method: 'POST', body: fd });
+            const tema = temasProduto.find(t => t.id === temaId);
+            if (tema) tema.subtemas.push(novo);
+            renderVariacaoModalBody();
+        } catch (err) { App.toast('error', err.message); }
+    };
+
+    function abrirPreviewTema(titulo, endpoint) {
+        $('modalPreviewTemaTitulo').textContent = titulo;
+        $('modalPreviewTema')?.classList.remove('hidden');
+        $('modalPreviewTema')?.setAttribute('aria-hidden', 'false');
+        PdfProtegido.renderizar($('modalPreviewTemaBody'), endpoint, { autenticado: true })
+            .then(desbloquear => { _previewTemaDesbloquear = desbloquear; });
+    }
+    let _previewTemaDesbloquear = null;
+    window._temaPreview = (id) => abrirPreviewTema('Prévia do tema', `/api/produto-temas/${id}/preview`);
+    window._subtemaPreview = (id) => abrirPreviewTema('Prévia do subtema', `/api/produto-subtemas/${id}/preview`);
+
+    $('btnFecharModalPreviewTema')?.addEventListener('click', () => {
+        $('modalPreviewTema')?.classList.add('hidden');
+        $('modalPreviewTema')?.setAttribute('aria-hidden', 'true');
+        $('modalPreviewTemaBody').innerHTML = '';
+        if (_previewTemaDesbloquear) { _previewTemaDesbloquear(); _previewTemaDesbloquear = null; }
+    });
+
+    // =========================================================
     // PASSO 2 — VARIAÇÕES (dropdown "+ Adicionar variação" + modal + resumo em chips)
     // =========================================================
     function novaVariacaoMultipla() {
@@ -760,7 +904,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="form-group prec-add-actions"><label>&nbsp;</label>
               <button type="button" class="btn btn-primary btn-small" onclick="window._faixaAdicionar(${v.id})"><i class="bx bx-plus"></i></button>
             </div>
-          </div>`;
+          </div>
+
+          ${temasSecaoHtml()}`;
     }
 
     window._varMultSetNome = (id, val) => { const v = variacoesMultiplas.find(x => x.id === id); if (v) v.variacao = val; };
@@ -1265,6 +1411,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Guarda dados para preencher step 3 quando for renderizado
             _dadosEdicao = p;
+
+            await carregarTemas();
 
             // Pula step 1, vai para step 2
             stepAtual = 2;

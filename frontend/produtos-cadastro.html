@@ -229,6 +229,17 @@
     </div>
 </div>
 
+<!-- Modal prévia protegida de tema/subtema -->
+<div id="modalPreviewTema" class="app-modal hidden" aria-hidden="true">
+    <div class="app-modal-card app-modal-card-lg">
+        <div class="app-modal-header">
+            <div><h3 id="modalPreviewTemaTitulo">Prévia</h3></div>
+            <button type="button" class="icon-btn" id="btnFecharModalPreviewTema"><i class="bx bx-x"></i></button>
+        </div>
+        <div class="app-modal-body" id="modalPreviewTemaBody" style="max-height:70vh;overflow:auto"></div>
+    </div>
+</div>
+
 <!-- Modal crop -->
 <div id="modalCropProduto" class="crop-modal hidden" aria-hidden="true">
     <div class="crop-modal-card">
@@ -248,6 +259,7 @@
 </div>
 
 <script src="assets/js/core.js"></script>
+<script src="assets/js/pdf-protegido.js"></script>
 <script src="assets/js/pages/produtos-cadastro.js"></script>
 </body>
 </html>

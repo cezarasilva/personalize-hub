@@ -199,6 +199,32 @@
 
     <footer class="catalogo-footer" id="catalogoFooter"></footer>
 
+    <!-- ========== OVERLAY: ESCOLHA DE TEMA/SUBTEMA (produtos sob encomenda) ========== -->
+    <div id="temaModal" class="app-modal hidden" aria-hidden="true">
+        <div class="app-modal-card app-modal-card-lg">
+            <div class="app-modal-header">
+                <div><h3 id="temaModalTitulo">Escolha o tema</h3></div>
+                <button type="button" class="icon-btn" id="btnFecharTemaModal"><i class="bx bx-x"></i></button>
+            </div>
+            <div class="app-modal-body" id="temaModalBody"></div>
+            <div class="app-modal-actions">
+                <button type="button" class="btn-checkout" id="btnTemaConfirmar" disabled>Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prévia protegida (reaproveitado tema/subtema) -->
+    <div id="temaPreviewModal" class="app-modal hidden" aria-hidden="true">
+        <div class="app-modal-card app-modal-card-lg">
+            <div class="app-modal-header">
+                <div><h3 id="temaPreviewTitulo">Prévia</h3></div>
+                <button type="button" class="icon-btn" id="btnFecharTemaPreview"><i class="bx bx-x"></i></button>
+            </div>
+            <div class="app-modal-body" id="temaPreviewBody" style="max-height:70vh;overflow:auto"></div>
+        </div>
+    </div>
+
+    <script src="/assets/js/pdf-protegido.js"></script>
     <script src="/assets/js/pages/catalogo-publico.js"></script>
 </body>
 </html>

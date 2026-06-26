@@ -401,12 +401,9 @@
 
     // variacaoIdOverride/quantidadeOverride: usados quando o item vem da página de
     // detalhe (sem card/selects na tela) — ver produto-detalhe.js
-    window.adicionarItem = (produtoId, variacaoIdOverride, quantidadeOverride) => {
-        const prod = produtos.find(p => Number(p.id) === Number(produtoId));
-        if (!prod) return;
+    function resolverVariacaoEQuantidade(prod, variacaoIdOverride, quantidadeOverride) {
         const vs = variacoesDoProduto(prod);
         const comSel = temSeletor(prod);
-
         let variacao = vs[0];
         let quantidade = 1;
 
@@ -414,7 +411,7 @@
             variacao = vs.find(v => Number(v.variacao_id) === Number(variacaoIdOverride)) || vs[0];
             if (quantidadeOverride != null) quantidade = Number(quantidadeOverride) || 1;
         } else if (comSel) {
-            const card = document.querySelector(`.cat-card-seletores[data-pid="${produtoId}"]`);
+            const card = document.querySelector(`.cat-card-seletores[data-pid="${prod.id}"]`);
             if (card) {
                 const selTam = card.querySelector('.cat-sel-tamanho');
                 const selQtd = card.querySelector('.cat-sel-qtd');
@@ -424,27 +421,189 @@
             }
         } else {
             // Produto simples (sem seletor) — usa a quantidade definida no stepper mobile, se houver.
-            quantidade = stepperLivre.get(produtoId) || 1;
+            quantidade = stepperLivre.get(prod.id) || 1;
         }
+        return { variacao, quantidade, comSel };
+    }
 
+    // tema: { tema_id, tema_nome, subtema_ids, subtemas_nomes } ou null (produto sem tema)
+    function adicionarAoCarrinho(prod, variacao, quantidade, comSel, tema = null) {
         const faixa = opcoesQtd(variacao).find(f => Number(f.quantidade) === quantidade);
         const precoUnit = faixa ? Number(faixa.preco_unitario) : Number(variacao.preco_publico || 0);
 
-        // Item com faixa de quantidade fixa: cada combinação tamanho+quantidade
-        // é uma linha própria no carrinho (não soma +1 livre, troca-se a faixa).
-        const key = `${produtoId}-${variacao.variacao_id}${comSel ? '-' + quantidade : ''}`;
+        const sufixoTema = tema ? `-tema${tema.tema_id}${tema.subtema_ids?.length ? '-sub' + tema.subtema_ids.slice().sort().join('_') : ''}` : '';
+        // Item com faixa de quantidade fixa (ou tema escolhido): cada combinação
+        // é uma linha própria no carrinho (não soma +1 livre, troca-se a faixa/tema).
+        const key = `${prod.id}-${variacao.variacao_id}${comSel ? '-' + quantidade : ''}${sufixoTema}`;
         const existente = carrinho.find(i => i.key === key);
-        if (existente && !comSel) existente.quantidade += 1;
+        if (existente && !comSel && !tema) existente.quantidade += 1;
         else if (!existente) {
             carrinho.push({
-                key, produto_id: produtoId, variacao_id: variacao.variacao_id,
+                key, produto_id: prod.id, variacao_id: variacao.variacao_id,
                 nome: prod.nome, variacao: variacao.variacao,
-                preco: precoUnit, quantidade, usaFaixa: comSel
+                preco: precoUnit, quantidade, usaFaixa: comSel,
+                tema_id: tema?.tema_id || null, tema_nome: tema?.tema_nome || null,
+                subtema_ids: tema?.subtema_ids || null, subtemas_nomes: tema?.subtemas_nomes || null
             });
         }
         renderCarrinho();
         abrirCarrinho();
+    }
+
+    window.adicionarItem = (produtoId, variacaoIdOverride, quantidadeOverride) => {
+        const prod = produtos.find(p => Number(p.id) === Number(produtoId));
+        if (!prod) return;
+
+        // Sob encomenda com temas cadastrados: precisa escolher tema (e
+        // subtemas, se houver) antes de entrar no carrinho.
+        if (prod.tipo_oferta === 'SOB_ENCOMENDA' && Array.isArray(prod.temas) && prod.temas.length) {
+            abrirOverlayTemas(prod, variacaoIdOverride, quantidadeOverride);
+            return;
+        }
+
+        const { variacao, quantidade, comSel } = resolverVariacaoEQuantidade(prod, variacaoIdOverride, quantidadeOverride);
+        adicionarAoCarrinho(prod, variacao, quantidade, comSel);
     };
+
+    // =========================================================
+    // OVERLAY: escolha de tema (única) e subtemas (múltipla, até o limite).
+    // Cada tema/subtema é um mini card com o PDF já renderizado em miniatura
+    // (não escondido atrás de um botão "ver prévia") e um checkbox no canto
+    // superior direito pra selecionar. Escolher um tema com subtemas revela
+    // a grade de subtemas dele logo abaixo, na mesma tela (sem navegação por
+    // "passos"). Clicar na miniatura (não no checkbox) abre a prévia ampliada.
+    // =========================================================
+    let _temaOverlayState = null; // { prod, variacaoIdOverride, quantidadeOverride, temaEscolhido, subtemasEscolhidos: [] }
+    let _temaPreviewDesbloquear = null;
+
+    function abrirOverlayTemas(prod, variacaoIdOverride, quantidadeOverride) {
+        _temaOverlayState = { prod, variacaoIdOverride, quantidadeOverride, temaEscolhido: null, subtemasEscolhidos: [] };
+        document.getElementById('temaModalTitulo').textContent = `Escolha o tema — ${prod.nome}`;
+        renderOverlayTemas();
+        document.getElementById('temaModal').classList.remove('hidden');
+        document.getElementById('temaModal').setAttribute('aria-hidden', 'false');
+    }
+
+    function fecharOverlayTemas() {
+        document.getElementById('temaModal').classList.add('hidden');
+        document.getElementById('temaModal').setAttribute('aria-hidden', 'true');
+        document.getElementById('temaModalBody').innerHTML = '';
+        _temaOverlayState = null;
+    }
+
+    function miniCardHtml(id, nome, endpoint, selecionado) {
+        return `
+            <div class="tema-card">
+                <button type="button" class="tema-card-check${selecionado ? ' checked' : ''}" data-check="${id}" aria-label="Selecionar ${esc(nome)}" title="Selecionar">
+                    <i class="bx ${selecionado ? 'bxs-check-circle' : 'bx-circle'}"></i>
+                </button>
+                <div class="tema-card-thumb" data-thumb data-endpoint="${esc(endpoint)}" title="Ver prévia ampliada"></div>
+                <strong class="tema-card-nome">${esc(nome)}</strong>
+            </div>`;
+    }
+
+    function renderizarThumbsPendentes(body) {
+        body.querySelectorAll('[data-thumb]').forEach(el => {
+            if (el.dataset.rendered) return;
+            el.dataset.rendered = '1';
+            PdfProtegido.renderizar(el, el.dataset.endpoint, { autenticado: false, paginaUnica: true, escala: 0.5 });
+        });
+    }
+
+    function renderOverlayTemas() {
+        const st = _temaOverlayState;
+        const body = document.getElementById('temaModalBody');
+        const temaAtual = st.prod.temas.find(t => t.id === st.temaEscolhido);
+
+        let html = `
+            <p class="tema-secao-label">Escolha o tema</p>
+            <div class="tema-grid" data-grid="tema">
+                ${st.prod.temas.map(t => miniCardHtml(
+                    t.id, t.nome, `/api/catalogo-publico/${slug}/produto-temas/${t.id}/preview`, st.temaEscolhido === t.id
+                )).join('')}
+            </div>`;
+
+        if (temaAtual && temaAtual.limite_subtemas) {
+            html += `
+                <p class="tema-secao-label" style="margin-top:18px">
+                    Escolha os subtemas — <span id="temaContadorAtual">${st.subtemasEscolhidos.length}</span>/${temaAtual.limite_subtemas} selecionado(s)
+                </p>
+                <div class="tema-grid" data-grid="subtema">
+                    ${temaAtual.subtemas.map(s => miniCardHtml(
+                        s.id, s.nome, `/api/catalogo-publico/${slug}/produto-subtemas/${s.id}/preview`, st.subtemasEscolhidos.includes(s.id)
+                    )).join('')}
+                </div>`;
+        }
+
+        body.innerHTML = html;
+
+        body.querySelectorAll('[data-grid="tema"] [data-check]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = Number(btn.dataset.check);
+                st.temaEscolhido = st.temaEscolhido === id ? null : id;
+                st.subtemasEscolhidos = [];
+                renderOverlayTemas();
+            });
+        });
+        body.querySelectorAll('[data-grid="subtema"] [data-check]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = Number(btn.dataset.check);
+                const jaEscolhido = st.subtemasEscolhidos.includes(id);
+                if (!jaEscolhido && st.subtemasEscolhidos.length >= temaAtual.limite_subtemas) {
+                    Swal.fire({ icon: 'warning', title: `Limite de ${temaAtual.limite_subtemas} atingido.`, timer: 1800, showConfirmButton: false });
+                    return;
+                }
+                st.subtemasEscolhidos = jaEscolhido ? st.subtemasEscolhidos.filter(x => x !== id) : [...st.subtemasEscolhidos, id];
+                renderOverlayTemas();
+            });
+        });
+        body.querySelectorAll('.tema-card-thumb').forEach(el => {
+            el.addEventListener('click', () => {
+                const nome = el.closest('.tema-card')?.querySelector('.tema-card-nome')?.textContent || 'Prévia';
+                abrirPreviewPublico(nome, el.dataset.endpoint);
+            });
+        });
+
+        renderizarThumbsPendentes(body);
+        atualizarBotaoConfirmarTema();
+    }
+
+    function atualizarBotaoConfirmarTema() {
+        const st = _temaOverlayState;
+        const btn = document.getElementById('btnTemaConfirmar');
+        if (!st || !st.temaEscolhido) { btn.disabled = true; return; }
+        const tema = st.prod.temas.find(t => t.id === st.temaEscolhido);
+        btn.disabled = Boolean(tema.limite_subtemas) && st.subtemasEscolhidos.length < 1;
+    }
+
+    document.getElementById('btnTemaConfirmar')?.addEventListener('click', () => {
+        const st = _temaOverlayState;
+        if (!st || !st.temaEscolhido) return;
+        const tema = st.prod.temas.find(t => t.id === st.temaEscolhido);
+        const subtemasNomes = (tema.subtemas || []).filter(s => st.subtemasEscolhidos.includes(s.id)).map(s => s.nome);
+        const { variacao, quantidade, comSel } = resolverVariacaoEQuantidade(st.prod, st.variacaoIdOverride, st.quantidadeOverride);
+        adicionarAoCarrinho(st.prod, variacao, quantidade, comSel, {
+            tema_id: tema.id, tema_nome: tema.nome,
+            subtema_ids: st.subtemasEscolhidos.slice(), subtemas_nomes: subtemasNomes
+        });
+        fecharOverlayTemas();
+    });
+
+    document.getElementById('btnFecharTemaModal')?.addEventListener('click', fecharOverlayTemas);
+
+    function abrirPreviewPublico(titulo, endpoint) {
+        document.getElementById('temaPreviewTitulo').textContent = titulo;
+        document.getElementById('temaPreviewModal').classList.remove('hidden');
+        document.getElementById('temaPreviewModal').setAttribute('aria-hidden', 'false');
+        PdfProtegido.renderizar(document.getElementById('temaPreviewBody'), endpoint, { autenticado: false })
+            .then(desbloquear => { _temaPreviewDesbloquear = desbloquear; });
+    }
+    document.getElementById('btnFecharTemaPreview')?.addEventListener('click', () => {
+        document.getElementById('temaPreviewModal').classList.add('hidden');
+        document.getElementById('temaPreviewModal').setAttribute('aria-hidden', 'true');
+        document.getElementById('temaPreviewBody').innerHTML = '';
+        if (_temaPreviewDesbloquear) { _temaPreviewDesbloquear(); _temaPreviewDesbloquear = null; }
+    });
 
     function renderCarrinho() {
         const lista = document.getElementById('listaPedido');
@@ -472,11 +631,15 @@
                 : `<button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade - 1})" type="button">-</button>
                    <span class="cart-qty-val">${i.quantidade}</span>
                    <button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade + 1})" type="button">+</button>`;
+            const temaLinha = i.tema_nome
+                ? `<div class="cart-item-tema">Tema: ${esc(i.tema_nome)}${i.subtemas_nomes?.length ? ' • ' + i.subtemas_nomes.map(esc).join(', ') : ''}</div>`
+                : '';
             return `<div class="cart-item">
                 ${imagem ? `<img src="${esc(imagem)}" alt="${esc(i.nome)}">` : `<div class="cart-img-placeholder"><i class='bx bx-image'></i></div>`}
                 <div class="cart-item-info">
                     <div class="cart-item-title">${esc(i.nome)}</div>
                     <div class="cart-item-price">${esc(i.variacao || '')} • ${money(i.preco)}/un</div>
+                    ${temaLinha}
                     <div class="cart-qty-box">
                         ${qtyControl}
                         <button class="cart-remove-inline" onclick="removerItem(${idx})" type="button"><i class='bx bx-trash'></i></button>
@@ -498,7 +661,8 @@
         if (!item) return;
         item.quantidade = Number(sel.value || 1);
         item.preco = Number(sel.selectedOptions[0]?.dataset.preco || item.preco);
-        item.key = `${item.produto_id}-${item.variacao_id}-${item.quantidade}`;
+        const sufixoTema = item.tema_id ? `-tema${item.tema_id}${item.subtema_ids?.length ? '-sub' + item.subtema_ids.slice().sort().join('_') : ''}` : '';
+        item.key = `${item.produto_id}-${item.variacao_id}-${item.quantidade}${sufixoTema}`;
         renderCarrinho();
     };
 
@@ -528,7 +692,10 @@
             cliente_whatsapp,
             cliente_email,
             observacao,
-            itens: carrinho.map(i => ({ produto_id: i.produto_id, variacao_id: i.variacao_id, quantidade: i.quantidade }))
+            itens: carrinho.map(i => ({
+                produto_id: i.produto_id, variacao_id: i.variacao_id, quantidade: i.quantidade,
+                tema_id: i.tema_id || undefined, subtema_ids: i.subtema_ids || undefined
+            }))
         };
         const salvo = await api(`/api/catalogo-publico/${slug}/leads`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const whats = String(salvo.whatsapp_destino || whatsappDestino()).replace(/\D/g, '');

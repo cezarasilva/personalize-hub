@@ -36,9 +36,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     function itensPedido(p) {
         const itens = Array.isArray(p.itens) ? p.itens : [];
-        if (itens.length) return itens.map(i =>
-            `<li>${esc(String(i.quantidade||1))}x ${esc(i.produto_nome||'')} ${i.variacao ? '- '+esc(i.variacao) : ''} <strong>${App.money(i.valor_total||0)}</strong></li>`
-        ).join('');
+        if (itens.length) return itens.map(i => {
+            let subtemas = [];
+            try { subtemas = i.subtemas ? JSON.parse(i.subtemas) : []; } catch {}
+            const temaInfo = i.tema_nome
+                ? ` <small style="color:#64748b">• Tema: ${esc(i.tema_nome)}${subtemas.length ? ' • Subtemas: ' + subtemas.map(s => esc(s.nome)).join(', ') : ''}</small>`
+                : '';
+            return `<li>${esc(String(i.quantidade||1))}x ${esc(i.produto_nome||'')} ${i.variacao ? '- '+esc(i.variacao) : ''} <strong>${App.money(i.valor_total||0)}</strong>${temaInfo}</li>`;
+        }).join('');
         return `<li>${esc(p.produto_nome_snapshot || p.assunto_lead || 'Contato')}</li>`;
     }
     function statusOptions(atual) {
