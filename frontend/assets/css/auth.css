@@ -25,6 +25,10 @@
   transition: background .3s, border-color .3s;
 }
 .auth-brand { text-align: center; margin-bottom: 28px; }
+.brand-logo-auth { height: 64px; width: auto; object-fit: contain; margin-bottom: 12px; }
+.brand-logo-auth.brand-logo-dark { display: none; }
+[data-theme="dark"] .brand-logo-auth.brand-logo-light { display: none; }
+[data-theme="dark"] .brand-logo-auth.brand-logo-dark { display: inline-block; }
 .auth-brand h1, .auth-brand h2 {
   font-size: 28px;
   font-weight: 800;

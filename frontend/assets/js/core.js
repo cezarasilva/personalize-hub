@@ -265,8 +265,12 @@ window.App = (() => {
         side.innerHTML = `
             <div class="sidebar-top">
                 <div class="sidebar-brand">
-                    <strong>PERSONALIZE</strong>
-                    <small>${escapeHtml(perfil || '')} • ${escapeHtml(nome)}</small>
+                    <img class="brand-logo brand-logo-light" src="assets/icons/logo.png" alt="PERSONALIZE">
+                    <img class="brand-logo brand-logo-dark" src="assets/icons/logo-white.png" alt="PERSONALIZE">
+                    <div class="sidebar-brand-text">
+                        <strong>PERSONALIZE</strong>
+                        <small>${escapeHtml(perfil || '')} • ${escapeHtml(nome)}</small>
+                    </div>
                 </div>
                 <div class="sidebar-top-btns">
                     <button class="btn-sidebar-toggle" id="btnSidebarToggle" type="button"

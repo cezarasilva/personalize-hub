@@ -32,7 +32,12 @@
   min-height: 64px;
   flex-shrink: 0;
 }
-.sidebar-brand { line-height: 1; flex: 1; min-width: 0; overflow: hidden; transition: opacity .2s, width .2s; }
+.sidebar-brand { line-height: 1; flex: 1; min-width: 0; overflow: hidden; transition: opacity .2s, width .2s; display: flex; align-items: center; gap: 8px; }
+.brand-logo { height: 30px; width: auto; flex-shrink: 0; object-fit: contain; }
+.brand-logo-dark { display: none; }
+[data-theme="dark"] .brand-logo-light { display: none; }
+[data-theme="dark"] .brand-logo-dark { display: block; }
+.sidebar-brand-text { min-width: 0; overflow: hidden; }
 .sidebar-brand strong {
   display: block;
   color: var(--primary);
