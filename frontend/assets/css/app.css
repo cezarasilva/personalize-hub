@@ -4644,4 +4644,40 @@ tr:hover td { background: var(--surface-2); }
   text-decoration: none;
   transition: border-color .15s, color .15s;
 }
+
+/* ---- Toast de confirmação de adição ao carrinho ---- */
+#cartToast {
+  position: fixed;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: #0f172a;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 9900;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s, transform .22s;
+  white-space: nowrap;
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 24px rgba(0,0,0,.28);
+}
+#cartToast i { font-size: 17px; color: #4ade80; flex-shrink: 0; }
+#cartToast.cart-toast-show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Pulso no badge do carrinho ao adicionar item */
+@keyframes cartBadgePulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.6); }
+  100% { transform: scale(1); }
+}
+.cart-badge-pulse { animation: cartBadgePulse .38s ease-out; }
 .det-btn-voltar:hover { border-color: var(--catalogo-button-color, var(--primary)); color: var(--catalogo-button-color, var(--primary)); }
