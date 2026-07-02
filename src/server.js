@@ -3909,7 +3909,7 @@ const FORMAS_PAGAMENTO_VENDA = ['DINHEIRO', 'PIX', 'CREDITO', 'DEBITO'];
 
 app.post('/api/vendas/lote', autenticar, async (req, res) => {
     try {
-        const { parceiro_id, forma_pagamento, itens } = req.body;
+        const { parceiro_id, forma_pagamento, itens, data_venda } = req.body;
         if (!Array.isArray(itens) || itens.length === 0) {
             return res.status(400).json({ erro: 'Adicione ao menos um produto à venda.' });
         }
@@ -3918,6 +3918,10 @@ app.post('/api/vendas/lote', autenticar, async (req, res) => {
         if (!FORMAS_PAGAMENTO_VENDA.includes(forma)) {
             return res.status(400).json({ erro: 'Forma de pagamento inválida.' });
         }
+
+        const dataVendaFinal = data_venda && /^\d{4}-\d{2}-\d{2}$/.test(data_venda)
+            ? data_venda
+            : null; // null → banco usa DEFAULT (CURRENT_DATE)
 
         const perfil = normalizarPerfil(req.user.perfil);
         const pIdFinal = perfil === 'PARCEIRO' ? req.user.parceiro_id : (parceiro_id || null);
@@ -3977,10 +3981,10 @@ app.post('/api/vendas/lote', autenticar, async (req, res) => {
                 valorTotalLote = money(valorTotalLote + valorVenda);
 
                 const venda = await client.query(
-                    `INSERT INTO vendas (parceiro_id, usuario_id, variacao_id, quantidade, valor_total, forma_pagamento, venda_lote_codigo)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    `INSERT INTO vendas (parceiro_id, usuario_id, variacao_id, quantidade, valor_total, forma_pagamento, venda_lote_codigo, data_venda)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::date, CURRENT_DATE))
                      RETURNING id`,
-                    [pIdFinal || null, req.user.id, v.id, qtd, valorVenda, forma, codigo]
+                    [pIdFinal || null, req.user.id, v.id, qtd, valorVenda, forma, codigo, dataVendaFinal]
                 );
 
                 await registrarMovimentacao(client, {

@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const totalCarrinhoVenda = document.getElementById('totalCarrinhoVenda');
     const formaPagamentoVenda = document.getElementById('formaPagamentoVenda');
     const btnFecharVenda = document.getElementById('btnFecharVenda');
+    const dataVenda = document.getElementById('dataVenda');
+    dataVenda.value = new Date().toISOString().slice(0, 10);
 
     function normalizarProduto(p) {
         return {
@@ -582,6 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             parceiro_id: App.isParceiro() ? null : (origemVenda.value || null),
             forma_pagamento: formaPagamentoVenda.value,
+            data_venda: dataVenda.value || null,
             itens: lote.map(i => ({
                 produto_id: i.produto_id,
                 variacao_id: i.variacao_id,
@@ -595,6 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
             App.toast('success', 'Venda registrada.');
             lote = [];
             formaPagamentoVenda.value = 'DINHEIRO';
+            dataVenda.value = new Date().toISOString().slice(0, 10);
             renderCarrinho();
             await carregarProdutos();
             await carregarVendas();
