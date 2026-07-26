@@ -10,7 +10,7 @@
     const variacaoId = params.get('vid');
 
     function urlCatalogo() {
-        return `catalogo-publico.html?loja=${encodeURIComponent(slug)}`;
+        return `/catalogo/${encodeURIComponent(slug)}`;
     }
 
     // --- Renderizador de specs (HTML do Quill ou markdown legado) ---

@@ -21,6 +21,7 @@
     let bannerTimer = null;
     let bannerIndex = 0;
     let categoriaAtiva = 'TODOS';
+    let termoBusca = '';
     const galeriasEstado = new Map();
     const stepperLivre = new Map(); // produtoId -> quantidade (produtos sem seletor/faixa)
 
@@ -118,7 +119,26 @@
         if (!el) return;
         const cats = Array.from(new Set(produtos.map(categoriaProduto))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
         const botoes = ['TODOS', ...cats];
-        el.innerHTML = botoes.map(cat => `<button type="button" class="catalogo-chip ${categoriaAtiva === cat ? 'active' : ''}" data-categoria="${esc(cat)}">${cat === 'TODOS' ? 'Todos' : esc(cat)}</button>`).join('');
+        el.innerHTML = botoes.map((cat, index) => {
+            const itens = cat === 'TODOS' ? produtos : produtos.filter(p => categoriaProduto(p) === cat);
+            const produtoComImagem = itens.find(p => imagensProduto(p).length) || itens[0] || {};
+            const imagem = imagensProduto(produtoComImagem)[0] || '';
+            const rotulo = cat === 'TODOS' ? 'Ver tudo' : cat;
+            const cor = ['cyan', 'yellow', 'coral', 'cream'][index % 4];
+            return `<button type="button"
+                class="catalogo-chip cat-category-${cor} ${categoriaAtiva === cat ? 'active' : ''}"
+                data-categoria="${esc(cat)}"
+                aria-pressed="${categoriaAtiva === cat ? 'true' : 'false'}">
+                <span class="cat-category-visual">
+                    ${imagem ? `<img src="${esc(imagem)}" alt="" loading="lazy">` : '<i class="bx bx-gift"></i>'}
+                </span>
+                <span class="cat-category-copy">
+                    <small>${itens.length} ${itens.length === 1 ? 'produto' : 'produtos'}</small>
+                    <strong>${esc(rotulo)}</strong>
+                </span>
+                <i class="bx bx-up-arrow-alt cat-category-arrow" aria-hidden="true"></i>
+            </button>`;
+        }).join('');
         el.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
             categoriaAtiva = btn.dataset.categoria || 'TODOS';
             renderCategorias();
@@ -159,12 +179,64 @@
         }
     }
 
+    function renderHeroAcoes() {
+        const el = document.getElementById('linksContato');
+        if (!el) return;
+        el.innerHTML = `
+            <a class="cat-hero-btn cat-hero-btn-primary" href="#catalogoGrid">
+                Explorar catálogo <i class="bx bx-right-arrow-alt"></i>
+            </a>
+            <a class="cat-hero-btn cat-hero-btn-secondary" href="#formPedidoPersonalizado">
+                Pedir personalizado
+            </a>
+        `;
+    }
+
+    function renderHeroBento() {
+        const el = document.getElementById('catalogoHeroBento');
+        if (!el) return;
+
+        const comImagem = produtos.filter(p => imagensProduto(p).length);
+        const destaquesComImagem = comImagem.filter(p => p.produto_destaque);
+        const base = [...destaquesComImagem, ...comImagem.filter(p => !p.produto_destaque)];
+
+        if (!base.length) {
+            el.innerHTML = `
+                <div class="cat-hero-empty">
+                    <i class="bx bx-palette"></i>
+                    <strong>Seu produto, do seu jeito.</strong>
+                    <span>Escolha uma ideia e fale com a gente.</span>
+                </div>`;
+            return;
+        }
+
+        const escolhidos = [];
+        for (let i = 0; i < 4; i++) escolhidos.push(base[i % base.length]);
+        const classes = ['primary', 'tall', 'small', 'wide'];
+        const chamadas = ['Mais queridos', 'Crie sua coleção', 'Do papel à ideia', 'Pronto para presentear'];
+
+        el.innerHTML = escolhidos.map((p, i) => {
+            const vs = variacoesDoProduto(p);
+            const href = `/produto-detalhe.html?loja=${encodeURIComponent(slug)}&id=${p.id}&vid=${vs[0].variacao_id}`;
+            return `
+                <a class="cat-hero-product cat-hero-product-${classes[i]}" href="${href}">
+                    <img src="${esc(imagensProduto(p)[0])}" alt="${esc(p.nome)}">
+                    <span class="cat-hero-product-label">${chamadas[i]}</span>
+                    <span class="cat-hero-product-info">
+                        <strong>${esc(p.nome)}</strong>
+                        <small>${money(vs[0].preco_publico)}</small>
+                    </span>
+                    <i class="bx bx-up-arrow-alt" aria-hidden="true"></i>
+                </a>`;
+        }).join('');
+    }
+
     function cardHtml(p) {
         const gallery = renderGallery(p);
         const vs = variacoesDoProduto(p);
         const comSel = temSeletor(p);
         const precoInicial = vs[0].preco_publico;
-        const href = `produto-detalhe.html?loja=${esc(slug)}&id=${p.id}&vid=${vs[0].variacao_id}`;
+        const href = `/produto-detalhe.html?loja=${encodeURIComponent(slug)}&id=${p.id}&vid=${vs[0].variacao_id}`;
 
         const seletorHtml = comSel ? `
             <div class="cat-card-seletores" data-pid="${p.id}">
@@ -179,18 +251,19 @@
 
         return `
         <article class="cat-card">
-            <a class="cat-card-media-link" href="${href}">
+            <a class="cat-card-media-link" href="${href}" aria-label="Ver ${esc(p.nome)}">
                 <div class="cat-card-media">
                     ${gallery}
                     ${p.produto_destaque ? '<span class="cat-badge-star"><i class="bx bxs-star"></i> Destaque</span>' : ''}
+                    <span class="cat-card-view">Ver produto <i class="bx bx-up-arrow-alt"></i></span>
                 </div>
             </a>
             <div class="cat-card-body">
+                ${p.categoria ? `<p class="cat-card-subtitle">${esc(p.categoria)}</p>` : ''}
                 <div class="cat-card-toprow">
                     <a class="cat-card-name-link" href="${href}"><h3 class="cat-card-name">${esc(p.nome)}</h3></a>
                     <span class="cat-card-price-inline" data-price-for="${p.id}">${money(precoInicial)}</span>
                 </div>
-                ${p.categoria ? `<p class="cat-card-subtitle">${esc(p.categoria)}</p>` : ''}
                 <p class="cat-card-desc">${esc(p.descricao || '')}</p>
                 ${seletorHtml}
                 <div class="cat-card-bottom">
@@ -275,9 +348,7 @@
     }
 
     function renderProdutos() {
-        const termoInline  = (document.getElementById('catSearchInline')?.value || '').toLowerCase();
-        const termoFloat   = (document.getElementById('floatingSearchInput')?.value || '').toLowerCase();
-        const termo = termoInline || termoFloat;
+        const termo = termoBusca.trim().toLowerCase();
         const grid  = document.getElementById('catalogoGrid');
         const count = document.getElementById('catCount');
 
@@ -288,9 +359,7 @@
         });
         paginaAtual = 1;
 
-        if (count) count.textContent = produtosFiltrados.length
-            ? `${produtosFiltrados.length} produto${produtosFiltrados.length !== 1 ? 's' : ''}`
-            : '';
+        if (count) count.textContent = `${produtosFiltrados.length} produto${produtosFiltrados.length !== 1 ? 's' : ''}`;
         if (!produtosFiltrados.length) {
             grid.innerHTML = `
                 <div style="column-span:all; text-align:center; padding:48px 20px; color:var(--muted);">
@@ -842,6 +911,7 @@
         slug = pegarSlug();
         const data = await api(`/api/catalogo-publico/${slug}`);
         loja = data.loja || {}; produtos = data.produtos || [];
+        document.title = `${loja.nome_loja || 'PERSONALIZE'} — catálogo personalizado`;
         document.getElementById('nomeLoja').textContent = loja.nome_loja || 'PERSONALIZE';
         document.getElementById('descricaoLoja').textContent = loja.descricao_catalogo || 'Catálogo de produtos personalizados.';
         if (loja.logo_url) { document.getElementById('logoLoja').src = loja.logo_url; document.getElementById('logoLoja').style.display = 'block'; }
@@ -857,9 +927,15 @@
         } else {
             if (wfloat) wfloat.style.display = 'none';
         }
-        // Hero não exibe botões — apenas os flutuantes ficam visíveis
-        document.getElementById('linksContato').innerHTML = '';
-        renderTopbar(); renderFooter(); iniciarBanners(); renderCarrinho(); renderCategorias(); renderProdutos(); renderDestaques();
+        renderTopbar();
+        renderHeroAcoes();
+        renderHeroBento();
+        renderFooter();
+        iniciarBanners();
+        renderCarrinho();
+        renderCategorias();
+        renderProdutos();
+        renderDestaques();
 
         // Processar item pendente adicionado na página de detalhe
         const pendingCart = JSON.parse(localStorage.getItem('catalogoPending') || '[]');
@@ -913,12 +989,20 @@
         const input = document.getElementById('floatingSearchInput');
         if (!box.classList.contains('active')) abrirBusca();
         else if (!input.value.trim()) fecharBusca();
-        else renderProdutos();
+        else atualizarBusca(input.value);
     });
-    document.getElementById('floatingSearchClose').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('floatingSearchInput').value = ''; renderProdutos(); fecharBusca(); });
+    document.getElementById('floatingSearchClose').addEventListener('click', (e) => {
+        e.preventDefault();
+        atualizarBusca('');
+        fecharBusca();
+    });
     document.getElementById('floatingCartBtn').addEventListener('click', abrirCarrinho);
     document.getElementById('topbarCart')?.addEventListener('click', abrirCarrinho);
-    document.getElementById('catalogoMenuToggle')?.addEventListener('click', () => document.getElementById('catalogoNav')?.classList.toggle('active'));
+    document.getElementById('catalogoMenuToggle')?.addEventListener('click', (e) => {
+        const nav = document.getElementById('catalogoNav');
+        const aberto = nav?.classList.toggle('active');
+        e.currentTarget.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+    });
     document.querySelectorAll('#catalogoNav a').forEach(a => a.addEventListener('click', () => document.getElementById('catalogoNav')?.classList.remove('active')));
     document.getElementById('btnCloseCart').addEventListener('click', fecharCarrinho);
     document.getElementById('cartOverlay').addEventListener('click', fecharCarrinho);
@@ -928,14 +1012,37 @@
         // fecha nav mobile ao clicar fora
         const nav = document.getElementById('catalogoNav');
         const toggle = document.getElementById('catalogoMenuToggle');
-        if (nav?.classList.contains('active') && !nav.contains(e.target) && !toggle?.contains(e.target)) nav.classList.remove('active');
+        if (nav?.classList.contains('active') && !nav.contains(e.target) && !toggle?.contains(e.target)) {
+            nav.classList.remove('active');
+            toggle?.setAttribute('aria-expanded', 'false');
+        }
     });
     window.addEventListener('resize', aplicarBanner);
-    document.getElementById('floatingSearchInput').addEventListener('input', renderProdutos);
-    document.getElementById('floatingSearchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); renderProdutos(); } });
-    // busca inline
-    document.getElementById('catSearchInline')?.addEventListener('input', renderProdutos);
-    document.getElementById('catSearchInline')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); renderProdutos(); } });
+
+    function atualizarBusca(valor) {
+        termoBusca = String(valor || '');
+        ['catSearchTop', 'catSearchInline', 'floatingSearchInput'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input && input.value !== termoBusca) input.value = termoBusca;
+        });
+        renderProdutos();
+    }
+
+    ['catSearchTop', 'catSearchInline', 'floatingSearchInput'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', e => atualizarBusca(e.target.value));
+        document.getElementById(id)?.addEventListener('keypress', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                atualizarBusca(e.target.value);
+                document.getElementById('catalogoGrid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+    document.getElementById('catFilterReset')?.addEventListener('click', () => {
+        categoriaAtiva = 'TODOS';
+        atualizarBusca('');
+        renderCategorias();
+    });
     document.getElementById('btnFinalizarPedido').addEventListener('click', () => finalizarPedido().catch(err => Swal.fire('Erro', err.message, 'error')));
     // form personalizado — suporta o novo ID e o antigo
     (document.getElementById('formPedidoPersonalizadoForm') || document.getElementById('formPedidoPersonalizado'))
