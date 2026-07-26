@@ -204,31 +204,37 @@
             el.innerHTML = `
                 <div class="cat-hero-empty">
                     <i class="bx bx-palette"></i>
-                    <strong>Seu produto, do seu jeito.</strong>
-                    <span>Escolha uma ideia e fale com a gente.</span>
+                    <strong>Sua ideia, do seu jeito.</strong>
+                    <span>Escolha um produto e personalize com a gente.</span>
                 </div>`;
             return;
         }
 
-        const escolhidos = [];
-        for (let i = 0; i < 4; i++) escolhidos.push(base[i % base.length]);
-        const classes = ['primary', 'tall', 'small', 'wide'];
-        const chamadas = ['Mais queridos', 'Crie sua coleção', 'Do papel à ideia', 'Pronto para presentear'];
-
-        el.innerHTML = escolhidos.map((p, i) => {
+        const principal = base[0];
+        const apoio = base.slice(1, 3);
+        const cardProduto = (p, classe, chamada) => {
             const vs = variacoesDoProduto(p);
             const href = `/produto-detalhe.html?loja=${encodeURIComponent(slug)}&id=${p.id}&vid=${vs[0].variacao_id}`;
             return `
-                <a class="cat-hero-product cat-hero-product-${classes[i]}" href="${href}">
+                <a class="cat-hero-product ${classe}" href="${href}">
                     <img src="${esc(imagensProduto(p)[0])}" alt="${esc(p.nome)}">
-                    <span class="cat-hero-product-label">${chamadas[i]}</span>
+                    <span class="cat-hero-product-label">${chamada}</span>
                     <span class="cat-hero-product-info">
                         <strong>${esc(p.nome)}</strong>
                         <small>${money(vs[0].preco_publico)}</small>
                     </span>
-                    <i class="bx bx-up-arrow-alt" aria-hidden="true"></i>
+                    <i class="bx bx-right-arrow-alt" aria-hidden="true"></i>
                 </a>`;
-        }).join('');
+        };
+
+        el.innerHTML = `
+            ${cardProduto(principal, 'cat-hero-feature', 'Mais pedido')}
+            <div class="cat-hero-mini-products">
+                ${apoio.map((p, i) => cardProduto(p, 'cat-hero-mini-product', i ? 'Novidade' : 'Para presentear')).join('')}
+            </div>
+            <span class="cat-hero-decoration cat-hero-decoration-one" aria-hidden="true"></span>
+            <span class="cat-hero-decoration cat-hero-decoration-two" aria-hidden="true"></span>
+        `;
     }
 
     function cardHtml(p) {
@@ -288,9 +294,9 @@
         const valor = comSel ? `${opcoesQtd(vs[0])[0]?.quantidade ?? 1} un.` : String(stepperLivre.get(p.id) || 1);
         return `
         <div class="cat-card-stepper" data-pid="${p.id}">
-            <button type="button" class="cat-stepper-btn" onclick="window._catStepperMove(${p.id}, -1)" aria-label="Diminuir">−</button>
+            <button type="button" class="cat-stepper-btn" onclick="window._catStepperMove(${p.id}, -1)" aria-label="Diminuir"><i class="bx bx-minus" aria-hidden="true"></i></button>
             <span class="cat-stepper-val" data-stepper-val="${p.id}">${valor}</span>
-            <button type="button" class="cat-stepper-btn" onclick="window._catStepperMove(${p.id}, 1)" aria-label="Aumentar">+</button>
+            <button type="button" class="cat-stepper-btn" onclick="window._catStepperMove(${p.id}, 1)" aria-label="Aumentar"><i class="bx bx-plus" aria-hidden="true"></i></button>
             <button type="button" class="cat-btn-add-mobile" onclick="adicionarItem(${p.id})" title="Adicionar ao carrinho">
                 <i class="bx bx-cart-add"></i>
             </button>
@@ -683,7 +689,12 @@
         const topCount = document.getElementById('topbarCartCount');
         if (topCount) topCount.textContent = totalQtd;
         if (!carrinho.length) {
-            lista.innerHTML = '<p style="text-align:center; padding:20px; color:#666;">Sua sacola está vazia.</p>';
+            lista.innerHTML = `
+                <div class="cart-empty">
+                    <i class="bx bx-shopping-bag"></i>
+                    <strong>Sua sacola está vazia</strong>
+                    <span>Adicione um produto para começar.</span>
+                </div>`;
             document.getElementById('subtotalPedido').textContent = money(0);
             document.getElementById('cartTotal').textContent = money(0);
             return;
@@ -696,9 +707,9 @@
                 ? `<select class="cart-qty-select" onchange="window._cartTrocarFaixa(${idx}, this)">
                        ${opcoesQtd(variacao).map(f => `<option value="${f.quantidade}" data-preco="${f.preco_unitario}" ${f.quantidade === i.quantidade ? 'selected' : ''}>${f.quantidade} un.</option>`).join('')}
                    </select>`
-                : `<button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade - 1})" type="button">-</button>
+                : `<button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade - 1})" type="button" aria-label="Diminuir quantidade"><i class="bx bx-minus" aria-hidden="true"></i></button>
                    <span class="cart-qty-val">${i.quantidade}</span>
-                   <button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade + 1})" type="button">+</button>`;
+                   <button class="cart-qty-btn" onclick="alterarQtd(${idx}, ${i.quantidade + 1})" type="button" aria-label="Aumentar quantidade"><i class="bx bx-plus" aria-hidden="true"></i></button>`;
             const temaLinha = i.tema_nome
                 ? `<div class="cart-item-tema">Tema: ${esc(i.tema_nome)}${i.subtemas_nomes?.length ? ' • ' + i.subtemas_nomes.map(esc).join(', ') : ''}</div>`
                 : '';
@@ -1003,7 +1014,10 @@
         const aberto = nav?.classList.toggle('active');
         e.currentTarget.setAttribute('aria-expanded', aberto ? 'true' : 'false');
     });
-    document.querySelectorAll('#catalogoNav a').forEach(a => a.addEventListener('click', () => document.getElementById('catalogoNav')?.classList.remove('active')));
+    document.querySelectorAll('#catalogoNav a').forEach(a => a.addEventListener('click', () => {
+        document.getElementById('catalogoNav')?.classList.remove('active');
+        document.getElementById('catalogoMenuToggle')?.setAttribute('aria-expanded', 'false');
+    }));
     document.getElementById('btnCloseCart').addEventListener('click', fecharCarrinho);
     document.getElementById('cartOverlay').addEventListener('click', fecharCarrinho);
     document.addEventListener('click', (e) => {
@@ -1037,6 +1051,19 @@
                 document.getElementById('catalogoGrid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
+    });
+    document.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            const busca = document.getElementById('catSearchTop') || document.getElementById('catSearchInline');
+            busca?.focus();
+            busca?.select();
+        }
+        if (e.key === 'Escape') {
+            fecharCarrinho();
+            document.getElementById('catalogoNav')?.classList.remove('active');
+            document.getElementById('catalogoMenuToggle')?.setAttribute('aria-expanded', 'false');
+        }
     });
     document.getElementById('catFilterReset')?.addEventListener('click', () => {
         categoriaAtiva = 'TODOS';

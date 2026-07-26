@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Catálogo - PERSONALIZE Hub</title>
-    <meta name="theme-color" content="#071827">
+    <meta name="theme-color" content="#7657d7">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
     <link rel="icon" href="/assets/icons/favicon-32.png">
@@ -15,238 +15,289 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="/assets/js/theme.js"></script>
 </head>
-<body class="catalogo-publico">
+<body class="catalogo-publico dashboard-v8">
 
     <a class="cat-skip-link" href="#catalogoGrid">Ir para os produtos</a>
 
-    <!-- ========== TOPBAR ========== -->
-    <nav class="cat-topbar" id="catalogoTopbar">
-        <div class="cat-topbar-inner">
+    <div class="cat-app-shell">
+        <!-- Navegação principal -->
+        <aside class="cat-sidebar-nav" aria-label="Navegação do catálogo">
             <a class="cat-brand" href="#catalogoHeader" aria-label="Ir para o início">
                 <img id="topbarLogo" src="" alt="" style="display:none;">
+                <span class="cat-brand-mark" aria-hidden="true"><i class="bx bx-palette"></i></span>
                 <span id="topbarNome">PERSONALIZE</span>
             </a>
 
-            <label class="cat-top-search" for="catSearchTop">
-                <i class="bx bx-search" aria-hidden="true"></i>
-                <input id="catSearchTop" type="search" placeholder="O que você quer personalizar?" autocomplete="off">
-            </label>
-
-            <button class="cat-menu-toggle" id="catalogoMenuToggle" type="button" aria-label="Abrir menu" aria-expanded="false">
-                <i class="bx bx-menu"></i>
-            </button>
-
-            <div class="cat-nav" id="catalogoNav">
-                <a href="#catalogoGrid"><i class="bx bx-store-alt"></i> Produtos</a>
-                <a href="#formPedidoPersonalizado"><i class="bx bx-palette"></i> Sob medida</a>
+            <nav class="cat-nav" id="catalogoNav">
+                <a class="active" href="#catalogoHeader"><i class="bx bx-home-alt-2"></i><span>Início</span></a>
+                <a href="#catCategories"><i class="bx bx-category"></i><span>Categorias</span></a>
+                <a href="#catalogoDestaques"><i class="bx bx-purchase-tag-alt"></i><span>Destaques</span><small>Hot</small></a>
+                <a href="#catalogoGrid"><i class="bx bx-store-alt"></i><span>Produtos</span></a>
+                <a href="#formPedidoPersonalizado"><i class="bx bxs-magic-wand"></i><span>Personalizado</span></a>
+                <span class="cat-nav-divider" aria-hidden="true"></span>
                 <a href="#" id="topbarWhatsapp" target="_blank" rel="noopener noreferrer">
-                    <i class="bx bxl-whatsapp"></i> WhatsApp
+                    <i class="bx bxl-whatsapp"></i><span>WhatsApp</span>
                 </a>
-                <button type="button" id="topbarCart" class="cat-cart-pill" aria-label="Abrir sacola">
-                    <i class="bx bx-shopping-bag"></i>
-                    <span class="cat-cart-label">Sacola</span>
-                    <span id="topbarCartCount" class="cat-cart-badge">0</span>
+                <a href="#catalogoFooter"><i class="bx bx-envelope"></i><span>Contato</span></a>
+            </nav>
+
+            <a class="cat-sidebar-promo" href="#formPedidoPersonalizado">
+                <span>Projeto especial?</span>
+                <strong>Criamos do seu jeito</strong>
+                <small>Pedir orçamento <i class="bx bx-right-arrow-alt"></i></small>
+                <i class="bx bxs-gift cat-sidebar-promo-icon" aria-hidden="true"></i>
+            </a>
+
+            <div class="cat-sidebar-help">
+                <i class="bx bx-headphone"></i>
+                <span><strong>Precisa de ajuda?</strong><small>Atendimento direto</small></span>
+            </div>
+        </aside>
+
+        <!-- Conteúdo central -->
+        <div class="cat-workspace">
+            <nav class="cat-topbar" id="catalogoTopbar" aria-label="Busca e ações">
+                <button class="cat-menu-toggle" id="catalogoMenuToggle" type="button" aria-label="Abrir menu" aria-expanded="false">
+                    <i class="bx bx-menu"></i>
                 </button>
-            </div>
-        </div>
-    </nav>
 
-    <!-- ========== HERO ========== -->
-    <header class="cat-hero" id="catalogoHeader">
-        <div class="cat-banner-bg" id="bannerLayer" aria-hidden="true"></div>
-        <div class="cat-hero-inner">
-            <section class="cat-hero-copy">
-                <div class="cat-hero-kicker">
-                    <img id="logoLoja" class="cat-logo" src="" alt="" style="display:none;">
-                    <span id="nomeLoja">PERSONALIZE</span>
-                    <i class="bx bxs-star" aria-hidden="true"></i>
-                </div>
-                <h1>Ideias que<br><span>viram presentes.</span></h1>
-                <p id="descricaoLoja">Produtos personalizados para celebrar, presentear e vender.</p>
-                <div class="cat-hero-actions" id="linksContato"></div>
-                <div class="cat-hero-proof" aria-label="Vantagens">
-                    <span><i class="bx bx-check"></i> Feito sob medida</span>
-                    <span><i class="bx bx-check"></i> Atendimento direto</span>
-                </div>
-            </section>
-
-            <div class="cat-hero-bento" id="catalogoHeroBento" aria-label="Seleção de produtos">
-                <div class="cat-hero-card cat-hero-card-loading"></div>
-                <div class="cat-hero-card cat-hero-card-loading"></div>
-                <div class="cat-hero-card cat-hero-card-loading"></div>
-                <div class="cat-hero-card cat-hero-card-loading"></div>
-            </div>
-        </div>
-    </header>
-
-    <!-- ========== MAIN ========== -->
-    <main class="cat-main">
-
-        <!-- Navegação visual por categorias -->
-        <section class="cat-category-showcase" aria-labelledby="catCategoryTitle">
-            <div class="cat-section-heading">
-                <div>
-                    <span class="cat-section-kicker">Encontre seu estilo</span>
-                    <h2 id="catCategoryTitle">Comece por uma categoria.</h2>
-                </div>
-                <p>Escolha uma coleção ou veja tudo que podemos personalizar.</p>
-            </div>
-            <div class="cat-chips" id="catalogoCategorias"></div>
-        </section>
-
-        <!-- Destaques (carrossel) -->
-        <section class="cat-destaques" id="catalogoDestaques" style="display:none">
-            <div class="cat-destaques-cabecalho">
-                <span class="cat-section-kicker">Mais queridos</span>
-                <h2>Favoritos que fazem sucesso.</h2>
-                <p>Uma seleção dos produtos mais procurados da loja.</p>
-            </div>
-            <div class="cat-destaques-viewport">
-                <div class="cat-destaques-track" id="catalogoDestaquesTrack"></div>
-            </div>
-            <div class="cat-destaques-dots" id="catalogoDestaquesDots"></div>
-        </section>
-
-        <section class="cat-products-section" aria-labelledby="catProductsTitle">
-            <div class="cat-products-title">
-                <div>
-                    <span class="cat-section-kicker">Escolha o seu</span>
-                    <h2 id="catProductsTitle">Produtos que contam histórias.</h2>
-                </div>
-                <span class="cat-count" id="catCount"></span>
-            </div>
-
-            <!-- Busca local -->
-            <div class="cat-filter-bar">
-                <label class="cat-search-box" for="catSearchInline">
-                    <i class="bx bx-search cat-search-ico" aria-hidden="true"></i>
-                    <input
-                        id="catSearchInline"
-                        type="search"
-                        placeholder="Buscar por nome, categoria ou ideia..."
-                        autocomplete="off"
-                    >
+                <label class="cat-top-search" for="catSearchTop">
+                    <i class="bx bx-search" aria-hidden="true"></i>
+                    <input id="catSearchTop" type="search" placeholder="Buscar produtos, categorias ou ideias..." autocomplete="off">
+                    <kbd>⌘ K</kbd>
                 </label>
-                <button class="cat-filter-reset" id="catFilterReset" type="button">
-                    <i class="bx bx-reset"></i> Limpar filtros
-                </button>
-            </div>
 
-            <!-- Grid de produtos -->
-            <div id="catalogoGrid" class="cat-grid"></div>
-
-            <!-- Ver mais -->
-            <div class="cat-load-more-wrap" id="verMaisWrap" style="display:none">
-                <button class="cat-load-more-btn" id="btnVerMais" type="button">
-                    Ver mais produtos <i class="bx bx-down-arrow-alt"></i>
-                </button>
-            </div>
-        </section>
-
-        <!-- Seção Produto Personalizado -->
-        <section class="cat-custom" id="formPedidoPersonalizado">
-            <div class="cat-custom-content">
-
-                <div class="cat-custom-info">
-                    <span class="cat-custom-label">Não encontrou o que imaginou?</span>
-                    <h2>A gente cria com você.</h2>
-                    <p>Conte sua ideia, envie uma referência e receba um orçamento sem compromisso.</p>
-                    <ul class="cat-custom-list">
-                        <li><i class="bx bx-check-circle"></i> Orçamento sem compromisso</li>
-                        <li><i class="bx bx-check-circle"></i> Resposta rápida via WhatsApp</li>
-                        <li><i class="bx bx-check-circle"></i> Produção 100% sob medida</li>
-                    </ul>
-                </div>
-
-                <form id="formPedidoPersonalizadoForm" class="cat-custom-form" enctype="multipart/form-data">
-                    <div class="cat-form-row">
-                        <div class="form-group">
-                            <label>Seu nome</label>
-                            <input name="cliente_nome" required placeholder="Como prefere ser chamado?">
-                        </div>
-                        <div class="form-group">
-                            <label>WhatsApp</label>
-                            <input name="cliente_whatsapp" required placeholder="(00) 00000-0000">
-                        </div>
-                    </div>
-                    <div class="cat-form-row">
-                        <div class="form-group">
-                            <label>Título do pedido</label>
-                            <input name="titulo" required placeholder="Ex.: Caneca personalizada">
-                        </div>
-                        <div class="form-group">
-                            <label>Quantidade</label>
-                            <input name="quantidade_desejada" type="number" min="1" value="1">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Descreva o que deseja</label>
-                        <textarea name="descricao" required placeholder="Modelo, cores, tamanho, nome, tema, prazo..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Imagem de referência</label>
-                        <input type="file" name="arquivo" accept="image/jpeg,image/png,image/webp">
-                    </div>
-                    <button class="cat-custom-btn" type="submit">
-                        <i class="bx bx-send"></i> Solicitar orçamento
+                <div class="cat-top-actions">
+                    <a href="#formPedidoPersonalizado" class="cat-top-personalize">
+                        <i class="bx bxs-magic-wand"></i><span>Personalizar</span>
+                    </a>
+                    <button type="button" id="topbarCart" class="cat-cart-pill" aria-label="Abrir sacola">
+                        <i class="bx bx-shopping-bag"></i>
+                        <span class="cat-cart-label">Sacola</span>
+                        <span id="topbarCartCount" class="cat-cart-badge">0</span>
                     </button>
-                </form>
+                </div>
+            </nav>
 
+            <!-- Hero -->
+            <header class="cat-hero" id="catalogoHeader">
+                <div class="cat-banner-bg" id="bannerLayer" aria-hidden="true"></div>
+                <div class="cat-hero-inner">
+                    <section class="cat-hero-copy">
+                        <span class="cat-hero-tag">Nova coleção</span>
+                        <div class="cat-hero-kicker">
+                            <img id="logoLoja" class="cat-logo" src="" alt="" style="display:none;">
+                            <span id="nomeLoja">PERSONALIZE</span>
+                        </div>
+                        <h1>Transforme ideias em algo único.</h1>
+                        <p id="descricaoLoja">Produtos personalizados para celebrar, presentear e vender.</p>
+                        <div class="cat-hero-actions" id="linksContato"></div>
+                        <div class="cat-hero-proof" aria-label="Vantagens">
+                            <span><i class="bx bx-check-shield"></i> Compra segura</span>
+                            <span><i class="bx bx-message-rounded-dots"></i> Atendimento humano</span>
+                        </div>
+                    </section>
+
+                    <div class="cat-hero-bento cat-hero-showcase" id="catalogoHeroBento" aria-label="Produto em destaque">
+                        <div class="cat-hero-card cat-hero-card-loading"></div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="cat-main">
+                <!-- Categorias -->
+                <section class="cat-category-showcase" id="catCategories" aria-labelledby="catCategoryTitle">
+                    <div class="cat-section-heading">
+                        <div>
+                            <span class="cat-section-kicker">Navegue por</span>
+                            <h2 id="catCategoryTitle">Categorias</h2>
+                        </div>
+                        <a href="#catalogoGrid">Ver todos <i class="bx bx-right-arrow-alt"></i></a>
+                    </div>
+                    <div class="cat-chips" id="catalogoCategorias"></div>
+                </section>
+
+                <!-- Atalhos de compra -->
+                <section class="cat-benefit-grid" aria-label="Vantagens da loja">
+                    <article class="cat-benefit-card cat-benefit-lilac">
+                        <span>Atendimento rápido</span>
+                        <strong>Fale direto com quem produz</strong>
+                        <a href="#formPedidoPersonalizado">Pedir orçamento <i class="bx bx-right-arrow-alt"></i></a>
+                        <i class="bx bx-conversation" aria-hidden="true"></i>
+                    </article>
+                    <article class="cat-benefit-card cat-benefit-mint">
+                        <span>Feito sob medida</span>
+                        <strong>Escolha tamanho, quantidade e tema</strong>
+                        <a href="#catalogoGrid">Explorar produtos <i class="bx bx-right-arrow-alt"></i></a>
+                        <i class="bx bx-ruler" aria-hidden="true"></i>
+                    </article>
+                    <article class="cat-benefit-card cat-benefit-peach">
+                        <span>Novidades</span>
+                        <strong>Ideias únicas para presentear</strong>
+                        <a href="#catalogoDestaques">Ver destaques <i class="bx bx-right-arrow-alt"></i></a>
+                        <i class="bx bx-gift" aria-hidden="true"></i>
+                    </article>
+                </section>
+
+                <!-- Destaques -->
+                <section class="cat-destaques" id="catalogoDestaques" style="display:none">
+                    <div class="cat-destaques-cabecalho">
+                        <span class="cat-section-kicker">Seleção da loja</span>
+                        <h2>Mais pedidos para você</h2>
+                        <p>Produtos que já conquistaram nossos clientes.</p>
+                    </div>
+                    <div class="cat-destaques-viewport">
+                        <div class="cat-destaques-track" id="catalogoDestaquesTrack"></div>
+                    </div>
+                    <div class="cat-destaques-dots" id="catalogoDestaquesDots"></div>
+                </section>
+
+                <!-- Produtos -->
+                <section class="cat-products-section" aria-labelledby="catProductsTitle">
+                    <div class="cat-products-title">
+                        <div>
+                            <span class="cat-section-kicker">Nosso catálogo</span>
+                            <h2 id="catProductsTitle">Escolha seu próximo favorito</h2>
+                        </div>
+                        <span class="cat-count" id="catCount"></span>
+                    </div>
+
+                    <div class="cat-filter-bar">
+                        <label class="cat-search-box" for="catSearchInline">
+                            <i class="bx bx-search cat-search-ico" aria-hidden="true"></i>
+                            <input id="catSearchInline" type="search" placeholder="Buscar no catálogo..." autocomplete="off">
+                        </label>
+                        <button class="cat-filter-reset" id="catFilterReset" type="button">
+                            <i class="bx bx-reset"></i> Limpar
+                        </button>
+                    </div>
+
+                    <div id="catalogoGrid" class="cat-grid"></div>
+
+                    <div class="cat-load-more-wrap" id="verMaisWrap" style="display:none">
+                        <button class="cat-load-more-btn" id="btnVerMais" type="button">
+                            Ver mais produtos <i class="bx bx-down-arrow-alt"></i>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Pedido personalizado -->
+                <section class="cat-custom" id="formPedidoPersonalizado">
+                    <div class="cat-custom-content">
+                        <div class="cat-custom-info">
+                            <span class="cat-custom-label">Seu projeto começa aqui</span>
+                            <h2>Não encontrou? A gente cria com você.</h2>
+                            <p>Conte sua ideia, envie uma referência e receba um orçamento sem compromisso.</p>
+                            <ul class="cat-custom-list">
+                                <li><i class="bx bx-check-circle"></i> Orçamento sem compromisso</li>
+                                <li><i class="bx bx-check-circle"></i> Resposta rápida via WhatsApp</li>
+                                <li><i class="bx bx-check-circle"></i> Produção 100% sob medida</li>
+                            </ul>
+                        </div>
+
+                        <form id="formPedidoPersonalizadoForm" class="cat-custom-form" enctype="multipart/form-data">
+                            <div class="cat-form-row">
+                                <div class="form-group">
+                                    <label>Seu nome</label>
+                                    <input name="cliente_nome" required placeholder="Como prefere ser chamado?">
+                                </div>
+                                <div class="form-group">
+                                    <label>WhatsApp</label>
+                                    <input name="cliente_whatsapp" required placeholder="(00) 00000-0000">
+                                </div>
+                            </div>
+                            <div class="cat-form-row">
+                                <div class="form-group">
+                                    <label>Título do pedido</label>
+                                    <input name="titulo" required placeholder="Ex.: Kit personalizado">
+                                </div>
+                                <div class="form-group">
+                                    <label>Quantidade</label>
+                                    <input name="quantidade_desejada" type="number" min="1" value="1">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Descreva o que deseja</label>
+                                <textarea name="descricao" required placeholder="Modelo, cores, tamanho, nome, tema, prazo..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Imagem de referência</label>
+                                <input type="file" name="arquivo" accept="image/jpeg,image/png,image/webp">
+                            </div>
+                            <button class="cat-custom-btn" type="submit">
+                                <i class="bx bx-send"></i> Solicitar orçamento
+                            </button>
+                        </form>
+                    </div>
+                </section>
+            </main>
+
+            <footer class="catalogo-footer" id="catalogoFooter"></footer>
+        </div>
+
+        <!-- Carrinho sempre visível no desktop e gaveta no mobile -->
+        <aside class="cart-sidebar" id="cartSidebar" aria-label="Carrinho de pedidos">
+            <div class="cart-header">
+                <div>
+                    <span>Seu pedido</span>
+                    <h2>Minha sacola <span class="cart-badge-inside" id="cartBadgeInside">0</span></h2>
+                </div>
+                <button class="close-cart" id="btnCloseCart" type="button" aria-label="Fechar carrinho"><i class="bx bx-x"></i></button>
             </div>
-        </section>
+            <div id="listaPedido" class="cart-items">
+                <div class="cart-empty">
+                    <i class="bx bx-shopping-bag"></i>
+                    <strong>Sua sacola está vazia</strong>
+                    <span>Adicione um produto para começar.</span>
+                </div>
+            </div>
+            <div class="cart-footer">
+                <div class="total-linha"><span>Subtotal</span><strong id="subtotalPedido">R$ 0,00</strong></div>
+                <div class="total-linha destaque"><span>Total estimado</span><strong id="cartTotal">R$ 0,00</strong></div>
+                <p class="cart-disclaimer">Valores e disponibilidade são confirmados no atendimento.</p>
+                <div class="cart-customer-heading">
+                    <strong>Dados para o pedido</strong>
+                    <span>Preencha para enviar à loja.</span>
+                </div>
+                <div class="cart-customer-info">
+                    <input id="cartNomeCliente" placeholder="Seu nome" autocomplete="name">
+                    <input id="cartTelefoneCliente" placeholder="WhatsApp" autocomplete="tel">
+                    <input id="cartEmailCliente" placeholder="E-mail opcional" autocomplete="email">
+                    <textarea id="cartObservacaoCliente" placeholder="Observação ou personalização"></textarea>
+                </div>
+                <button id="btnFinalizarPedido" class="btn-checkout" type="button">
+                    <i class="bx bx-send"></i> Enviar pedido
+                </button>
+                <div class="cart-trust">
+                    <span><i class="bx bx-lock-alt"></i> Dados protegidos</span>
+                    <span><i class="bx bxl-whatsapp"></i> Atendimento humano</span>
+                </div>
+            </div>
+        </aside>
+    </div>
 
-    </main>
+    <div class="cart-overlay" id="cartOverlay"></div>
 
-    <!-- ========== BOTÕES FLUTUANTES ========== -->
+    <!-- Ações rápidas no mobile -->
     <a href="#" class="whatsapp-float" id="whatsappFloat" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
         <i class="bx bxl-whatsapp"></i>
     </a>
-
     <div class="floating-search" id="floatingSearch">
         <input type="text" id="floatingSearchInput" placeholder="Buscar produtos...">
         <button class="btn-search-close" id="floatingSearchClose" type="button" aria-label="Limpar"><i class="bx bx-x"></i></button>
-        <button class="btn-search-icon"  id="floatingSearchIcon"  type="button" aria-label="Buscar"><i class="bx bx-search"></i></button>
+        <button class="btn-search-icon" id="floatingSearchIcon" type="button" aria-label="Buscar"><i class="bx bx-search"></i></button>
     </div>
-
-    <button class="floating-cart-btn" id="floatingCartBtn" type="button" aria-label="Carrinho">
+    <button class="floating-cart-btn" id="floatingCartBtn" type="button" aria-label="Abrir carrinho">
         <i class="bx bx-shopping-bag"></i>
         <span class="cart-badge" id="cartCount">0</span>
     </button>
 
-    <!-- ========== CARRINHO LATERAL ========== -->
-    <div class="cart-overlay" id="cartOverlay"></div>
-    <aside class="cart-sidebar" id="cartSidebar" aria-label="Carrinho de pedidos">
-        <div class="cart-header">
-            <h2><i class="bx bx-shopping-bag"></i> Minha sacola <span class="cart-badge-inside" id="cartBadgeInside">0</span></h2>
-            <button class="close-cart" id="btnCloseCart" type="button" aria-label="Fechar"><i class="bx bx-x"></i></button>
-        </div>
-        <div id="listaPedido" class="cart-items">
-            <p class="text-muted">Sua sacola está vazia.</p>
-        </div>
-        <div class="cart-footer">
-            <div class="total-linha"><span>Subtotal</span><strong id="subtotalPedido">R$ 0,00</strong></div>
-            <div class="total-linha destaque"><span>Total estimado</span><strong id="cartTotal">R$ 0,00</strong></div>
-            <p class="cart-disclaimer">O pedido será enviado para a loja responsável. Valores e disponibilidade confirmados no atendimento.</p>
-            <div class="cart-customer-info">
-                <input id="cartNomeCliente"      placeholder="Seu nome"       autocomplete="name">
-                <input id="cartTelefoneCliente"  placeholder="WhatsApp"       autocomplete="tel">
-                <input id="cartEmailCliente"     placeholder="E-mail opcional" autocomplete="email">
-                <textarea id="cartObservacaoCliente" placeholder="Observação, personalização ou dúvida"></textarea>
-            </div>
-            <button id="btnFinalizarPedido" class="btn-checkout" type="button">
-                <i class="bx bx-send"></i> Enviar pedido
-            </button>
-        </div>
-    </aside>
-
-    <footer class="catalogo-footer" id="catalogoFooter"></footer>
-
-    <!-- ========== OVERLAY: ESCOLHA DE TEMA/SUBTEMA (produtos sob encomenda) ========== -->
+    <!-- Escolha de tema/subtema -->
     <div id="temaModal" class="app-modal hidden" aria-hidden="true">
         <div class="app-modal-card app-modal-card-lg">
             <div class="app-modal-header">
                 <div><h3 id="temaModalTitulo">Escolha o tema</h3></div>
-                <button type="button" class="icon-btn" id="btnFecharTemaModal"><i class="bx bx-x"></i></button>
+                <button type="button" class="icon-btn" id="btnFecharTemaModal" aria-label="Fechar"><i class="bx bx-x"></i></button>
             </div>
             <div class="app-modal-body" id="temaModalBody"></div>
             <div class="app-modal-actions">
@@ -255,12 +306,11 @@
         </div>
     </div>
 
-    <!-- Prévia protegida (reaproveitado tema/subtema) -->
     <div id="temaPreviewModal" class="app-modal hidden" aria-hidden="true">
         <div class="app-modal-card app-modal-card-lg">
             <div class="app-modal-header">
                 <div><h3 id="temaPreviewTitulo">Prévia</h3></div>
-                <button type="button" class="icon-btn" id="btnFecharTemaPreview"><i class="bx bx-x"></i></button>
+                <button type="button" class="icon-btn" id="btnFecharTemaPreview" aria-label="Fechar"><i class="bx bx-x"></i></button>
             </div>
             <div class="app-modal-body" id="temaPreviewBody" style="max-height:70vh;overflow:auto"></div>
         </div>
