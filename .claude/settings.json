@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check \"frontend/assets/js/pages/produtos-lista.js\")",
+      "Bash(node -e \"console.log\\(1\\)\")",
+      "Bash(node --check \"src/server.js\")",
+      "Bash(node --check \"frontend/assets/js/pages/produtos-cadastro.js\")",
+      "Bash(node --check \"frontend/assets/js/pages/produtos-insumos.js\")",
+      "Bash(node --check \"frontend/assets/js/core.js\")",
+      "Bash(netstat -ano)",
+      "Bash(ps -p 27380 -o pid,comm,args)",
+      "Bash(wmic process *)",
+      "Bash(powershell -Command \"Get-Process -Id 27380 | Select-Object Id,ProcessName,Path\")",
+      "Bash(taskkill //PID 27380 //F)",
+      "Bash(node src/server.js)",
+      "Bash(node -e ' *)",
+      "Bash(taskkill //PID 18900 //F)",
+      "Bash(node --check frontend/assets/js/pages/dashboard.js)",
+      "Bash(taskkill //PID 2076 //F)",
+      "Bash(taskkill //PID 2544 //F)",
+      "Bash(grep -Eo '^[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+$' ./tok.tmp)",
+      "Bash(curl -s -o ./destaque-resp.json -w 'HTTP %{http_code}\\\\n' -X PATCH -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"destaque\":true}' http://localhost:3000/api/produtos/71/destaque)",
+      "Bash(rm -f ./tok.tmp ./tok-clean.tmp ./destaque-resp.json)",
+      "Bash(curl -s -o /dev/null -w 'revert destaque: HTTP %{http_code}\\\\n' -X PATCH -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"destaque\":false}' http://localhost:3000/api/produtos/71/destaque)",
+      "Bash(rm -f ./tok.tmp ./tok-clean.tmp)",
+      "Bash(pkill -f \"node src/server.js\")",
+      "Bash(awk 'NR<=2417 && /@media/{line=NR; rule=$0} END{}' frontend/assets/css/app.css)",
+      "Bash(awk -F: '$1<2430')",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
